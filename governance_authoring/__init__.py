@@ -1,6 +1,7 @@
 """Deterministic governance authoring primitives."""
 
 from governance_authoring.extract import extract_constraints
+from governance_authoring.lifecycle import transition_review_status
 from governance_authoring.provenance import build_review_provenance
 from governance_authoring.report import review_constraints, validate_constraints
 from governance_authoring.review import build_review_report
@@ -11,6 +12,7 @@ __all__ = [
     "build_review_provenance",
     "extract_constraints",
     "review_constraints",
+    "transition_review_status",
     "validate_authoring",
     "validate_constraints",
 ]
