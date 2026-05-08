@@ -14,7 +14,9 @@ authors = [
     { name = "Waveframe Labs" }
 ]
 
-dependencies = []
+dependencies = [
+    "cricore-contract-compiler",
+]
 
 [project.optional-dependencies]
 dev = [
