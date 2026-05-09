@@ -301,28 +301,51 @@ review = attach_deployment(
 snapshot = create_snapshot(review)
 ```
 
-## Runnable Finance Walkthrough
+## Operational Workflow
 
-Run the canonical example lifecycle:
+Primary repository layout:
 
-```powershell
-python examples\run_finance_flow.py
+```text
+policies/     source governance text
+generated/    extraction and validation drafts
+reviews/      pending, approved, and deployed review artifacts
+contracts/    runtime contract artifacts only
+snapshots/    deterministic governance snapshots
 ```
 
-The script reads [examples/finance_governance.txt](examples/finance_governance.txt) and writes deterministic artifacts to [examples/artifacts/](examples/artifacts/):
+Draft generation reads policy text from `policies/` and writes machine-generated constraints plus pending review artifacts:
 
-- `structured_policy.json`
-- `review.json`
-- `validation.json`
-- `approved_review.json`
-- `compiled_contract.json`
-- `compiled_review.json`
-- `deployed_review.json`
-- `snapshot.json`
-- `diff.json`
-- `rollback.json`
+```powershell
+governance-ledger run policies/
+```
 
-The walkthrough attempts to use the canonical CRI-CORE Contract Compiler when available. If the installed compiler rejects the v0.1 example policy shape, the script writes an explicitly marked deterministic example compiled contract so the lifecycle remains runnable end to end.
+Draft output:
+
+- `generated/<policy>.generated.json`
+- `generated/<policy>.validation.json`
+- `reviews/<policy>.review.json`
+
+Draft generation does not approve, compile, deploy, publish, or create runtime contracts.
+
+Human approval is explicit:
+
+```powershell
+governance-ledger approve reviews/finance_policy.review.json --actor governance-team
+```
+
+Publishing requires an approved review:
+
+```powershell
+governance-ledger publish reviews/finance_policy.review.json
+```
+
+Publish output:
+
+- `contracts/<contract-id>-<version>.contract.json`
+- `reviews/<policy>.deployed.review.json`
+- `snapshots/<snapshot-id>.json`
+
+Runtime contracts should only exist in `contracts/`. They should not be written to `generated/`, `reviews/`, or `policies/`.
 
 ## Documentation
 
@@ -330,5 +353,4 @@ The walkthrough attempts to use the canonical CRI-CORE Contract Compiler when av
 - [LIFECYCLE.md](LIFECYCLE.md)
 - [PROVENANCE.md](PROVENANCE.md)
 - [NON_GOALS.md](NON_GOALS.md)
-- [examples/](examples/)
 - [schemas/](schemas/)

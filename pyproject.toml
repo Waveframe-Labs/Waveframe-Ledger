@@ -22,3 +22,6 @@ dependencies = [
 dev = [
     "pytest>=7"
 ]
+
+[project.scripts]
+governance-ledger = "governance_ledger.cli:main"

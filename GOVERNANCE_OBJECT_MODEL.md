@@ -107,6 +107,18 @@ The following field names are canonical and should remain stable across code, sc
 
 Documents may use human-readable phrases such as "compiled contract linkage" in prose, but object keys should use the canonical snake_case names above.
 
+## Operational Artifact Directories
+
+Governance-Ledger separates draft, review, runtime, and recovery artifacts by directory:
+
+- `policies/`: source governance text only.
+- `generated/`: machine-generated extraction and validation artifacts.
+- `reviews/`: human-review artifacts and deployed review lineage.
+- `contracts/`: runtime contract artifacts only.
+- `snapshots/`: deterministic frozen governance state snapshots.
+
+Runtime contracts should only be written to `contracts/`.
+
 ## Detected Constraints
 
 Role requirement:

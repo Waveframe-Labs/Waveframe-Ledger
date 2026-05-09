@@ -1,0 +1,8 @@
+{
+  "warnings": [
+    {
+      "text": "Deletion requests shall retain audit evidence.",
+      "type": "extraction_gap"
+    }
+  ]
+}

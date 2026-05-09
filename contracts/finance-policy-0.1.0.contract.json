@@ -10,8 +10,8 @@
     ]
   },
   "compiler": "governance-ledger-example",
-  "compiler_note": "canonical compiler rejected v0.1 example policy: approval thresholds must be a list of threshold objects",
-  "contract_hash": "465a3c0904dbca3edde843b7b1b6e52f370d839f0ab3a6a3bf1d973f20e8431e",
+  "compiler_note": "canonical compiler rejected v0.1 policy shape: approval thresholds must be a list of threshold objects",
+  "contract_hash": "468d80661be7731b5df4192d071261b35f7e023b5a587426f7714dbbbba11b47",
   "contract_id": "finance-policy",
   "contract_version": "0.1.0",
   "invariants": {

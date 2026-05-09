@@ -1,0 +1,24 @@
+{
+  "created_at": "2026-05-09T04:11:35Z",
+  "detected_constraints": [
+    {
+      "source_text": "require platform approval",
+      "type": "required_role",
+      "value": "platform"
+    },
+    {
+      "source_text": "must be separate",
+      "type": "separation_of_duties",
+      "value": true
+    }
+  ],
+  "review_id": "review-deployment_policy",
+  "review_status": "pending",
+  "source_document": "deployment_policy.txt",
+  "warnings": [
+    {
+      "text": "Deployments require reasonable activation timing.",
+      "type": "extraction_gap"
+    }
+  ]
+}

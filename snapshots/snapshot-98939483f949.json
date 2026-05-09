@@ -1,16 +1,16 @@
 {
-  "created_at": "2026-05-07T21:30:00Z",
+  "created_at": "2026-05-09T12:30:00Z",
   "review": {
-    "compiled_at": "2026-05-07T20:30:00Z",
+    "compiled_at": "2026-05-09T12:30:00Z",
     "compiled_by": "compiler-service",
     "compiled_contract": {
-      "contract_hash": "465a3c0904dbca3edde843b7b1b6e52f370d839f0ab3a6a3bf1d973f20e8431e",
+      "contract_hash": "468d80661be7731b5df4192d071261b35f7e023b5a587426f7714dbbbba11b47",
       "contract_id": "finance-policy",
       "contract_version": "0.1.0"
     },
-    "created_at": "2026-05-07T20:00:00Z",
+    "created_at": "2026-05-09T04:11:35Z",
     "deployment": {
-      "deployed_at": "2026-05-07T21:00:00Z",
+      "deployed_at": "2026-05-09T12:30:00Z",
       "deployed_by": "ops-team",
       "enforcement_engine": "cricore",
       "engine_version": "0.12.0",
@@ -39,39 +39,40 @@
       {
         "actor": "governance-team",
         "from_status": "pending",
-        "note": "Reviewed extracted finance governance constraints.",
-        "timestamp": "2026-05-07T20:10:00Z",
+        "note": "Reviewed generated governance artifact.",
+        "timestamp": "2026-05-09T12:00:00Z",
         "to_status": "reviewed"
       },
       {
         "actor": "governance-team",
         "from_status": "reviewed",
-        "note": "Approved for deterministic compilation.",
-        "timestamp": "2026-05-07T20:20:00Z",
+        "note": "Approved finance governance for publishing.",
+        "timestamp": "2026-05-09T12:00:00Z",
         "to_status": "approved"
       },
       {
         "actor": "compiler-service",
         "from_status": "approved",
         "note": "Linked compiled contract.",
-        "timestamp": "2026-05-07T20:30:00Z",
+        "timestamp": "2026-05-09T12:30:00Z",
         "to_status": "compiled"
       },
       {
         "actor": "ops-team",
         "from_status": "compiled",
         "note": "Attached deployment provenance.",
-        "timestamp": "2026-05-07T21:00:00Z",
+        "timestamp": "2026-05-09T12:30:00Z",
         "to_status": "deployed"
       }
     ],
-    "review_id": "review-finance-001",
+    "published_by": "governance-team",
+    "review_id": "review-finance_policy",
     "review_status": "deployed",
-    "source_document": "finance_governance.txt",
+    "source_document": "finance_policy.txt",
     "warnings": []
   },
-  "review_id": "review-finance-001",
+  "review_id": "review-finance_policy",
   "review_status": "deployed",
-  "snapshot_hash": "c309b22f1ef13330d4092f647f96ad42dab7f241acbb89afc51d255b1d9b1002",
-  "snapshot_id": "snapshot-c309b22f1ef1"
+  "snapshot_hash": "98939483f949f642be5cf56a38bc4549424bf0cbc0b6c8e97deb9abd59ad91c1",
+  "snapshot_id": "snapshot-98939483f949"
 }

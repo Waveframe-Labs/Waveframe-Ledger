@@ -1,0 +1,24 @@
+{
+  "created_at": "2026-05-09T04:11:35Z",
+  "detected_constraints": [
+    {
+      "source_text": "Only platform-engineers may",
+      "type": "required_role",
+      "value": "platform_engineers"
+    },
+    {
+      "source_text": "must be separate",
+      "type": "separation_of_duties",
+      "value": true
+    }
+  ],
+  "review_id": "review-infrastructure_policy",
+  "review_status": "pending",
+  "source_document": "infrastructure_policy.txt",
+  "warnings": [
+    {
+      "text": "appropriate manager",
+      "type": "ambiguous_authority"
+    }
+  ]
+}

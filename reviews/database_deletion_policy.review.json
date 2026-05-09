@@ -1,0 +1,24 @@
+{
+  "created_at": "2026-05-09T04:11:35Z",
+  "detected_constraints": [
+    {
+      "source_text": "require database-admin approval",
+      "type": "required_role",
+      "value": "database_admin"
+    },
+    {
+      "source_text": "must be separate",
+      "type": "separation_of_duties",
+      "value": true
+    }
+  ],
+  "review_id": "review-database_deletion_policy",
+  "review_status": "pending",
+  "source_document": "database_deletion_policy.txt",
+  "warnings": [
+    {
+      "text": "Deletion requests shall retain audit evidence.",
+      "type": "extraction_gap"
+    }
+  ]
+}

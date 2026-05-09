@@ -1,5 +1,5 @@
 {
-  "created_at": "2026-05-07T20:00:00Z",
+  "created_at": "2026-05-09T04:11:35Z",
   "detected_constraints": [
     {
       "source_text": "require manager approval",
@@ -22,20 +22,20 @@
     {
       "actor": "governance-team",
       "from_status": "pending",
-      "note": "Reviewed extracted finance governance constraints.",
-      "timestamp": "2026-05-07T20:10:00Z",
+      "note": "Reviewed generated governance artifact.",
+      "timestamp": "2026-05-09T12:00:00Z",
       "to_status": "reviewed"
     },
     {
       "actor": "governance-team",
       "from_status": "reviewed",
-      "note": "Approved for deterministic compilation.",
-      "timestamp": "2026-05-07T20:20:00Z",
+      "note": "Approved finance governance for publishing.",
+      "timestamp": "2026-05-09T12:00:00Z",
       "to_status": "approved"
     }
   ],
-  "review_id": "review-finance-001",
+  "review_id": "review-finance_policy",
   "review_status": "approved",
-  "source_document": "finance_governance.txt",
+  "source_document": "finance_policy.txt",
   "warnings": []
 }
