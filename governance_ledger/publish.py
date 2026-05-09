@@ -108,9 +108,21 @@ def publish_review_file(
     snapshot_path.parent.mkdir(parents=True, exist_ok=True)
     _write_json(snapshot_path, snapshot)
 
+    manifest = _build_publication_manifest(
+        compiled_contract,
+        contract_path=contract_path,
+        deployed_review_path=deployed_review_path,
+        snapshot_path=snapshot_path,
+        published_at=timestamp,
+        published_by=actor,
+    )
+    manifest_path = Path(contracts_dir) / f"{policy_stem}.publication_manifest.json"
+    _write_json(manifest_path, manifest)
+
     return {
         "contract": str(contract_path),
         "deployed_review": str(deployed_review_path),
+        "manifest": str(manifest_path),
         "snapshot": str(snapshot_path),
     }
 
@@ -164,6 +176,42 @@ def _contract_filename(compiled_contract: dict[str, Any]) -> str:
     contract_id = compiled_contract["contract_id"]
     contract_version = compiled_contract["contract_version"]
     return f"{contract_id}-{contract_version}.contract.json"
+
+
+def _build_publication_manifest(
+    compiled_contract: dict[str, Any],
+    *,
+    contract_path: Path,
+    deployed_review_path: Path,
+    snapshot_path: Path,
+    published_at: str | None,
+    published_by: str,
+) -> dict[str, Any]:
+    contract_hash = compiled_contract["contract_hash"]
+    if not contract_hash.startswith("sha256:"):
+        contract_hash = f"sha256:{contract_hash}"
+    return {
+        "published_at": published_at,
+        "published_by": published_by,
+        "contracts": [
+            {
+                "contract_id": compiled_contract["contract_id"],
+                "contract_version": compiled_contract["contract_version"],
+                "contract_hash": contract_hash,
+                "path": str(contract_path),
+            }
+        ],
+        "reviews": [
+            {
+                "path": str(deployed_review_path),
+            }
+        ],
+        "snapshots": [
+            {
+                "path": str(snapshot_path),
+            }
+        ],
+    }
 
 
 def _policy_stem_from_review_path(review_path: Path) -> str:

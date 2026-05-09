@@ -1,5 +1,6 @@
 """Deterministic Governance-Ledger primitives."""
 
+from governance_ledger.checks import check_validation_directory, format_check_summary
 from governance_ledger.contract_linkage import attach_compiled_contract
 from governance_ledger.deployment import attach_deployment
 from governance_ledger.diff import diff_reviews
@@ -22,11 +23,13 @@ __all__ = [
     "build_review_report",
     "build_review_provenance",
     "build_pr_summary",
+    "check_validation_directory",
     "create_snapshot",
     "diff_reviews",
     "extract_constraints",
     "format_publish_summary",
     "format_run_summary",
+    "format_check_summary",
     "publish_review_file",
     "review_constraints",
     "rollback_to_snapshot",

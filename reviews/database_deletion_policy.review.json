@@ -1,5 +1,5 @@
 {
-  "created_at": "2026-05-09T04:11:35Z",
+  "created_at": "2026-05-09T04:36:32Z",
   "detected_constraints": [
     {
       "source_text": "require database-admin approval",
@@ -17,6 +17,7 @@
   "source_document": "database_deletion_policy.txt",
   "warnings": [
     {
+      "severity": "warning",
       "text": "Deletion requests shall retain audit evidence.",
       "type": "extraction_gap"
     }

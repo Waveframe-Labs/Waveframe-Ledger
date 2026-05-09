@@ -7,7 +7,7 @@ version: "0.1.0"
 status: "draft"
 
 created: "2026-05-08"
-updated: "2026-05-08"
+updated_date: "2026-05-09"
 
 authors:
   - "Waveframe Labs"

@@ -7,7 +7,7 @@ version: "0.1.0"
 status: "draft"
 
 created: "2026-05-08"
-updated: "2026-05-08"
+updated_date: "2026-05-09"
 
 authors:
   - "Waveframe Labs"
@@ -118,6 +118,8 @@ Governance-Ledger separates draft, review, runtime, and recovery artifacts by di
 - `snapshots/`: deterministic frozen governance state snapshots.
 
 Runtime contracts should only be written to `contracts/`.
+
+Publication manifests are written to `contracts/` because they index runtime contract publication outputs.
 
 ## Detected Constraints
 
@@ -307,5 +309,6 @@ Initial JSON Schemas live in [schemas/](schemas/):
 - [review.schema.json](schemas/review.schema.json)
 - [snapshot.schema.json](schemas/snapshot.schema.json)
 - [deployment.schema.json](schemas/deployment.schema.json)
+- [publication_manifest.schema.json](schemas/publication_manifest.schema.json)
 
 Schemas are references for artifact shape stability. Runtime code remains deterministic and explicit; schemas document expected object boundaries.

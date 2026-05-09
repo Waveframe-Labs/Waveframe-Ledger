@@ -5,6 +5,7 @@ import pytest
 
 from governance_ledger.publish import approve_review_file, publish_review_file
 from governance_ledger.runner import run_policy_directory
+from governance_ledger.checks import check_validation_directory
 from governance_ledger.summary import build_pr_summary, format_run_summary
 
 
@@ -33,6 +34,8 @@ def test_run_policy_directory_generates_draft_artifacts_only(tmp_path):
             "validation": str(generated_dir / "finance_policy.validation.json"),
             "review": str(reviews_dir / "finance_policy.review.json"),
             "review_id": "review-finance_policy",
+            "review_status": "pending",
+            "review_created": True,
             "constraint_count": 3,
             "warning_count": 0,
             "ambiguity_count": 0,
@@ -104,6 +107,7 @@ def test_approve_then_publish_creates_contract_review_and_snapshot_artifacts(tmp
     assert approved_review["approval_note"] == "Approved finance governance."
     assert Path(result["contract"]).parent == contracts_dir
     assert Path(result["deployed_review"]).parent == reviews_dir
+    assert Path(result["manifest"]).parent == contracts_dir
     assert Path(result["snapshot"]).parent == snapshots_dir
     assert Path(result["contract"]).name.endswith(".contract.json")
 
@@ -111,6 +115,35 @@ def test_approve_then_publish_creates_contract_review_and_snapshot_artifacts(tmp
     assert deployed_review["review_status"] == "deployed"
     assert deployed_review["compiled_contract"]["contract_hash"]
     assert deployed_review["deployment"]["environment"] == "production"
+
+    manifest = json.loads(Path(result["manifest"]).read_text())
+    assert manifest["published_at"] == "2026-05-09T12:30:00Z"
+    assert manifest["contracts"][0]["contract_hash"].startswith("sha256:")
+    assert manifest["contracts"][0]["path"] == result["contract"]
+
+
+def test_check_validation_directory_fails_on_error_severity(tmp_path):
+    generated_dir = tmp_path / "generated"
+    generated_dir.mkdir()
+    (generated_dir / "policy.validation.json").write_text(
+        json.dumps(
+            {
+                "warnings": [
+                    {
+                        "type": "ambiguous_authority",
+                        "severity": "error",
+                        "text": "appropriate manager",
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = check_validation_directory(generated_dir)
+
+    assert result["status"] == "failed"
+    assert result["error_count"] == 1
 
 
 def test_format_run_summary_exposes_operational_counts(tmp_path):
@@ -128,6 +161,7 @@ def test_format_run_summary_exposes_operational_counts(tmp_path):
     assert "3 constraints detected" in summary
     assert "0 ambiguity warnings detected" in summary
     assert "pending human approval" in summary
+    assert "review-finance_policy preserved" in summary
 
 
 def test_build_pr_summary_formats_constraints_warnings_and_status():
@@ -155,6 +189,7 @@ def test_build_pr_summary_formats_constraints_warnings_and_status():
         "warnings": [
             {
                 "type": "ambiguous_authority",
+                "severity": "error",
                 "text": "appropriate manager",
             },
         ],
@@ -167,7 +202,7 @@ def test_build_pr_summary_formats_constraints_warnings_and_status():
     assert "- required_role: manager" in summary
     assert "- threshold: transfer_funds > 1000000" in summary
     assert "- separation_of_duties" in summary
-    assert '- ambiguous clause: "appropriate manager"' in summary
+    assert 'error: ambiguous clause: "appropriate manager"' in summary
     assert "BLOCKED_PENDING_REVIEW" in summary
 
 

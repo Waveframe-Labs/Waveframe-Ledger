@@ -1,0 +1,22 @@
+{
+  "contracts": [
+    {
+      "contract_hash": "sha256:468d80661be7731b5df4192d071261b35f7e023b5a587426f7714dbbbba11b47",
+      "contract_id": "finance-policy",
+      "contract_version": "0.1.0",
+      "path": "contracts\\finance-policy-0.1.0.contract.json"
+    }
+  ],
+  "published_at": "2026-05-09T12:30:00Z",
+  "published_by": "governance-team",
+  "reviews": [
+    {
+      "path": "reviews\\finance_policy.deployed.review.json"
+    }
+  ],
+  "snapshots": [
+    {
+      "path": "snapshots\\snapshot-98939483f949.json"
+    }
+  ]
+}

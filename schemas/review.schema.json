@@ -88,11 +88,15 @@
     },
     "warning": {
       "type": "object",
-      "required": ["type", "text"],
+      "required": ["type", "severity", "text"],
       "properties": {
         "type": {
           "type": "string",
           "enum": ["unsupported_constraint", "ambiguous_authority", "extraction_gap"]
+        },
+        "severity": {
+          "type": "string",
+          "enum": ["warning", "error"]
         },
         "text": {
           "type": "string"

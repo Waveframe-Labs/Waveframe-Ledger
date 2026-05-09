@@ -66,15 +66,21 @@ def run_policy_file(
 
     _write_json(generated_path, structured_policy)
     _write_json(validation_path, validation)
-    if not review_path.exists():
+    review_created = not review_path.exists()
+    if review_created:
         _write_json(review_path, review)
+        review_for_summary = review
+    else:
+        review_for_summary = json.loads(review_path.read_text(encoding="utf-8"))
 
     return {
         "policy": str(input_path),
         "generated": str(generated_path),
         "validation": str(validation_path),
         "review": str(review_path),
-        "review_id": review["review_id"],
+        "review_id": review_for_summary["review_id"],
+        "review_status": review_for_summary["review_status"],
+        "review_created": review_created,
         "constraint_count": len(review["detected_constraints"]),
         "warning_count": len(review["warnings"]),
         "ambiguity_count": sum(

@@ -29,14 +29,25 @@ def format_run_summary(results: list[dict[str, Any]]) -> str:
                     f"  {ambiguity_count} ambiguity warnings detected",
                     "",
                     "Review:",
-                    f"  {result.get('review_id')} created",
+                    f"  {result.get('review_id')} {_review_action(result)}",
                     "",
                     "Status:",
-                    "  pending human approval",
+                    f"  {_status_message(result)}",
                 ]
             )
         )
     return "\n".join(sections)
+
+
+def _review_action(result: dict[str, Any]) -> str:
+    return "created" if result.get("review_created") else "preserved"
+
+
+def _status_message(result: dict[str, Any]) -> str:
+    status = result.get("review_status")
+    if status == "pending":
+        return "pending human approval"
+    return str(status)
 
 
 def format_publish_summary(result: dict[str, str]) -> str:
@@ -53,6 +64,9 @@ def format_publish_summary(result: dict[str, str]) -> str:
             "",
             "Review:",
             f"  {result['deployed_review']}",
+            "",
+            "Manifest:",
+            f"  {result['manifest']}",
             "",
             "Snapshot:",
             f"  {result['snapshot']}",
@@ -120,11 +134,12 @@ def _format_constraint(constraint: dict[str, Any]) -> str:
 
 def _format_warning(warning: dict[str, Any]) -> str:
     warning_type = warning.get("type")
+    severity = warning.get("severity", "warning")
     text = warning.get("text")
     if warning_type == "ambiguous_authority":
-        return f'ambiguous clause: "{text}"'
+        return f'{severity}: ambiguous clause: "{text}"'
     if warning_type == "unsupported_constraint":
-        return f'unsupported constraint: "{text}"'
+        return f'{severity}: unsupported constraint: "{text}"'
     if warning_type == "extraction_gap":
-        return f'extraction gap: "{text}"'
-    return f'{warning_type}: "{text}"'
+        return f'{severity}: extraction gap: "{text}"'
+    return f'{severity}: {warning_type}: "{text}"'

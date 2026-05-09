@@ -13,6 +13,7 @@ def test_detects_unsupported_governance_language():
         "warnings": [
             {
                 "type": "unsupported_constraint",
+                "severity": "warning",
                 "text": "reasonable approval timing",
             },
         ],
@@ -31,6 +32,7 @@ def test_detects_ambiguous_authority_language():
         "warnings": [
             {
                 "type": "ambiguous_authority",
+                "severity": "error",
                 "text": "appropriate manager",
             },
         ],
@@ -44,6 +46,7 @@ def test_detects_extraction_gaps_for_unmatched_governance_sentences():
         "warnings": [
             {
                 "type": "extraction_gap",
+                "severity": "warning",
                 "text": "Transfers shall be reviewed quarterly.",
             },
         ],
@@ -80,6 +83,7 @@ def test_review_report_includes_authoring_warnings():
     assert report["warnings"] == [
         {
             "type": "unsupported_constraint",
+            "severity": "warning",
             "text": "reasonable approval timing",
         },
     ]

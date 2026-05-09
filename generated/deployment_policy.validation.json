@@ -1,6 +1,7 @@
 {
   "warnings": [
     {
+      "severity": "warning",
       "text": "Deployments require reasonable activation timing.",
       "type": "extraction_gap"
     }

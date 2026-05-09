@@ -7,7 +7,7 @@ version: "0.1.0"
 status: "draft"
 
 created: "2026-05-08"
-updated: "2026-05-08"
+updated_date: "2026-05-09"
 
 authors:
   - "Waveframe Labs"
@@ -342,10 +342,19 @@ governance-ledger publish reviews/finance_policy.review.json
 Publish output:
 
 - `contracts/<contract-id>-<version>.contract.json`
+- `contracts/<policy>.publication_manifest.json`
 - `reviews/<policy>.deployed.review.json`
 - `snapshots/<snapshot-id>.json`
 
 Runtime contracts should only exist in `contracts/`. They should not be written to `generated/`, `reviews/`, or `policies/`.
+
+Generated validation artifacts include warning severity. CI can block publication workflows with:
+
+```powershell
+governance-ledger check generated
+```
+
+The check fails when any generated validation artifact contains `severity == "error"`.
 
 ## Documentation
 

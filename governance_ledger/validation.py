@@ -27,6 +27,7 @@ def validate_authoring(text: str, policy: dict[str, Any] | None = None) -> dict[
                 warnings,
                 {
                     "type": "unsupported_constraint",
+                    "severity": "warning",
                     "text": match.group(0),
                 },
             )
@@ -37,6 +38,7 @@ def validate_authoring(text: str, policy: dict[str, Any] | None = None) -> dict[
                 warnings,
                 {
                     "type": "ambiguous_authority",
+                    "severity": "error",
                     "text": match.group(0),
                 },
             )
@@ -50,6 +52,7 @@ def validate_authoring(text: str, policy: dict[str, Any] | None = None) -> dict[
             warnings,
             {
                 "type": "extraction_gap",
+                "severity": "warning",
                 "text": sentence["text"],
             },
         )

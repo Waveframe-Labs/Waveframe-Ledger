@@ -9,6 +9,7 @@ from typing import Sequence
 
 from governance_ledger.publish import approve_review_file, publish_review_file
 from governance_ledger.runner import run_policy_directory
+from governance_ledger.checks import check_validation_directory, format_check_summary
 from governance_ledger.summary import (
     build_pr_summary,
     format_publish_summary,
@@ -49,6 +50,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     publish_parser.add_argument("--timestamp")
     publish_parser.add_argument("--json", action="store_true")
 
+    check_parser = subparsers.add_parser("check", help="check generated validation artifacts")
+    check_parser.add_argument("generated_dir")
+    check_parser.add_argument("--json", action="store_true")
+
     args = parser.parse_args(argv)
 
     if args.command == "run":
@@ -76,7 +81,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             timestamp=args.timestamp,
             note=args.note,
         )
-    else:
+    elif args.command == "publish":
         result = publish_review_file(
             args.review_path,
             generated_dir=args.generated_dir,
@@ -91,6 +96,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             enforcement_engine_version=args.enforcement_engine_version,
             timestamp=args.timestamp,
         )
+    else:
+        result = check_validation_directory(args.generated_dir)
 
     if getattr(args, "json", False):
         print(json.dumps(result, indent=2, sort_keys=True))
@@ -98,6 +105,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(format_run_summary(result))
     elif args.command == "publish":
         print(format_publish_summary(result))
+    elif args.command == "check":
+        print(format_check_summary(result))
+        return 1 if result["error_count"] else 0
     else:
         print(
             "\n".join(

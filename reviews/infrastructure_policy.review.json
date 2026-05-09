@@ -1,8 +1,13 @@
 {
-  "created_at": "2026-05-09T04:11:35Z",
+  "created_at": "2026-05-09T04:36:32Z",
   "detected_constraints": [
     {
       "source_text": "Only platform-engineers may",
+      "type": "required_role",
+      "value": "platform_engineers"
+    },
+    {
+      "source_text": "require platform-engineers approval",
       "type": "required_role",
       "value": "platform_engineers"
     },
@@ -15,10 +20,5 @@
   "review_id": "review-infrastructure_policy",
   "review_status": "pending",
   "source_document": "infrastructure_policy.txt",
-  "warnings": [
-    {
-      "text": "appropriate manager",
-      "type": "ambiguous_authority"
-    }
-  ]
+  "warnings": []
 }
