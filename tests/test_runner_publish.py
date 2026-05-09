@@ -5,6 +5,7 @@ import pytest
 
 from governance_ledger.publish import approve_review_file, publish_review_file
 from governance_ledger.runner import run_policy_directory
+from governance_ledger.summary import build_pr_summary, format_run_summary
 
 
 def test_run_policy_directory_generates_draft_artifacts_only(tmp_path):
@@ -31,6 +32,10 @@ def test_run_policy_directory_generates_draft_artifacts_only(tmp_path):
             "generated": str(generated_dir / "finance_policy.generated.json"),
             "validation": str(generated_dir / "finance_policy.validation.json"),
             "review": str(reviews_dir / "finance_policy.review.json"),
+            "review_id": "review-finance_policy",
+            "constraint_count": 3,
+            "warning_count": 0,
+            "ambiguity_count": 0,
         },
     ]
     assert (generated_dir / "finance_policy.generated.json").exists()
@@ -82,6 +87,7 @@ def test_approve_then_publish_creates_contract_review_and_snapshot_artifacts(tmp
         review_path,
         actor="governance-team",
         timestamp="2026-05-09T12:00:00Z",
+        note="Approved finance governance.",
     )
     result = publish_review_file(
         review_path,
@@ -93,6 +99,9 @@ def test_approve_then_publish_creates_contract_review_and_snapshot_artifacts(tmp
     )
 
     assert approved_review["review_status"] == "approved"
+    assert approved_review["approved_by"] == "governance-team"
+    assert approved_review["approved_at"] == "2026-05-09T12:00:00Z"
+    assert approved_review["approval_note"] == "Approved finance governance."
     assert Path(result["contract"]).parent == contracts_dir
     assert Path(result["deployed_review"]).parent == reviews_dir
     assert Path(result["snapshot"]).parent == snapshots_dir
@@ -102,6 +111,64 @@ def test_approve_then_publish_creates_contract_review_and_snapshot_artifacts(tmp
     assert deployed_review["review_status"] == "deployed"
     assert deployed_review["compiled_contract"]["contract_hash"]
     assert deployed_review["deployment"]["environment"] == "production"
+
+
+def test_format_run_summary_exposes_operational_counts(tmp_path):
+    policies_dir, generated_dir, reviews_dir, contracts_dir, snapshots_dir = _draft_policy(tmp_path)
+    results = run_policy_directory(
+        policies_dir,
+        generated_dir=generated_dir,
+        reviews_dir=reviews_dir,
+    )
+
+    summary = format_run_summary(results)
+
+    assert "[Governance Ledger]" in summary
+    assert "Policy: finance_policy.txt" in summary
+    assert "3 constraints detected" in summary
+    assert "0 ambiguity warnings detected" in summary
+    assert "pending human approval" in summary
+
+
+def test_build_pr_summary_formats_constraints_warnings_and_status():
+    review = {
+        "source_document": "finance_policy.txt",
+        "review_status": "pending",
+        "detected_constraints": [
+            {
+                "type": "required_role",
+                "value": "manager",
+                "source_text": "require manager approval",
+            },
+            {
+                "type": "approval_threshold",
+                "operation": "transfer_funds",
+                "value": 1_000_000,
+                "source_text": "above $1M",
+            },
+            {
+                "type": "separation_of_duties",
+                "value": True,
+                "source_text": "must be separate",
+            },
+        ],
+        "warnings": [
+            {
+                "type": "ambiguous_authority",
+                "text": "appropriate manager",
+            },
+        ],
+    }
+
+    summary = build_pr_summary(review)
+
+    assert "## Governance Review Summary" in summary
+    assert "Policy: finance_policy.txt" in summary
+    assert "- required_role: manager" in summary
+    assert "- threshold: transfer_funds > 1000000" in summary
+    assert "- separation_of_duties" in summary
+    assert '- ambiguous clause: "appropriate manager"' in summary
+    assert "BLOCKED_PENDING_REVIEW" in summary
 
 
 def _draft_policy(tmp_path):

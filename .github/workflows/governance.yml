@@ -28,4 +28,10 @@ jobs:
         run: python -m pytest -q
 
       - name: Generate draft governance artifacts
-        run: governance-ledger run policies
+        run: governance-ledger run policies --pr-summary governance-review-summary.md
+
+      - name: Upload governance review summary
+        uses: actions/upload-artifact@v4
+        with:
+          name: governance-review-summary
+          path: governance-review-summary.md

@@ -43,6 +43,12 @@ def approve_review_file(
     elif review.get("review_status") != "approved":
         raise ValueError("Only pending, reviewed, or approved reviews can be approved.")
 
+    approval_timestamp = review["lifecycle"][-1]["timestamp"]
+    approval_note = review["lifecycle"][-1]["note"]
+    review["approved_by"] = actor
+    review["approved_at"] = approval_timestamp
+    review["approval_note"] = approval_note
+
     _write_json(path, review)
     return review
 

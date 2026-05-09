@@ -74,6 +74,12 @@ def run_policy_file(
         "generated": str(generated_path),
         "validation": str(validation_path),
         "review": str(review_path),
+        "review_id": review["review_id"],
+        "constraint_count": len(review["detected_constraints"]),
+        "warning_count": len(review["warnings"]),
+        "ambiguity_count": sum(
+            1 for warning in review["warnings"] if warning["type"] == "ambiguous_authority"
+        ),
     }
 
 
