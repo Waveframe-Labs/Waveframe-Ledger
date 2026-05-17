@@ -1,13 +1,19 @@
-"""Helpers for resolving local integration checkouts during development."""
+"""Opt-in helpers for resolving local integration checkouts during development."""
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
+LOCAL_INTEGRATIONS_ENV = "GOVERNANCE_LEDGER_USE_LOCAL_INTEGRATIONS"
+
 
 def ensure_integration_paths(*, compiler: bool = False, guard: bool = False) -> None:
-    """Prefer local integration sources when this package is tested from a checkout."""
+    """Prefer local integration sources only when explicitly enabled for dev work."""
+    if os.environ.get(LOCAL_INTEGRATIONS_ENV) != "1":
+        return
+
     for path in reversed(_candidate_paths(compiler=compiler, guard=guard)):
         if path.exists():
             path_text = str(path)

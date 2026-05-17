@@ -1,3 +1,29 @@
+# Python build artifacts
+dist/
+build/
+*.egg-info/
+
+# Pytest/cache
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environments
+venv/
+.venv/
+
+# Local runtime/generated artifacts
+runtime/
+
+# Local package installs
+pip-wheel-metadata/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
