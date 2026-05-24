@@ -14,6 +14,7 @@ from governance_ledger.report import review_constraints, validate_constraints
 from governance_ledger.review import build_review_report
 from governance_ledger.rollback import rollback_to_snapshot
 from governance_ledger.runner import run_policy_directory, run_policy_file
+from governance_ledger.semantics.diff import build_authority_diff_impact
 from governance_ledger.semantics.preview import build_governance_impact_preview
 from governance_ledger.snapshot import create_snapshot
 from governance_ledger.summary import build_pr_summary, format_publish_summary, format_run_summary
@@ -27,6 +28,7 @@ __all__ = [
     "build_review_provenance",
     "build_pr_summary",
     "build_governance_impact_preview",
+    "build_authority_diff_impact",
     "check_validation_directory",
     "create_snapshot",
     "diff_reviews",

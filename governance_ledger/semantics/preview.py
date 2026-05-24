@@ -9,6 +9,8 @@ from __future__ import annotations
 import copy
 from typing import Any
 
+from governance_ledger.schema_versions import GOVERNANCE_IMPACT_PREVIEW_V1
+
 
 def build_governance_impact_preview(authority_contract: dict[str, Any]) -> dict[str, Any]:
     """Return governance_impact_preview.v1 for an authority contract."""
@@ -28,7 +30,7 @@ def build_governance_impact_preview(authority_contract: dict[str, Any]) -> dict[
     lifecycle_implications = _lifecycle_implications(lifecycle_transitions, continuity_requirements)
 
     return {
-        "schema_version": "governance_impact_preview.v1",
+        "schema_version": GOVERNANCE_IMPACT_PREVIEW_V1,
         "authority_ref": authority_ref,
         "contract_id": contract_id,
         "contract_version": contract_version,

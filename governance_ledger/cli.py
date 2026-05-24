@@ -21,6 +21,10 @@ from governance_ledger.replay import (
     replay_governance_compilation,
     verify_authority_lineage,
 )
+from governance_ledger.semantics.diff import (
+    build_authority_diff_impact,
+    format_authority_diff_impact,
+)
 from governance_ledger.semantics.preview import (
     build_governance_impact_preview,
     format_governance_impact_preview,
@@ -85,6 +89,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     preview_parser.add_argument("contract")
     preview_parser.add_argument("--output")
     preview_parser.add_argument("--json", action="store_true")
+
+    diff_impact_parser = subparsers.add_parser(
+        "diff-impact",
+        help="derive authority_diff_impact.v1 from old and new authority contracts",
+    )
+    diff_impact_parser.add_argument("--old", required=True)
+    diff_impact_parser.add_argument("--new", required=True)
+    diff_impact_parser.add_argument("--output")
+    diff_impact_parser.add_argument("--json", action="store_true")
 
     replay_authority_parser = subparsers.add_parser(
         "replay-authority",
@@ -180,6 +193,16 @@ def main(argv: Sequence[str] | None = None) -> int:
                 json.dumps(result, indent=2, sort_keys=True) + "\n",
                 encoding="utf-8",
             )
+    elif args.command == "diff-impact":
+        result = build_authority_diff_impact(
+            _read_json_arg(args.old) or {},
+            _read_json_arg(args.new) or {},
+        )
+        if args.output:
+            Path(args.output).write_text(
+                json.dumps(result, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
     else:
         result = show_artifact(args.path)
 
@@ -200,6 +223,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(format_artifact(args.path, result))
     elif args.command == "preview":
         print(format_governance_impact_preview(result))
+    elif args.command == "diff-impact":
+        print(format_authority_diff_impact(result))
     elif args.command in {"replay-authority", "replay-execution", "verify-lineage"}:
         print(_format_replay_summary(result))
         return 0 if _replay_ok(result) else 1
