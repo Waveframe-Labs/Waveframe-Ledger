@@ -1,0 +1,1 @@
+"""Continuity implication derivation namespace."""

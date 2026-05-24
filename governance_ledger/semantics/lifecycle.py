@@ -1,0 +1,1 @@
+"""Lifecycle implication derivation namespace."""

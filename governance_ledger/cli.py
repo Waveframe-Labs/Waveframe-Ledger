@@ -21,6 +21,10 @@ from governance_ledger.replay import (
     replay_governance_compilation,
     verify_authority_lineage,
 )
+from governance_ledger.semantics.preview import (
+    build_governance_impact_preview,
+    format_governance_impact_preview,
+)
 from governance_ledger.summary import (
     build_pr_summary,
     format_publish_summary,
@@ -73,6 +77,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     show_parser = subparsers.add_parser("show", help="show a governance artifact")
     show_parser.add_argument("path")
     show_parser.add_argument("--json", action="store_true")
+
+    preview_parser = subparsers.add_parser(
+        "preview",
+        help="derive governance_impact_preview.v1 from an authority contract",
+    )
+    preview_parser.add_argument("contract")
+    preview_parser.add_argument("--output")
+    preview_parser.add_argument("--json", action="store_true")
 
     replay_authority_parser = subparsers.add_parser(
         "replay-authority",
@@ -161,6 +173,13 @@ def main(argv: Sequence[str] | None = None) -> int:
             authority_contract=_read_json_arg(args.contract),
             compilation_report=_read_json_arg(args.report),
         )
+    elif args.command == "preview":
+        result = build_governance_impact_preview(_read_json_arg(args.contract) or {})
+        if args.output:
+            Path(args.output).write_text(
+                json.dumps(result, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
     else:
         result = show_artifact(args.path)
 
@@ -179,6 +198,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(format_contract_list(result))
     elif args.command == "show":
         print(format_artifact(args.path, result))
+    elif args.command == "preview":
+        print(format_governance_impact_preview(result))
     elif args.command in {"replay-authority", "replay-execution", "verify-lineage"}:
         print(_format_replay_summary(result))
         return 0 if _replay_ok(result) else 1

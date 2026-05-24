@@ -1,0 +1,1 @@
+"""Semantic diff derivation namespace."""

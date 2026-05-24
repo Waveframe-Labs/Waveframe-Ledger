@@ -1,0 +1,1 @@
+"""Semantic packet derivation namespace."""

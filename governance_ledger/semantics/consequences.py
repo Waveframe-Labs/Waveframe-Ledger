@@ -1,0 +1,1 @@
+"""Operational consequence derivation namespace."""
