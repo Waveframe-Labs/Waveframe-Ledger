@@ -17,6 +17,7 @@ from governance_ledger.runner import run_policy_directory, run_policy_file
 from governance_ledger.semantics.diff import build_authority_diff_impact
 from governance_ledger.semantics.packets import build_governance_review_packet
 from governance_ledger.semantics.preview import build_governance_impact_preview
+from governance_ledger.semantics.publication import build_authority_bundle
 from governance_ledger.snapshot import create_snapshot
 from governance_ledger.summary import build_pr_summary, format_publish_summary, format_run_summary
 from governance_ledger.validation import validate_authoring, validate_compiler_policy
@@ -30,6 +31,7 @@ __all__ = [
     "build_pr_summary",
     "build_governance_impact_preview",
     "build_authority_diff_impact",
+    "build_authority_bundle",
     "build_governance_review_packet",
     "check_validation_directory",
     "create_snapshot",

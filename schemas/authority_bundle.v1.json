@@ -1,0 +1,212 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.waveframe.dev/authority_bundle.v1.json",
+  "title": "Authority Bundle",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "publication_id",
+    "authority_ref",
+    "contract_hash",
+    "authority_contract",
+    "publication_manifest",
+    "governance_impact_preview",
+    "authority_diff_impact",
+    "governance_review_packets",
+    "semantic_artifacts",
+    "review_packets",
+    "lineage",
+    "provenance",
+    "schema_compatibility",
+    "publication_meaning",
+    "operational_implications",
+    "continuity_implications",
+    "immutable_inputs",
+    "non_goals"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "authority_bundle.v1"
+    },
+    "publication_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "authority_ref": {
+      "type": "string",
+      "minLength": 1
+    },
+    "contract_hash": {
+      "type": "string",
+      "minLength": 1
+    },
+    "authority_contract": {
+      "type": "object"
+    },
+    "publication_manifest": {
+      "type": "object"
+    },
+    "governance_impact_preview": {
+      "type": "object"
+    },
+    "authority_diff_impact": {
+      "type": ["object", "null"]
+    },
+    "governance_review_packets": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "semantic_artifacts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["artifact_type", "artifact_hash"],
+        "properties": {
+          "artifact_type": {
+            "enum": [
+              "governance_impact_preview.v1",
+              "authority_diff_impact.v1"
+            ]
+          },
+          "artifact_hash": {
+            "type": "string",
+            "pattern": "^sha256:[a-f0-9]{64}$"
+          }
+        }
+      }
+    },
+    "review_packets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["packet_id", "packet_hash", "authority_ref", "operational_state"],
+        "properties": {
+          "packet_id": {
+            "type": ["string", "null"]
+          },
+          "packet_hash": {
+            "type": "string",
+            "pattern": "^sha256:[a-f0-9]{64}$"
+          },
+          "authority_ref": {
+            "type": ["string", "null"]
+          },
+          "operational_state": {
+            "type": ["string", "null"]
+          }
+        }
+      }
+    },
+    "lineage": {
+      "type": "object"
+    },
+    "provenance": {
+      "type": "object"
+    },
+    "schema_compatibility": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["compatibility_mode", "artifacts", "expected", "compatible"],
+      "properties": {
+        "compatibility_mode": {
+          "const": "additive_v1"
+        },
+        "artifacts": {
+          "type": "object"
+        },
+        "expected": {
+          "type": "object"
+        },
+        "compatible": {
+          "type": "boolean"
+        }
+      }
+    },
+    "publication_meaning": {
+      "type": "string",
+      "minLength": 1
+    },
+    "operational_implications": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "continuity_implications": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "immutable_inputs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "authority_hash",
+        "manifest_hash",
+        "preview_hash",
+        "diff_hash",
+        "review_packet_hashes"
+      ],
+      "properties": {
+        "authority_hash": {
+          "type": "string",
+          "minLength": 1
+        },
+        "manifest_hash": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "preview_hash": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "diff_hash": {
+          "type": ["string", "null"],
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "review_packet_hashes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^sha256:[a-f0-9]{64}$"
+          }
+        }
+      }
+    },
+    "non_goals": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "const": "does_not_deploy_authority"
+        },
+        {
+          "const": "does_not_approve_authority"
+        },
+        {
+          "const": "does_not_change_execution_outcome"
+        },
+        {
+          "const": "does_not_mutate_evidence"
+        },
+        {
+          "const": "does_not_alter_replay"
+        },
+        {
+          "const": "does_not_bypass_guard"
+        },
+        {
+          "const": "does_not_call_cloud"
+        }
+      ],
+      "items": false
+    }
+  }
+}

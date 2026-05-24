@@ -33,6 +33,10 @@ from governance_ledger.semantics.preview import (
     build_governance_impact_preview,
     format_governance_impact_preview,
 )
+from governance_ledger.semantics.publication import (
+    build_authority_bundle,
+    format_authority_bundle,
+)
 from governance_ledger.summary import (
     build_pr_summary,
     format_publish_summary,
@@ -114,6 +118,18 @@ def main(argv: Sequence[str] | None = None) -> int:
     review_packet_parser.add_argument("--review-metadata")
     review_packet_parser.add_argument("--output")
     review_packet_parser.add_argument("--json", action="store_true")
+
+    authority_bundle_parser = subparsers.add_parser(
+        "authority-bundle",
+        help="derive authority_bundle.v1 from published governance artifacts",
+    )
+    authority_bundle_parser.add_argument("--authority", required=True)
+    authority_bundle_parser.add_argument("--manifest", required=True)
+    authority_bundle_parser.add_argument("--preview", required=True)
+    authority_bundle_parser.add_argument("--diff")
+    authority_bundle_parser.add_argument("--review-packet", action="append", default=[])
+    authority_bundle_parser.add_argument("--output")
+    authority_bundle_parser.add_argument("--json", action="store_true")
 
     replay_authority_parser = subparsers.add_parser(
         "replay-authority",
@@ -232,6 +248,22 @@ def main(argv: Sequence[str] | None = None) -> int:
                 json.dumps(result, indent=2, sort_keys=True) + "\n",
                 encoding="utf-8",
             )
+    elif args.command == "authority-bundle":
+        result = build_authority_bundle(
+            authority_contract=_read_json_arg(args.authority) or {},
+            publication_manifest=_read_json_arg(args.manifest) or {},
+            governance_impact_preview=_read_json_arg(args.preview) or {},
+            authority_diff_impact=_read_json_arg(args.diff),
+            governance_review_packets=[
+                _read_json_arg(packet_path) or {}
+                for packet_path in args.review_packet
+            ],
+        )
+        if args.output:
+            Path(args.output).write_text(
+                json.dumps(result, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
     else:
         result = show_artifact(args.path)
 
@@ -256,6 +288,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(format_authority_diff_impact(result))
     elif args.command == "review-packet":
         print(format_governance_review_packet(result))
+    elif args.command == "authority-bundle":
+        print(format_authority_bundle(result))
     elif args.command in {"replay-authority", "replay-execution", "verify-lineage"}:
         print(_format_replay_summary(result))
         return 0 if _replay_ok(result) else 1
