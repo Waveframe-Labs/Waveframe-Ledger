@@ -25,6 +25,10 @@ from governance_ledger.semantics.diff import (
     build_authority_diff_impact,
     format_authority_diff_impact,
 )
+from governance_ledger.semantics.packets import (
+    build_governance_review_packet,
+    format_governance_review_packet,
+)
 from governance_ledger.semantics.preview import (
     build_governance_impact_preview,
     format_governance_impact_preview,
@@ -98,6 +102,18 @@ def main(argv: Sequence[str] | None = None) -> int:
     diff_impact_parser.add_argument("--new", required=True)
     diff_impact_parser.add_argument("--output")
     diff_impact_parser.add_argument("--json", action="store_true")
+
+    review_packet_parser = subparsers.add_parser(
+        "review-packet",
+        help="derive governance_review_packet.v1 from semantic governance artifacts",
+    )
+    review_packet_parser.add_argument("--authority", required=True)
+    review_packet_parser.add_argument("--preview", required=True)
+    review_packet_parser.add_argument("--diff")
+    review_packet_parser.add_argument("--execution-evidence")
+    review_packet_parser.add_argument("--review-metadata")
+    review_packet_parser.add_argument("--output")
+    review_packet_parser.add_argument("--json", action="store_true")
 
     replay_authority_parser = subparsers.add_parser(
         "replay-authority",
@@ -203,6 +219,19 @@ def main(argv: Sequence[str] | None = None) -> int:
                 json.dumps(result, indent=2, sort_keys=True) + "\n",
                 encoding="utf-8",
             )
+    elif args.command == "review-packet":
+        result = build_governance_review_packet(
+            authority_contract=_read_json_arg(args.authority) or {},
+            governance_impact_preview=_read_json_arg(args.preview) or {},
+            authority_diff_impact=_read_json_arg(args.diff),
+            execution_evidence=_read_json_arg(args.execution_evidence),
+            review_metadata=_read_json_arg(args.review_metadata),
+        )
+        if args.output:
+            Path(args.output).write_text(
+                json.dumps(result, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
     else:
         result = show_artifact(args.path)
 
@@ -225,6 +254,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(format_governance_impact_preview(result))
     elif args.command == "diff-impact":
         print(format_authority_diff_impact(result))
+    elif args.command == "review-packet":
+        print(format_governance_review_packet(result))
     elif args.command in {"replay-authority", "replay-execution", "verify-lineage"}:
         print(_format_replay_summary(result))
         return 0 if _replay_ok(result) else 1
