@@ -3,11 +3,11 @@ title: "Governance Object Model"
 document_type: "reference"
 system: "Governance-Ledger"
 component: "core"
-version: "0.2.0"
+version: "0.3.0"
 status: "draft"
 
 created: "2026-05-08"
-updated: "2026-05-10"
+updated: "2026-05-24"
 
 authors:
   - "Waveframe Labs"
@@ -22,7 +22,7 @@ repository: "https://github.com/Waveframe-Labs/Governance-Ledger"
 summary: >
   Reference model for Governance-Ledger review artifacts, lifecycle entries,
   compiled contract linkage, deployment provenance, snapshots, rollback
-  provenance, and governance diffs.
+  provenance, governance diffs, and semantic artifacts.
 
 related_components:
   - "CRI-CORE"
@@ -35,6 +35,7 @@ related_documents:
   - "LIFECYCLE.md"
   - "PROVENANCE.md"
   - "NON_GOALS.md"
+  - "SEMANTICS.md"
 
 governance_primitives:
   - "review_artifact"
@@ -43,6 +44,7 @@ governance_primitives:
   - "snapshot"
   - "rollback"
   - "governance_diff"
+  - "semantic_artifact"
 
 determinism:
   deterministic_ids: true
@@ -310,6 +312,19 @@ Review diffs compare governance versions.
 
 Diffs are structural, not semantic guesses.
 
+## Semantic Artifacts
+
+Semantic artifacts are deterministic derivations from structured authority and publication artifacts. They live under `governance_ledger/semantics/` and are not runtime evaluations.
+
+Canonical semantic artifacts:
+
+- `governance_impact_preview.v1`: authority summary, enforcement behavior, consequences, lifecycle implications, and example governed outcomes.
+- `authority_diff_impact.v1`: semantic impact of authority contract changes.
+- `governance_review_packet.v1`: review packet binding semantic context, immutable inputs, and review metadata.
+- `authority_bundle.v1`: publishable governance object binding authority, publication manifest, semantic artifacts, lineage, provenance, schema compatibility, and immutable inputs.
+
+Semantic artifacts do not call Guard, call Cloud, mutate evidence, alter replay, bypass admissibility, or change execution outcomes.
+
 ## Versioned Schemas
 
 Initial JSON Schemas live in [schemas/](schemas/):
@@ -320,5 +335,9 @@ Initial JSON Schemas live in [schemas/](schemas/):
 - [cricore_policy.schema.json](schemas/cricore_policy.schema.json)
 - [publication_manifest.schema.json](schemas/publication_manifest.schema.json)
 - [contract_registry.schema.json](schemas/contract_registry.schema.json)
+- [governance_impact_preview.v1.json](schemas/governance_impact_preview.v1.json)
+- [authority_diff_impact.v1.json](schemas/authority_diff_impact.v1.json)
+- [governance_review_packet.v1.json](schemas/governance_review_packet.v1.json)
+- [authority_bundle.v1.json](schemas/authority_bundle.v1.json)
 
 Schemas are references for artifact shape stability. Runtime code remains deterministic and explicit; schemas document expected object boundaries.

@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "governance-ledger"
-version = "0.2.0"
-description = "Governance compiler and semantic validation infrastructure for deterministic governance operationalization."
+version = "0.3.0"
+description = "Governance compiler and semantic derivation infrastructure for deterministic governance operationalization."
 readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"

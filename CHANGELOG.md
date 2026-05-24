@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.3.0 - 2026-05-24
+
+Governance-Ledger v0.3.0 adds the canonical semantic derivation layer and promotes semantic governance artifacts to first-class Ledger outputs.
+
+### Added
+
+- `governance_ledger/semantics/` as the canonical semantic derivation layer.
+- `governance_impact_preview.v1` for deterministic governance summaries, enforcement behavior, consequences, lifecycle implications, and example governed outcomes.
+- `authority_diff_impact.v1` for semantic impact of authority changes, including operational, escalation, lifecycle continuity, and replay continuity implications.
+- `governance_review_packet.v1` for review-ready packets that bind authority, previews, optional diffs, optional evidence, review context, immutable inputs, and non-goals.
+- `authority_bundle.v1` as the publishable governance object binding authority contracts, publication manifests, semantic artifacts, optional review packets, lineage, provenance, schema compatibility, and immutable inputs.
+- CLI commands: `preview`, `diff-impact`, `review-packet`, and `authority-bundle`.
+- Canonical JSON schemas for all new semantic artifacts.
+- `SEMANTICS.md` documenting semantic governance compilation boundaries, artifacts, guarantees, and CLI examples.
+
+### Changed
+
+- README now describes Ledger as governance compiler and semantic derivation infrastructure.
+- Documentation now explicitly distinguishes Ledger-owned governance meaning from Cloud-owned governance operations and Guard-owned admissibility.
+- Package version bumped to `0.3.0`.
+
+### Verification
+
+- Full test suite passes with `125` tests.
+
 ## 0.2.0 - 2026-05-17
 
 Governance-Ledger v0.2.0 is a major release that repositions Ledger as governance compiler and semantic validation infrastructure.

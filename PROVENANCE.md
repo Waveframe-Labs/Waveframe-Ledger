@@ -3,11 +3,11 @@ title: "Governance Provenance"
 document_type: "provenance"
 system: "Governance-Ledger"
 component: "core"
-version: "0.2.0"
+version: "0.3.0"
 status: "draft"
 
 created: "2026-05-08"
-updated: "2026-05-10"
+updated: "2026-05-24"
 
 authors:
   - "Waveframe Labs"
@@ -22,7 +22,7 @@ repository: "https://github.com/Waveframe-Labs/Governance-Ledger"
 summary: >
   Provenance model for Governance-Ledger deterministic review IDs,
   canonical snapshot hashes, source attribution, compiled contract linkage,
-  rollback lineage, and immutable-style history.
+  semantic artifact lineage, rollback lineage, and immutable-style history.
 
 related_components:
   - "CRI-CORE"
@@ -35,6 +35,7 @@ related_documents:
   - "GOVERNANCE_OBJECT_MODEL.md"
   - "LIFECYCLE.md"
   - "NON_GOALS.md"
+  - "SEMANTICS.md"
 
 governance_primitives:
   - "review_artifact"
@@ -43,6 +44,7 @@ governance_primitives:
   - "snapshot"
   - "rollback"
   - "governance_diff"
+  - "semantic_artifact"
 
 determinism:
   deterministic_ids: true
@@ -120,6 +122,24 @@ This keeps artifact boundaries clean:
 - Governance-Ledger owns review provenance.
 - The compiler owns compiled contract semantics.
 - Runtime systems own enforcement behavior.
+
+## Semantic Artifact Provenance
+
+Semantic artifacts bind deterministic governance meaning to immutable inputs.
+
+`governance_impact_preview.v1`, `authority_diff_impact.v1`, `governance_review_packet.v1`, and `authority_bundle.v1` are derived from structured artifacts rather than runtime evaluation.
+
+Their provenance is based on:
+
+- authority identity and contract hash
+- publication manifest metadata
+- preview, diff, and packet hashes
+- authority lineage metadata
+- schema compatibility metadata
+
+`authority_bundle.v1` is the publishable governance object. It allows Cloud systems to ingest, validate, store, replay, and operate on a single context-rich object without reconstructing governance meaning.
+
+Semantic provenance does not replace Guard admissibility provenance. It records Ledger-owned meaning, not runtime allow or block decisions.
 
 ## Snapshot Hashes
 

@@ -3,11 +3,11 @@ title: "Governance-Ledger"
 document_type: "overview"
 system: "Governance-Ledger"
 component: "core"
-version: "0.2.0"
+version: "0.3.0"
 status: "draft"
 
 created: "2026-05-08"
-updated: "2026-05-17"
+updated: "2026-05-24"
 
 authors:
   - "Waveframe Labs"
@@ -20,15 +20,16 @@ license: "Apache-2.0"
 repository: "https://github.com/Waveframe-Labs/Governance-Ledger"
 
 summary: >
-  Governance-Ledger is governance compiler and semantic validation
-  infrastructure for deterministic governance operationalization.
+  Governance-Ledger is governance compiler, semantic validation, and
+  semantic derivation infrastructure for deterministic governance
+  operationalization.
 ---
 
 # Governance-Ledger
 
-Governance-Ledger turns governed source text into deterministic, reviewable, publishable governance authority. It is best understood as **Governance Compiler + Semantic Validation Infrastructure**.
+Governance-Ledger turns governed source text and authority contracts into deterministic, reviewable, publishable governance authority. It is best understood as **Governance Compiler + Semantic Derivation Infrastructure**.
 
-Ledger is not an AI policy interpreter, workflow automation layer, orchestration engine, or runtime execution system. It does not guess meaning from policy language. It normalizes supported governance statements, emits semantic diagnostics for unsafe or ambiguous structure, gates publication, preserves lineage, and makes governance authority replayable.
+Ledger is not an AI policy interpreter, workflow automation layer, orchestration engine, cloud operations layer, or runtime execution system. It does not guess meaning from policy language. It normalizes supported governance statements, emits semantic diagnostics for unsafe or ambiguous structure, derives deterministic governance meaning from structured authority artifacts, gates publication, preserves lineage, and makes governance authority replayable.
 
 ## What It Provides
 
@@ -41,7 +42,8 @@ Ledger is not an AI policy interpreter, workflow automation layer, orchestration
 - Lineage verification for authority artifacts.
 - Replay tooling for compilation and admissibility evidence.
 - Deterministic snapshots, rollback artifacts, diffs, and review lifecycle state.
-- Canonical schemas for generated governance, diagnostics, replay, publication, review, registry, and snapshot artifacts.
+- Canonical semantic artifacts for previews, diff impacts, review packets, and authority bundles.
+- Canonical schemas for generated governance, diagnostics, replay, publication, review, registry, snapshot, and semantic artifacts.
 
 ## Why This Exists
 
@@ -56,7 +58,9 @@ Governance Source
   -> Governance Compilation Report
   -> Human Review and Approval
   -> Published Authority Contract
+  -> Semantic Derivation Artifacts
   -> Manifest, Registry, Snapshot
+  -> Authority Bundle
   -> Lineage Verification and Replay
 ```
 
@@ -82,6 +86,17 @@ Publishing requires an approved review and generated policy that passes compiler
 
 Published authority contracts include `governance_authority_lineage.v1` linking the authority to source governance and compilation report hashes. Ledger can verify that lineage independently.
 
+**Semantic governance compilation**
+
+Ledger owns deterministic governance interpretation after authority has been structured. Semantic derivation modules convert `authority_contract.v1` and related publication artifacts into canonical meaning artifacts without invoking Guard, Cloud, simulation, runtime evaluation, or admissibility execution.
+
+The canonical semantic artifacts are:
+
+- `governance_impact_preview.v1`: governance summary, enforcement behavior, consequences, lifecycle implications, and example governed outcomes.
+- `authority_diff_impact.v1`: semantic impact of authority changes, including escalation, operational, lifecycle, and replay continuity implications.
+- `governance_review_packet.v1`: review-ready packet binding authority, preview, optional diff impact, optional evidence, review context, immutable hashes, and explicit non-goals.
+- `authority_bundle.v1`: publishable governance object binding authority contract, publication manifest, semantic artifacts, review packets, lineage, provenance, schema compatibility, and immutable inputs.
+
 **Replayability**
 
 Replay tooling reproduces compilation evidence from source governance and can replay admissibility decisions against authority and execution state. Replay failures produce diagnostics rather than silent disagreement.
@@ -98,9 +113,11 @@ Governance-Ledger is not:
 - Legal advice or legal reasoning.
 - A workflow automation product.
 - An orchestration engine.
+- A cloud governance operations service.
 - A runtime mutation executor.
 - A replacement for CRI-CORE Contract Compiler semantics.
 - A replacement for Waveframe Guard runtime enforcement.
+- A system that bypasses Guard admissibility.
 - A system that infers unsupported governance meaning.
 
 ## Install
@@ -174,6 +191,30 @@ governance-ledger replay-execution `
   --execution-state execution_state.json
 ```
 
+Generate semantic governance artifacts:
+
+```powershell
+governance-ledger preview `
+  contracts/finance-policy-0.1.0.contract.json `
+  --output generated/finance-policy.preview.json
+
+governance-ledger diff-impact `
+  --old contracts/finance-policy-0.1.0.contract.json `
+  --new contracts/finance-policy-0.2.0.contract.json `
+  --output generated/finance-policy.diff-impact.json
+
+governance-ledger review-packet `
+  --authority contracts/finance-policy-0.1.0.contract.json `
+  --preview generated/finance-policy.preview.json `
+  --output generated/finance-policy.review-packet.json
+
+governance-ledger authority-bundle `
+  --authority contracts/finance-policy-0.1.0.contract.json `
+  --manifest contracts/finance_policy.publication_manifest.json `
+  --preview generated/finance-policy.preview.json `
+  --output generated/finance-policy.authority-bundle.json
+```
+
 ## Artifact Layout
 
 ```text
@@ -183,6 +224,8 @@ reviews/       review, approval, compilation, and deployment evidence
 contracts/     immutable published authority contracts, manifests, registry
 snapshots/     deterministic governance state snapshots
 schemas/       canonical JSON schemas
+governance_ledger/semantics/
+               canonical semantic derivation layer
 ```
 
 Publication produces:
@@ -194,6 +237,8 @@ Publication produces:
 - `snapshots/<snapshot-id>.json`
 
 Publication artifacts use normalized POSIX-style paths such as `contracts/finance-policy-0.1.0.contract.json`, even on Windows.
+
+Semantic artifacts are deterministic derivations. They may be exported under `generated/` for review or packaging, but they are not runtime evaluations and do not change execution outcomes.
 
 ## Example Normalization
 
@@ -273,24 +318,31 @@ Published authority contracts include lineage:
 
 Publication manifests and registries carry source and report hashes so consumers can verify the authority chain without trusting local build state.
 
+Semantic artifacts also carry immutable input hashes. Authority bundles bind contract, manifest, preview, optional diff impact, and optional review packets into a single publishable governance object that Cloud can ingest, validate, store, replay, and operate without reconstructing governance context.
+
 ## Schemas
 
 Canonical schemas live in [schemas/](schemas/), including:
 
-- Governance source identity.
-- Governance diagnostics.
-- Governance compilation reports.
-- Replay authority requests.
-- Replay execution requests.
-- Publication manifests.
-- Contract registries.
-- Reviews.
-- Snapshots.
+- [governance_source.v1.json](schemas/governance_source.v1.json): governance source identity.
+- [governance_diagnostic.v1.json](schemas/governance_diagnostic.v1.json): governance diagnostics.
+- [governance_compilation_report.v1.json](schemas/governance_compilation_report.v1.json): governance compilation reports.
+- [governance_impact_preview.v1.json](schemas/governance_impact_preview.v1.json): governance impact previews.
+- [authority_diff_impact.v1.json](schemas/authority_diff_impact.v1.json): authority diff impacts.
+- [governance_review_packet.v1.json](schemas/governance_review_packet.v1.json): governance review packets.
+- [authority_bundle.v1.json](schemas/authority_bundle.v1.json): authority bundles.
+- [replay_authority_request.v1.json](schemas/replay_authority_request.v1.json): replay authority requests.
+- [replay_execution_request.v1.json](schemas/replay_execution_request.v1.json): replay execution requests.
+- [publication_manifest.v1.json](schemas/publication_manifest.v1.json): publication manifests.
+- [contract_registry.schema.json](schemas/contract_registry.schema.json): contract registries.
+- [review.schema.json](schemas/review.schema.json): reviews.
+- [snapshot.schema.json](schemas/snapshot.schema.json): snapshots.
 
 ## Documentation
 
 - [CHANGELOG.md](CHANGELOG.md)
 - [GOVERNANCE_OBJECT_MODEL.md](GOVERNANCE_OBJECT_MODEL.md)
+- [SEMANTICS.md](SEMANTICS.md)
 - [LIFECYCLE.md](LIFECYCLE.md)
 - [PROVENANCE.md](PROVENANCE.md)
 - [NON_GOALS.md](NON_GOALS.md)
