@@ -328,19 +328,20 @@ Purpose: local bundle registry.
 
 Responsibilities:
 
+- persist local `authority_bundle_registry.v1` state
 - list local `authority_bundle.v1` exports
-- show publication timestamps
-- show authority refs
-- show contract hashes
-- show lineage summary
-- show replay metadata when present
-- allow local export/open
+- show `authority_ref`, lifecycle status, publication timestamps, and supersession state
+- show governed resource, governed action, continuity posture, escalation threshold, and semantic integrity posture
+- show immutable hashes, lineage summary, and replay metadata when present
+- support local artifact actions: view bundle, open semantic preview, open diff, export bundle, supersede, revoke, and view lineage
+- render lifecycle timeline events for drafted, reviewed, published, superseded, and revoked states
 
 Must not:
 
 - sync to Cloud
 - present itself as source of runtime truth
 - manage organizations or users
+- derive governance meaning in frontend code
 
 ### Diagnostics
 

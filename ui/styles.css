@@ -381,7 +381,8 @@ button:focus {
 }
 
 .primary-action,
-.secondary-action {
+.secondary-action,
+.tertiary-action {
   min-height: 42px;
   border: 1px solid transparent;
   border-radius: 6px;
@@ -418,6 +419,19 @@ button:focus {
   color: #8a958d;
   background: #eceeea;
   cursor: not-allowed;
+}
+
+.tertiary-action {
+  min-height: 34px;
+  padding: 0 10px;
+  color: var(--charcoal);
+  background: #fff;
+  border-color: var(--line-strong);
+  font-size: 0.8rem;
+}
+
+.tertiary-action:hover {
+  background: #fff0e8;
 }
 
 .artifact-pill {
@@ -527,10 +541,146 @@ button:focus {
   overflow-wrap: anywhere;
 }
 
+.registry-summary,
 .bundle-registry,
 .diagnostics-list {
   display: grid;
   gap: 12px;
+}
+
+.registry-summary {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-bottom: 14px;
+}
+
+.registry-metric {
+  min-height: 76px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+
+.registry-metric span {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 750;
+}
+
+.registry-metric strong {
+  font-size: 1.3rem;
+}
+
+.authority-card {
+  display: grid;
+  gap: 16px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+
+.authority-card-header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.authority-card h3 {
+  overflow-wrap: anywhere;
+}
+
+.authority-card p {
+  margin: 5px 0 0;
+  color: var(--muted);
+}
+
+.status-badge {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 9px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--blue);
+  background: #eef5f7;
+  font-size: 0.76rem;
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+.status-badge.superseded {
+  color: var(--brand-dark);
+  background: #fff0e8;
+}
+
+.status-badge.revoked {
+  color: var(--red);
+  background: #fff1ef;
+}
+
+.authority-meta {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.24fr) minmax(0, 1fr);
+  gap: 7px 12px;
+  margin: 0;
+}
+
+.authority-meta dt {
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 760;
+}
+
+.authority-meta dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.lifecycle-timeline {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lifecycle-timeline li {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr);
+  gap: 10px;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fbfbf8;
+}
+
+.lifecycle-timeline strong {
+  margin: 0;
+  color: var(--green);
+}
+
+.lifecycle-timeline span {
+  overflow-wrap: anywhere;
+  color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.78rem;
+}
+
+.authority-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.registry-detail {
+  margin-top: 16px;
 }
 
 .bundle-row,
@@ -582,6 +732,7 @@ button:focus {
   .overview-grid,
   .artifact-layout,
   .publication-grid,
+  .registry-summary,
   .form-grid,
   .outcome-grid,
   .authoring-section,
@@ -614,6 +765,15 @@ button:focus {
   }
 
   .hash-list {
+    grid-template-columns: 1fr;
+  }
+
+  .authority-card-header {
+    display: grid;
+  }
+
+  .authority-meta,
+  .lifecycle-timeline li {
     grid-template-columns: 1fr;
   }
 }

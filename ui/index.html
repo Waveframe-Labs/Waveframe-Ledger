@@ -294,11 +294,17 @@
             <div>
               <div class="section-kicker">Local registry</div>
               <h2>Published Bundles</h2>
+              <p class="section-intent">Inspect local authority lifecycle state for exported authority_bundle.v1 artifacts. The registry records publication posture; it does not publish to Cloud.</p>
             </div>
           </div>
+          <div id="bundle-registry-summary" class="registry-summary" aria-label="Authority registry summary"></div>
           <div id="bundle-registry" class="bundle-registry">
             <div class="empty-state">No local bundle exports in this browser session.</div>
           </div>
+          <article id="bundle-detail" class="artifact-panel registry-detail">
+            <h3>Registry detail</h3>
+            <p class="quiet">Export an authority bundle to inspect its publication lineage and immutable inputs.</p>
+          </article>
         </section>
 
         <section id="diagnostics" class="band page" data-page="diagnostics">

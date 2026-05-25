@@ -114,6 +114,7 @@ def compose_authority_publication(draft: dict[str, Any]) -> dict[str, Any]:
         "governance_review_packet": review_packet,
         "publication_manifest": manifest,
         "authority_bundle": bundle,
+        "authority_registry_projection": build_authority_registry_projection(authority, bundle),
         "diagnostics": diagnostics,
     }
 
@@ -284,12 +285,59 @@ def build_ui_diagnostics(
     return diagnostics
 
 
+def build_authority_registry_projection(authority: dict[str, Any], bundle: dict[str, Any]) -> dict[str, Any]:
+    """Build deterministic registry display metadata for local UI persistence."""
+    return {
+        "schema_version": "authority_registry_projection.v1",
+        "authority_ref": bundle["authority_ref"],
+        "governed_resource": authority["protected_resource"],
+        "governed_action": (authority.get("governed_actions") or ["unspecified action"])[0],
+        "continuity_posture": _continuity_posture(authority),
+        "escalation_threshold": _escalation_threshold(authority),
+        "semantic_integrity_posture": "compatible"
+        if bundle["schema_compatibility"]["compatible"]
+        else "requires review",
+    }
+
+
 def _diagnostic(code: str, text: str, *, severity: str = "error") -> dict[str, Any]:
     return {
         "code": code,
         "severity": severity,
         "text": text,
     }
+
+
+def _continuity_posture(authority: dict[str, Any]) -> str:
+    requirements = authority.get("continuity_requirements") or {}
+    if (
+        requirements.get("resume_requires_current_authority")
+        and requirements.get("revoked_authority_invalidates_resume")
+    ):
+        return "resume revalidation and revocation invalidation"
+    if requirements.get("resume_requires_current_authority"):
+        return "resume revalidation"
+    if requirements.get("revoked_authority_invalidates_resume"):
+        return "revocation invalidation"
+    return "continuity review recommended"
+
+
+def _escalation_threshold(authority: dict[str, Any]) -> str:
+    threshold = (authority.get("escalation_requirements") or {}).get("threshold")
+    if not isinstance(threshold, dict):
+        return "not defined"
+    field = threshold.get("field") or "threshold"
+    operator = threshold.get("operator") or ">"
+    value = _format_number(threshold.get("value"))
+    return f"{field} {operator} {value}"
+
+
+def _format_number(value: Any) -> str:
+    if isinstance(value, int):
+        return f"{value:,}"
+    if isinstance(value, float):
+        return f"{value:,.2f}".rstrip("0").rstrip(".")
+    return str(value or "")
 
 
 def _required_text(draft: dict[str, Any], field: str, label: str) -> str:

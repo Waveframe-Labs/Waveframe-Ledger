@@ -25,6 +25,7 @@ def test_ui_server_composes_artifacts_from_authoring_fields():
     preview = result["governance_impact_preview"]
     packet = result["governance_review_packet"]
     bundle = result["authority_bundle"]
+    registry_projection = result["authority_registry_projection"]
 
     assert authority["schema_version"] == "authority_contract.v1"
     assert authority["protected_resource"] == "Corporate Treasury Transfer System"
@@ -33,6 +34,15 @@ def test_ui_server_composes_artifacts_from_authoring_fields():
     assert packet["schema_version"] == "governance_review_packet.v1"
     assert bundle["schema_version"] == "authority_bundle.v1"
     assert bundle["authority_ref"] == "treasury-policy@2.1.0"
+    assert registry_projection == {
+        "schema_version": "authority_registry_projection.v1",
+        "authority_ref": "treasury-policy@2.1.0",
+        "governed_resource": "Corporate Treasury Transfer System",
+        "governed_action": "transfer funds",
+        "continuity_posture": "resume revalidation and revocation invalidation",
+        "escalation_threshold": "amount > 250,000",
+        "semantic_integrity_posture": "compatible",
+    }
     assert result["diagnostics"] == []
 
 

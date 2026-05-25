@@ -1,0 +1,138 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.waveframe.dev/authority_bundle_registry.v1.json",
+  "title": "Authority Bundle Registry",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "updated_at",
+    "authorities"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "authority_bundle_registry.v1"
+    },
+    "updated_at": {
+      "type": ["string", "null"]
+    },
+    "authorities": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "schema_version",
+          "registry_id",
+          "authority_ref",
+          "status",
+          "published_at",
+          "superseded_by",
+          "governed_resource",
+          "governed_action",
+          "continuity_posture",
+          "escalation_threshold",
+          "semantic_integrity_posture",
+          "contract_hash",
+          "immutable_inputs",
+          "lineage",
+          "bundle",
+          "artifacts",
+          "lifecycle_timeline"
+        ],
+        "properties": {
+          "schema_version": {
+            "const": "authority_bundle_registry_entry.v1"
+          },
+          "registry_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "authority_ref": {
+            "type": "string",
+            "minLength": 1
+          },
+          "status": {
+            "enum": ["published", "superseded", "revoked"]
+          },
+          "published_at": {
+            "type": "string",
+            "minLength": 1
+          },
+          "superseded_by": {
+            "type": ["string", "null"]
+          },
+          "governed_resource": {
+            "type": "string",
+            "minLength": 1
+          },
+          "governed_action": {
+            "type": "string",
+            "minLength": 1
+          },
+          "continuity_posture": {
+            "type": "string",
+            "minLength": 1
+          },
+          "escalation_threshold": {
+            "type": "string",
+            "minLength": 1
+          },
+          "semantic_integrity_posture": {
+            "type": "string",
+            "minLength": 1
+          },
+          "contract_hash": {
+            "type": "string",
+            "minLength": 1
+          },
+          "immutable_inputs": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "lineage": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "bundle": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "artifacts": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "lifecycle_timeline": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "event",
+                "timestamp",
+                "hash",
+                "detail"
+              ],
+              "properties": {
+                "event": {
+                  "enum": ["drafted", "reviewed", "published", "superseded", "revoked"]
+                },
+                "timestamp": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "hash": {
+                  "type": ["string", "null"]
+                },
+                "detail": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
