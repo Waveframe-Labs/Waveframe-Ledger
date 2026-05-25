@@ -26,6 +26,7 @@ dev = [
 
 [project.scripts]
 governance-ledger = "governance_ledger.cli:main"
+governance-ledger-ui = "governance_ledger.ui_server:main"
 
 [tool.setuptools.packages.find]
 include = ["governance_ledger*"]

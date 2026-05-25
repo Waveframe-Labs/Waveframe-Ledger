@@ -1,0 +1,361 @@
+"""Local Ledger UI server for artifact authoring and rendering."""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import mimetypes
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+from typing import Any
+from urllib.parse import urlparse
+
+from governance_ledger.semantics.packets import build_governance_review_packet
+from governance_ledger.semantics.preview import build_governance_impact_preview
+from governance_ledger.semantics.publication import build_authority_bundle
+
+ROOT = Path(__file__).resolve().parent.parent
+UI_ROOT = ROOT / "ui"
+
+
+def run_ui_server(host: str = "127.0.0.1", port: int = 8765) -> None:
+    """Run the local Ledger UI server."""
+    _resolve_ui_root()
+    server = ThreadingHTTPServer((host, port), LedgerUIHandler)
+    print(f"Ledger UI listening at http://{host}:{port}")
+    server.serve_forever()
+
+
+class LedgerUIHandler(BaseHTTPRequestHandler):
+    server_version = "GovernanceLedgerUI/0.1"
+
+    def do_GET(self) -> None:
+        parsed = urlparse(self.path)
+        if parsed.path == "/api/health":
+            self._write_json({"status": "ok"})
+            return
+        path = "/index.html" if parsed.path == "/" else parsed.path
+        self._serve_static(path)
+
+    def do_POST(self) -> None:
+        parsed = urlparse(self.path)
+        if parsed.path != "/api/compose":
+            self._write_json({"error": "not found"}, status=404)
+            return
+        try:
+            payload = self._read_json_body()
+            draft = payload.get("draft") if isinstance(payload.get("draft"), dict) else {}
+            result = compose_authority_publication(draft)
+            self._write_json(result)
+        except ValueError as exc:
+            self._write_json({"error": str(exc)}, status=400)
+        except Exception as exc:  # pragma: no cover - defensive HTTP boundary
+            self._write_json({"error": f"Unable to compose authority publication: {exc}"}, status=500)
+
+    def log_message(self, format: str, *args: Any) -> None:
+        return
+
+    def _read_json_body(self) -> dict[str, Any]:
+        length = int(self.headers.get("Content-Length", "0"))
+        if length <= 0:
+            return {}
+        raw = self.rfile.read(length).decode("utf-8")
+        return json.loads(raw)
+
+    def _serve_static(self, request_path: str) -> None:
+        relative = request_path.lstrip("/")
+        ui_root = _resolve_ui_root()
+        target = (ui_root / relative).resolve()
+        if not str(target).startswith(str(ui_root.resolve())) or not target.is_file():
+            self._write_json({"error": "not found"}, status=404)
+            return
+        content_type = mimetypes.guess_type(target.name)[0] or "application/octet-stream"
+        data = target.read_bytes()
+        self.send_response(200)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
+    def _write_json(self, payload: dict[str, Any], *, status: int = 200) -> None:
+        data = json.dumps(payload, indent=2, sort_keys=True).encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
+
+def compose_authority_publication(draft: dict[str, Any]) -> dict[str, Any]:
+    """Build local UI artifacts from governance authoring fields."""
+    authority = build_authority_contract_from_draft(draft)
+    preview = build_governance_impact_preview(authority)
+    review_packet = build_governance_review_packet(
+        authority_contract=authority,
+        governance_impact_preview=preview,
+        review_metadata={
+            "disposition": "AUTHORITY_REVIEW_REQUIRED",
+            "annotations": [],
+        },
+    )
+    manifest = build_publication_manifest(authority)
+    bundle = build_authority_bundle(
+        authority_contract=authority,
+        publication_manifest=manifest,
+        governance_impact_preview=preview,
+        governance_review_packets=[review_packet],
+    )
+    diagnostics = build_ui_diagnostics(authority, draft, bundle)
+    return {
+        "authority_contract": authority,
+        "governance_impact_preview": preview,
+        "governance_review_packet": review_packet,
+        "publication_manifest": manifest,
+        "authority_bundle": bundle,
+        "diagnostics": diagnostics,
+    }
+
+
+def _resolve_ui_root() -> Path:
+    candidates = [
+        UI_ROOT,
+        Path.cwd() / "ui",
+    ]
+    for candidate in candidates:
+        if (candidate / "index.html").is_file():
+            return candidate
+    raise RuntimeError("Ledger UI files were not found. Run from the repository root containing ui/.")
+
+
+def build_authority_contract_from_draft(draft: dict[str, Any]) -> dict[str, Any]:
+    """Compile local UI authoring fields into an authority contract shape."""
+    protected_system = _required_text(draft, "protected_system", "protected system")
+    governed_action = _required_text(draft, "governed_action", "governed action")
+    approver_role = _required_text(draft, "approver_role", "approver role")
+    contract_id = _slug(draft.get("contract_id") or protected_system)
+    contract_version = str(draft.get("contract_version") or "0.1.0")
+    approval_count = _positive_int(draft.get("approval_count"), default=1)
+    threshold = _positive_number(draft.get("escalation_threshold"), default=250000)
+    validity_days = _positive_int(draft.get("validity_days"), default=30)
+    continuity_revalidation = bool(draft.get("continuity_revalidation", True))
+    revocation_invalidates_resume = bool(draft.get("revocation_invalidates_resume", True))
+    category = str(draft.get("governance_category") or "Operational")
+    mutation_targets = _string_list(draft.get("mutation_targets")) or [_mutation_target(governed_action)]
+
+    authority = {
+        "schema_version": "authority_contract.v1",
+        "contract_id": contract_id,
+        "contract_version": contract_version,
+        "governance_category": category,
+        "protected_resource": protected_system,
+        "scope": {
+            "description": protected_system,
+            "resource": protected_system,
+            "domain": category,
+        },
+        "governed_actions": [governed_action],
+        "mutation_targets": mutation_targets,
+        "authority_requirements": {
+            "required_roles": [approver_role],
+            "approval_count": approval_count,
+        },
+        "approval_requirements": {
+            "thresholds": [
+                {
+                    "field": "amount",
+                    "operator": ">",
+                    "value": threshold,
+                    "requires_role": approver_role,
+                }
+            ],
+            "required": [
+                {
+                    "role": approver_role,
+                }
+            ],
+        },
+        "escalation_requirements": {
+            "threshold": {
+                "field": "amount",
+                "operator": ">",
+                "value": threshold,
+                "requires_role": approver_role,
+            },
+        },
+        "continuity_requirements": {
+            "resume_requires_current_authority": continuity_revalidation,
+            "revoked_authority_invalidates_resume": revocation_invalidates_resume,
+        },
+        "review_requirements": {
+            "approval_count": approval_count,
+            "validity_window_days": validity_days,
+        },
+        "decision_trace_fields": [
+            "authority_ref",
+            "contract_hash",
+            "actor",
+            "action",
+            "protected_resource",
+            "threshold",
+            "approvals",
+        ],
+        "replay_requirements": [
+            "authority_hash",
+            "decision_trace",
+            "approval_evidence",
+        ],
+        "artifact_requirements": {
+            "required": ["approval_evidence", "decision_trace"],
+        },
+        "stage_requirements": {
+            "allowed_transitions": [
+                {"from": "draft", "to": "review"},
+                {"from": "review", "to": "published"},
+            ],
+        },
+        "validity": {
+            "window_days": validity_days,
+        },
+    }
+    authority["contract_hash"] = _artifact_hash(authority)
+    return authority
+
+
+def build_publication_manifest(authority: dict[str, Any]) -> dict[str, Any]:
+    authority_ref = f"{authority['contract_id']}@{authority['contract_version']}"
+    publication_id = f"pub-{authority['contract_id']}-{authority['contract_version'].replace('.', '-')}"
+    contract_path = f"contracts/{authority['contract_id']}-{authority['contract_version']}.contract.json"
+    source_hash = _artifact_hash(
+        {
+            "protected_resource": authority["protected_resource"],
+            "governed_actions": authority["governed_actions"],
+            "authority_ref": authority_ref,
+        }
+    )
+    report_hash = _artifact_hash({"authority_ref": authority_ref, "contract_hash": authority["contract_hash"]})
+    return {
+        "schema_version": "publication_manifest.v1",
+        "publication_id": publication_id,
+        "published_at": None,
+        "published_by": "governance-ledger-ui",
+        "contracts": [
+            {
+                "contract_id": authority["contract_id"],
+                "contract_version": authority["contract_version"],
+                "contract_hash": authority["contract_hash"],
+                "path": contract_path,
+                "source_hash": source_hash,
+                "compilation_report_hash": report_hash,
+            }
+        ],
+        "reviews": [],
+        "snapshots": [],
+    }
+
+
+def build_ui_diagnostics(
+    authority: dict[str, Any],
+    draft: dict[str, Any],
+    bundle: dict[str, Any],
+) -> list[dict[str, Any]]:
+    diagnostics = []
+    if not authority["approval_requirements"]["thresholds"]:
+        diagnostics.append(_diagnostic("missing_escalation_rule", "Escalation threshold is not defined."))
+    if not authority["continuity_requirements"]["resume_requires_current_authority"]:
+        diagnostics.append(
+            _diagnostic(
+                "continuity_gap",
+                "Resumed workflows do not require revalidation when authority posture changes.",
+                severity="warning",
+            )
+        )
+    if not bundle["schema_compatibility"]["compatible"]:
+        diagnostics.append(_diagnostic("schema_compatibility", "Bundle schema compatibility check failed."))
+    if not _string_list(draft.get("mutation_targets")):
+        diagnostics.append(
+            _diagnostic(
+                "default_mutation_target",
+                "Mutation target was derived from governed action; confirm it matches the operational system.",
+                severity="info",
+            )
+        )
+    return diagnostics
+
+
+def _diagnostic(code: str, text: str, *, severity: str = "error") -> dict[str, Any]:
+    return {
+        "code": code,
+        "severity": severity,
+        "text": text,
+    }
+
+
+def _required_text(draft: dict[str, Any], field: str, label: str) -> str:
+    value = draft.get(field)
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"Draft authority requires {label}.")
+    return value.strip()
+
+
+def _positive_int(value: Any, *, default: int) -> int:
+    if value in (None, ""):
+        return default
+    parsed = int(value)
+    if parsed <= 0:
+        raise ValueError("Numeric governance fields must be greater than zero.")
+    return parsed
+
+
+def _positive_number(value: Any, *, default: int) -> int | float:
+    if value in (None, ""):
+        return default
+    parsed = float(value)
+    if parsed <= 0:
+        raise ValueError("Numeric governance fields must be greater than zero.")
+    return int(parsed) if parsed.is_integer() else parsed
+
+
+def _string_list(value: Any) -> list[str]:
+    if isinstance(value, list):
+        return [str(item).strip() for item in value if str(item).strip()]
+    if isinstance(value, str):
+        return [item.strip() for item in value.split(",") if item.strip()]
+    return []
+
+
+def _slug(value: Any) -> str:
+    text = str(value).lower()
+    chars = []
+    last_dash = False
+    for character in text:
+        if character.isalnum():
+            chars.append(character)
+            last_dash = False
+        elif not last_dash:
+            chars.append("-")
+            last_dash = True
+    slug = "".join(chars).strip("-")
+    return slug or "authority"
+
+
+def _mutation_target(action: str) -> str:
+    return action.lower().replace(" ", "_")
+
+
+def _artifact_hash(payload: Any) -> str:
+    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    return "sha256:" + hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(prog="governance-ledger-ui")
+    parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument("--port", type=int, default=8765)
+    args = parser.parse_args()
+    run_ui_server(host=args.host, port=args.port)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Governance Ledger</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="Ledger navigation">
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true">GL</div>
+          <div>
+            <div class="brand-name">Governance Ledger</div>
+            <div class="brand-subtitle">Authority authoring</div>
+          </div>
+        </div>
+        <nav class="nav-list">
+          <a href="#overview" class="nav-link active">Overview</a>
+          <a href="#draft" class="nav-link">Draft Authority</a>
+          <a href="#preview" class="nav-link">Impact Preview</a>
+          <a href="#diff" class="nav-link">Authority Diff</a>
+          <a href="#publication" class="nav-link">Publication Review</a>
+          <a href="#bundles" class="nav-link">Published Bundles</a>
+          <a href="#diagnostics" class="nav-link">Diagnostics</a>
+        </nav>
+      </aside>
+
+      <main class="workspace">
+        <section id="overview" class="band overview-band">
+          <div class="section-kicker">Local operational workspace</div>
+          <h1>Draft authority, inspect its meaning, export the publication bundle.</h1>
+          <div class="overview-grid" aria-label="Workflow status">
+            <div class="status-tile">
+              <span class="status-label">Current authority</span>
+              <strong id="status-authority-ref">not generated</strong>
+            </div>
+            <div class="status-tile">
+              <span class="status-label">Semantic readiness</span>
+              <strong id="status-semantic">draft required</strong>
+            </div>
+            <div class="status-tile">
+              <span class="status-label">Publication object</span>
+              <strong id="status-bundle">not exported</strong>
+            </div>
+          </div>
+        </section>
+
+        <section id="draft" class="band">
+          <div class="section-heading">
+            <div>
+              <div class="section-kicker">Step 1</div>
+              <h2>Draft Authority</h2>
+            </div>
+            <button id="generate-button" class="primary-action" type="button">Generate Semantic Artifacts</button>
+          </div>
+
+          <form id="authority-form" class="authority-form">
+            <div class="form-grid">
+              <label>
+                <span>What operational system are you governing?</span>
+                <input name="protected_system" value="Corporate Treasury Transfer System" />
+              </label>
+              <label>
+                <span>What action is being controlled?</span>
+                <input name="governed_action" value="transfer funds" />
+              </label>
+              <label>
+                <span>Authority reference name</span>
+                <input name="contract_id" value="treasury-policy" />
+              </label>
+              <label>
+                <span>Authority version</span>
+                <input name="contract_version" value="2.1.0" />
+              </label>
+              <label>
+                <span>Governance category</span>
+                <select name="governance_category">
+                  <option>Financial</option>
+                  <option>Access Control</option>
+                  <option>Operational</option>
+                  <option>Compliance</option>
+                  <option>Healthcare</option>
+                </select>
+              </label>
+              <label>
+                <span>Who is authorized to approve?</span>
+                <input name="approver_role" value="treasury-governance" />
+              </label>
+              <label>
+                <span>How many approvals are required?</span>
+                <input name="approval_count" type="number" min="1" value="1" />
+              </label>
+              <label>
+                <span>When does escalation occur?</span>
+                <input name="escalation_threshold" type="number" min="1" value="250000" />
+              </label>
+              <label>
+                <span>How long is admissibility valid?</span>
+                <input name="validity_days" type="number" min="1" value="30" />
+              </label>
+              <label class="wide">
+                <span>Which operational mutation targets are governed?</span>
+                <input name="mutation_targets" value="bank_api.transfer_funds" />
+              </label>
+            </div>
+
+            <fieldset class="guided-questions">
+              <legend>Continuity guarantees</legend>
+              <label class="check-row">
+                <input name="continuity_revalidation" type="checkbox" checked />
+                <span>Should resumed workflows require continuity revalidation if authority posture changes?</span>
+              </label>
+              <label class="check-row">
+                <input name="revocation_invalidates_resume" type="checkbox" checked />
+                <span>Should revoked authorities invalidate resumed execution continuity?</span>
+              </label>
+            </fieldset>
+          </form>
+        </section>
+
+        <section id="preview" class="band">
+          <div class="section-heading">
+            <div>
+              <div class="section-kicker">Step 2</div>
+              <h2>Impact Preview</h2>
+            </div>
+            <span class="artifact-pill">governance_impact_preview.v1</span>
+          </div>
+          <div class="artifact-layout">
+            <article class="artifact-panel">
+              <h3>Governance summary</h3>
+              <p id="preview-summary" class="quiet">Generate semantic artifacts to render Ledger meaning.</p>
+            </article>
+            <article class="artifact-panel">
+              <h3>Enforcement behavior</h3>
+              <ul id="preview-enforcement" class="semantic-list"></ul>
+            </article>
+            <article class="artifact-panel">
+              <h3>Operational consequences</h3>
+              <ul id="preview-consequences" class="semantic-list"></ul>
+            </article>
+            <article class="artifact-panel">
+              <h3>Lifecycle implications</h3>
+              <ul id="preview-lifecycle" class="semantic-list"></ul>
+            </article>
+            <article class="artifact-panel wide-panel">
+              <h3>Example governed outcomes</h3>
+              <div id="preview-outcomes" class="outcome-grid"></div>
+            </article>
+          </div>
+        </section>
+
+        <section id="diff" class="band">
+          <div class="section-heading">
+            <div>
+              <div class="section-kicker">Change review</div>
+              <h2>Authority Diff</h2>
+            </div>
+            <span class="artifact-pill muted">authority_diff_impact.v1 optional</span>
+          </div>
+          <div class="empty-state" id="diff-empty">
+            This first UI pass renders the current authority. Version-to-version diff rendering is reserved for the next workflow pass.
+          </div>
+        </section>
+
+        <section id="publication" class="band">
+          <div class="section-heading">
+            <div>
+              <div class="section-kicker">Step 3</div>
+              <h2>Publication Review</h2>
+            </div>
+            <button id="export-button" class="secondary-action" type="button" disabled>Export authority_bundle.v1</button>
+          </div>
+
+          <div class="publication-grid">
+            <article class="artifact-panel">
+              <h3>Publication meaning</h3>
+              <p id="bundle-meaning" class="quiet">No bundle generated yet.</p>
+            </article>
+            <article class="artifact-panel">
+              <h3>Immutable inputs</h3>
+              <dl id="immutable-inputs" class="hash-list"></dl>
+            </article>
+            <article class="artifact-panel">
+              <h3>Lineage</h3>
+              <dl id="lineage-list" class="hash-list"></dl>
+            </article>
+            <article class="artifact-panel">
+              <h3>Schema compatibility</h3>
+              <p id="schema-compatibility" class="quiet">Pending generation.</p>
+            </article>
+            <article class="artifact-panel wide-panel">
+              <h3>Publication manifest</h3>
+              <pre id="manifest-json" class="json-view">{}</pre>
+            </article>
+            <article class="artifact-panel wide-panel">
+              <h3>Authority bundle composition</h3>
+              <pre id="bundle-json" class="json-view">{}</pre>
+            </article>
+          </div>
+        </section>
+
+        <section id="bundles" class="band">
+          <div class="section-heading">
+            <div>
+              <div class="section-kicker">Local registry</div>
+              <h2>Published Bundles</h2>
+            </div>
+          </div>
+          <div id="bundle-registry" class="bundle-registry">
+            <div class="empty-state">No local bundle exports in this browser session.</div>
+          </div>
+        </section>
+
+        <section id="diagnostics" class="band">
+          <div class="section-heading">
+            <div>
+              <div class="section-kicker">Governance quality</div>
+              <h2>Diagnostics</h2>
+            </div>
+          </div>
+          <div id="diagnostics-list" class="diagnostics-list">
+            <div class="empty-state">Diagnostics will appear after artifact generation.</div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="/app.js"></script>
+  </body>
+</html>
