@@ -43,7 +43,8 @@ def test_ui_server_composes_artifacts_from_authoring_fields():
         "escalation_threshold": "amount > 250,000",
         "semantic_integrity_posture": "compatible",
     }
-    assert result["diagnostics"] == []
+    assert [diagnostic["code"] for diagnostic in result["diagnostics"]] == ["GQ004", "GQ005"]
+    assert {diagnostic["blocks_publication"] for diagnostic in result["diagnostics"]} == {False}
 
 
 def test_ui_server_emits_guidance_diagnostic_for_default_mutation_target():
@@ -55,10 +56,15 @@ def test_ui_server_emits_guidance_diagnostic_for_default_mutation_target():
         }
     )
 
-    assert result["diagnostics"] == [
-        {
-            "code": "default_mutation_target",
-            "severity": "info",
-            "text": "Mutation target was derived from governed action; confirm it matches the operational system.",
-        }
-    ]
+    diagnostics = result["diagnostics"]
+
+    assert {diagnostic["code"] for diagnostic in diagnostics} == {"GQ004", "GQ005", "default_mutation_target"}
+    assert _diagnostic(diagnostics, "default_mutation_target")["title"] == "Derived Mutation Target"
+    assert {diagnostic["blocks_publication"] for diagnostic in diagnostics} == {False}
+
+
+def _diagnostic(diagnostics: list[dict], code: str) -> dict:
+    for diagnostic in diagnostics:
+        if diagnostic["code"] == code:
+            return diagnostic
+    raise AssertionError(f"Missing diagnostic {code}: {diagnostics}")

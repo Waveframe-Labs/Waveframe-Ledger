@@ -326,6 +326,7 @@ Canonical schemas live in [schemas/](schemas/), including:
 
 - [governance_source.v1.json](schemas/governance_source.v1.json): governance source identity.
 - [governance_diagnostic.v1.json](schemas/governance_diagnostic.v1.json): governance diagnostics.
+- [governance_quality_diagnostic.v1.json](schemas/governance_quality_diagnostic.v1.json): advisory governance quality diagnostics.
 - [governance_compilation_report.v1.json](schemas/governance_compilation_report.v1.json): governance compilation reports.
 - [governance_impact_preview.v1.json](schemas/governance_impact_preview.v1.json): governance impact previews.
 - [authority_diff_impact.v1.json](schemas/authority_diff_impact.v1.json): authority diff impacts.

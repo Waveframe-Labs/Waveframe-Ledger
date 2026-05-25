@@ -1,6 +1,7 @@
 """Canonical semantic derivation layer for Governance-Ledger artifacts."""
 
 from governance_ledger.semantics.diff import build_authority_diff_impact
+from governance_ledger.semantics.diagnostics import build_governance_quality_diagnostics
 from governance_ledger.semantics.packets import build_governance_review_packet
 from governance_ledger.semantics.preview import build_governance_impact_preview
 from governance_ledger.semantics.publication import build_authority_bundle
@@ -8,6 +9,7 @@ from governance_ledger.semantics.publication import build_authority_bundle
 __all__ = [
     "build_authority_diff_impact",
     "build_authority_bundle",
+    "build_governance_quality_diagnostics",
     "build_governance_impact_preview",
     "build_governance_review_packet",
 ]

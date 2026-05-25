@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
+from governance_ledger.semantics.diagnostics import build_governance_quality_diagnostics
 from governance_ledger.semantics.packets import build_governance_review_packet
 from governance_ledger.semantics.preview import build_governance_impact_preview
 from governance_ledger.semantics.publication import build_authority_bundle
@@ -261,25 +262,25 @@ def build_ui_diagnostics(
     draft: dict[str, Any],
     bundle: dict[str, Any],
 ) -> list[dict[str, Any]]:
-    diagnostics = []
-    if not authority["approval_requirements"]["thresholds"]:
-        diagnostics.append(_diagnostic("missing_escalation_rule", "Escalation threshold is not defined."))
-    if not authority["continuity_requirements"]["resume_requires_current_authority"]:
+    diagnostics = build_governance_quality_diagnostics(authority)
+    if not bundle["schema_compatibility"]["compatible"]:
         diagnostics.append(
-            _diagnostic(
-                "continuity_gap",
-                "Resumed workflows do not require revalidation when authority posture changes.",
-                severity="warning",
+            _ui_diagnostic(
+                "schema_compatibility",
+                "Schema Compatibility",
+                "Bundle schema compatibility check failed.",
+                "Review generated artifacts before publication export.",
+                domain="schema",
             )
         )
-    if not bundle["schema_compatibility"]["compatible"]:
-        diagnostics.append(_diagnostic("schema_compatibility", "Bundle schema compatibility check failed."))
     if not _string_list(draft.get("mutation_targets")):
         diagnostics.append(
-            _diagnostic(
+            _ui_diagnostic(
                 "default_mutation_target",
+                "Derived Mutation Target",
                 "Mutation target was derived from governed action; confirm it matches the operational system.",
-                severity="info",
+                "Replace the derived mutation target if the governed operation uses a different system action.",
+                domain="authoring",
             )
         )
     return diagnostics
@@ -300,11 +301,32 @@ def build_authority_registry_projection(authority: dict[str, Any], bundle: dict[
     }
 
 
-def _diagnostic(code: str, text: str, *, severity: str = "error") -> dict[str, Any]:
+def _ui_diagnostic(
+    code: str,
+    title: str,
+    text: str,
+    recommendation: str,
+    *,
+    domain: str,
+    severity: str = "info",
+) -> dict[str, Any]:
     return {
+        "schema_version": "governance_quality_diagnostic.v1",
+        "type": "governance_quality_diagnostic",
         "code": code,
+        "title": title,
         "severity": severity,
+        "domain": domain,
         "text": text,
+        "recommendation": recommendation,
+        "blocks_publication": False,
+        "non_goals": [
+            "does_not_reject_publication",
+            "does_not_evaluate_admissibility",
+            "does_not_call_guard",
+            "does_not_call_cloud",
+            "does_not_score_policy",
+        ],
     }
 
 

@@ -621,10 +621,22 @@ button:focus {
 }
 
 .registry-summary,
+.registry-controls,
+.diagnostics-summary,
 .bundle-registry,
 .diagnostics-list {
   display: grid;
   gap: 12px;
+}
+
+.registry-controls {
+  grid-template-columns: minmax(240px, 1fr) minmax(180px, 0.34fr) minmax(220px, 0.44fr);
+  margin-bottom: 14px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
 }
 
 .registry-summary {
@@ -632,7 +644,13 @@ button:focus {
   margin-bottom: 14px;
 }
 
-.registry-metric {
+.diagnostics-summary {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-bottom: 14px;
+}
+
+.registry-metric,
+.diagnostic-metric {
   min-height: 76px;
   padding: 14px;
   border: 1px solid var(--line);
@@ -641,7 +659,8 @@ button:focus {
   box-shadow: var(--shadow);
 }
 
-.registry-metric span {
+.registry-metric span,
+.diagnostic-metric span {
   display: block;
   margin-bottom: 5px;
   color: var(--muted);
@@ -649,7 +668,8 @@ button:focus {
   font-weight: 750;
 }
 
-.registry-metric strong {
+.registry-metric strong,
+.diagnostic-metric strong {
   font-size: 1.3rem;
 }
 
@@ -773,6 +793,42 @@ button:focus {
   margin-bottom: 5px;
 }
 
+.diagnostic-row {
+  display: grid;
+  gap: 8px;
+}
+
+.diagnostic-heading {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.diagnostic-heading strong {
+  margin-bottom: 0;
+}
+
+.diagnostic-domain {
+  display: inline-flex;
+  min-height: 26px;
+  align-items: center;
+  padding: 3px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  background: #fbfbf8;
+  font-size: 0.76rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.diagnostic-recommendation {
+  margin: 0;
+  color: var(--green);
+  font-size: 0.9rem;
+}
+
 .diagnostic-row.error {
   border-left: 4px solid var(--red);
 }
@@ -815,6 +871,8 @@ button:focus {
   .boundary-grid,
   .workflow-map,
   .registry-summary,
+  .registry-controls,
+  .diagnostics-summary,
   .form-grid,
   .outcome-grid,
   .authoring-section,

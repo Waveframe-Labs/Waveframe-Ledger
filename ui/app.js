@@ -200,24 +200,59 @@ function renderDefinitionList(selector, value) {
 
 function renderDiagnostics(items) {
   const node = $("#diagnostics-list");
+  const summary = $("#diagnostics-summary");
   node.innerHTML = "";
+  summary.innerHTML = "";
+  const diagnostics = items || [];
+  const warningCount = diagnostics.filter((item) => item.severity === "warning").length;
+  const infoCount = diagnostics.filter((item) => item.severity === "info").length;
+  const domains = new Set(diagnostics.map((item) => item.domain).filter(Boolean));
+  summary.append(
+    diagnosticMetric("Findings", diagnostics.length),
+    diagnosticMetric("Warnings", warningCount),
+    diagnosticMetric("Info", infoCount),
+    diagnosticMetric("Domains", domains.size),
+  );
   if (!items || items.length === 0) {
     const empty = document.createElement("div");
     empty.className = "empty-state";
-    empty.textContent = "No diagnostics for the current draft.";
+    empty.textContent = "No advisory diagnostics for the current draft.";
     node.appendChild(empty);
     return;
   }
   for (const item of items) {
     const row = document.createElement("div");
     row.className = `diagnostic-row ${item.severity || "info"}`;
+    const heading = document.createElement("div");
+    heading.className = "diagnostic-heading";
     const title = document.createElement("strong");
-    title.textContent = `${(item.severity || "info").toUpperCase()} ${item.code || "diagnostic"}`;
+    title.textContent = `${item.title || formatLabel(item.code || "diagnostic")} (${(item.severity || "info").toUpperCase()})`;
+    const domain = document.createElement("span");
+    domain.className = "diagnostic-domain";
+    domain.textContent = item.domain || "governance";
+    heading.append(title, domain);
     const text = document.createElement("span");
     text.textContent = item.text || "";
-    row.append(title, text);
+    row.append(heading, text);
+    if (item.recommendation) {
+      const recommendation = document.createElement("p");
+      recommendation.className = "diagnostic-recommendation";
+      recommendation.textContent = item.recommendation;
+      row.appendChild(recommendation);
+    }
     node.appendChild(row);
   }
+}
+
+function diagnosticMetric(label, value) {
+  const metric = document.createElement("div");
+  metric.className = "diagnostic-metric";
+  const labelNode = document.createElement("span");
+  labelNode.textContent = label;
+  const valueNode = document.createElement("strong");
+  valueNode.textContent = value;
+  metric.append(labelNode, valueNode);
+  return metric;
 }
 
 function loadBundleRegistry() {
@@ -317,6 +352,7 @@ function renderBundleRegistry() {
   const registry = loadBundleRegistry();
   const summary = $("#bundle-registry-summary");
   const list = $("#bundle-registry");
+  const filtered = filterRegistryEntries(registry.authorities);
   summary.innerHTML = "";
   list.innerHTML = "";
 
@@ -339,9 +375,42 @@ function renderBundleRegistry() {
     return;
   }
 
-  for (const entry of registry.authorities) {
+  if (filtered.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "empty-state";
+    empty.textContent = "No authorities match the current registry filters.";
+    list.appendChild(empty);
+    renderBundleDetail(null);
+    return;
+  }
+
+  for (const entry of filtered) {
     list.appendChild(authorityRegistryCard(entry));
   }
+}
+
+function filterRegistryEntries(entries) {
+  const search = ($("#registry-search")?.value || "").trim().toLowerCase();
+  const status = $("#registry-status-filter")?.value || "all";
+  const continuity = $("#registry-continuity-filter")?.value || "all";
+  return entries.filter((entry) => {
+    const haystack = [
+      entry.authority_ref,
+      entry.governed_resource,
+      entry.governed_action,
+      entry.continuity_posture,
+      entry.escalation_threshold,
+      entry.semantic_integrity_posture,
+    ]
+      .join(" ")
+      .toLowerCase();
+    if (search && !haystack.includes(search)) return false;
+    if (status !== "all" && entry.status !== status) return false;
+    if (continuity === "revalidation" && !entry.continuity_posture.includes("revalidation")) return false;
+    if (continuity === "revocation" && !entry.continuity_posture.includes("revocation")) return false;
+    if (continuity === "review" && !entry.continuity_posture.includes("review recommended")) return false;
+    return true;
+  });
 }
 
 function registryMetric(label, value) {
@@ -595,6 +664,9 @@ form.addEventListener("change", () => {
   scheduleLivePreview();
 });
 $("#bundle-registry").addEventListener("click", handleRegistryAction);
+$("#registry-search").addEventListener("input", renderBundleRegistry);
+$("#registry-status-filter").addEventListener("change", renderBundleRegistry);
+$("#registry-continuity-filter").addEventListener("change", renderBundleRegistry);
 
 document.querySelectorAll("[data-page-link]").forEach((link) => {
   link.addEventListener("click", (event) => {

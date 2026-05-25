@@ -387,6 +387,30 @@
               <p class="section-intent">Inspect local authority lifecycle state for exported authority_bundle.v1 artifacts. The registry records publication posture; it does not publish to Cloud.</p>
             </div>
           </div>
+          <div class="registry-controls" aria-label="Authority registry filters">
+            <label>
+              <span>Search authorities</span>
+              <input id="registry-search" type="search" placeholder="authority, resource, action" />
+            </label>
+            <label>
+              <span>Status</span>
+              <select id="registry-status-filter">
+                <option value="all">All lifecycle states</option>
+                <option value="published">Published</option>
+                <option value="superseded">Superseded</option>
+                <option value="revoked">Revoked</option>
+              </select>
+            </label>
+            <label>
+              <span>Continuity</span>
+              <select id="registry-continuity-filter">
+                <option value="all">All continuity postures</option>
+                <option value="revalidation">Requires revalidation</option>
+                <option value="revocation">Revocation invalidates resume</option>
+                <option value="review">Review recommended</option>
+              </select>
+            </label>
+          </div>
           <div id="bundle-registry-summary" class="registry-summary" aria-label="Authority registry summary"></div>
           <div id="bundle-registry" class="bundle-registry">
             <div class="empty-state">No local bundle exports in this browser session.</div>
@@ -402,8 +426,10 @@
             <div>
               <div class="section-kicker">Governance quality</div>
               <h2>Diagnostics</h2>
+              <p class="section-intent">Deterministic quality guidance for the current authority draft. Diagnostics are advisory and do not evaluate admissibility or block publication.</p>
             </div>
           </div>
+          <div id="diagnostics-summary" class="diagnostics-summary" aria-label="Diagnostics summary"></div>
           <div id="diagnostics-list" class="diagnostics-list">
             <div class="empty-state">Diagnostics will appear after artifact generation.</div>
           </div>

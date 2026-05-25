@@ -345,23 +345,27 @@ Must not:
 
 ### Diagnostics
 
-Purpose: make governance quality and semantic safety visible.
+Purpose: make deterministic governance quality visible without becoming Guard, CRI-CORE, publication gating, or policy scoring.
 
 Initial diagnostics should include:
 
-- ambiguous governance language
-- missing escalation rules
-- continuity gaps
-- replay incompleteness
-- lifecycle incompatibilities
-- semantic inconsistencies
-- schema compatibility failures
+- missing escalation paths
+- weak continuity posture
+- replay weakness
+- approval concentration risk
+- lifecycle ambiguity
+- schema compatibility posture
 - missing lineage or provenance fields
 
 Long-term, this can become one of Ledger UI's strongest differentiators.
 
 Must not:
 
+- reject publication
+- evaluate admissibility
+- call Guard
+- call Cloud
+- score policy quality
 - auto-fix authority without explicit user action
 - hide blocking diagnostics
 - downgrade semantic risks into style warnings
