@@ -116,6 +116,14 @@ select {
   background: transparent;
 }
 
+.page {
+  display: none;
+}
+
+.page.active {
+  display: block;
+}
+
 .overview-band {
   padding-top: 10px;
 }
@@ -172,6 +180,26 @@ h3 {
   max-width: 720px;
   margin: 8px 0 0;
   color: var(--muted);
+}
+
+.session-status {
+  display: inline-flex;
+  margin: 12px 0 0;
+  padding: 5px 9px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  background: #fff;
+  font-size: 0.8rem;
+  font-weight: 750;
+}
+
+.action-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .overview-grid,
@@ -246,6 +274,22 @@ h3 {
   color: var(--muted);
   font-size: 0.92rem;
 }
+
+.guidance-list {
+  display: grid;
+  gap: 7px;
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.guidance-list li {
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fbfbf8;
+  color: var(--muted);
+  font-size: 0.84rem;
 }
 
 .form-grid {
@@ -351,6 +395,10 @@ button:focus {
   min-width: 254px;
 }
 
+.secondary-action {
+  min-width: 112px;
+}
+
 .primary-action {
   color: #fff;
   background: var(--brand);
@@ -403,6 +451,10 @@ button:focus {
 .quiet {
   color: var(--muted);
   margin: 0;
+}
+
+.publication-explain {
+  margin-top: 10px;
 }
 
 .semantic-list {

@@ -1,9 +1,12 @@
 const form = document.querySelector("#authority-form");
 const generateButton = document.querySelector("#generate-button");
 const exportButton = document.querySelector("#export-button");
+const newDraftButton = document.querySelector("#new-draft-button");
+const draftSessionStatus = document.querySelector("#draft-session-status");
 let currentArtifacts = null;
 let exportedBundles = [];
 let livePreviewTimer = null;
+const DRAFT_SESSION_KEY = "governance-ledger:draft-authority-session:v1";
 
 const $ = (selector) => document.querySelector(selector);
 
@@ -25,9 +28,72 @@ function readDraft() {
   };
 }
 
-async function generateArtifacts() {
+function buildDraftSession(draft) {
+  const previous = loadDraftSession();
+  const now = new Date().toISOString();
+  return {
+    schema_version: "draft_authority_session.v1",
+    session_id: previous?.session_id || `draft-${crypto.randomUUID()}`,
+    created_at: previous?.created_at || now,
+    updated_at: now,
+    draft,
+  };
+}
+
+function loadDraftSession() {
+  try {
+    const raw = window.localStorage.getItem(DRAFT_SESSION_KEY);
+    if (!raw) return null;
+    const session = JSON.parse(raw);
+    if (session.schema_version !== "draft_authority_session.v1") return null;
+    return session;
+  } catch {
+    return null;
+  }
+}
+
+function saveDraftSession() {
+  const session = buildDraftSession(readDraft());
+  window.localStorage.setItem(DRAFT_SESSION_KEY, JSON.stringify(session));
+  draftSessionStatus.textContent = `draft_authority_session.v1 saved locally ${new Date(session.updated_at).toLocaleTimeString()}`;
+  return session;
+}
+
+function restoreDraftSession() {
+  const session = loadDraftSession();
+  if (!session) {
+    saveDraftSession();
+    return;
+  }
+  for (const [key, value] of Object.entries(session.draft || {})) {
+    const field = form.elements[key];
+    if (!field) continue;
+    if (field.type === "checkbox") {
+      field.checked = Boolean(value);
+    } else {
+      field.value = value ?? "";
+    }
+  }
+  draftSessionStatus.textContent = `draft_authority_session.v1 restored ${new Date(session.updated_at).toLocaleTimeString()}`;
+}
+
+function startNewDraft() {
+  window.localStorage.removeItem(DRAFT_SESSION_KEY);
+  form.reset();
+  currentArtifacts = null;
+  exportButton.disabled = true;
+  $("#status-authority-ref").textContent = "not generated";
+  $("#status-semantic").textContent = "draft required";
+  $("#status-bundle").textContent = "not exported";
+  draftSessionStatus.textContent = "new draft_authority_session.v1 started locally";
+  saveDraftSession();
+}
+
+async function generateArtifacts(options = {}) {
+  const shouldNavigate = options.navigate === true;
   setBusy(true);
   try {
+    saveDraftSession();
     const response = await fetch("/api/compose", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -40,6 +106,9 @@ async function generateArtifacts() {
     currentArtifacts = payload;
     renderArtifacts(payload);
     exportButton.disabled = false;
+    if (shouldNavigate) {
+      showPage("preview");
+    }
   } catch (error) {
     renderDiagnostics([{ severity: "error", code: "ui_generation_error", text: error.message }]);
   } finally {
@@ -72,6 +141,7 @@ function renderArtifacts(payload) {
   renderList("#preview-consequences", preview.operational_consequences);
   renderList("#preview-lifecycle", preview.lifecycle_implications);
   renderOutcomes(preview.example_governed_outcomes);
+  renderList("#outcome-explorer", buildOutcomeExplorer(preview, bundle));
 
   $("#bundle-meaning").textContent = bundle.publication_meaning;
   $("#integrity-posture").textContent = bundle.schema_compatibility.compatible
@@ -91,7 +161,6 @@ function renderArtifacts(payload) {
 
   renderDiagnostics(payload.diagnostics);
   renderBundleRegistryPreview(bundle, authority);
-  updateActiveNav();
 }
 
 function renderList(selector, items) {
@@ -166,6 +235,18 @@ function renderBundleRegistryPreview(bundle, authority) {
   node.appendChild(row);
 }
 
+function buildOutcomeExplorer(preview, bundle) {
+  const outcomes = [];
+  if (preview.enforcement_behavior?.length) {
+    outcomes.push(preview.enforcement_behavior[0]);
+  }
+  if (preview.lifecycle_implications?.length) {
+    outcomes.push(...preview.lifecycle_implications);
+  }
+  outcomes.push(`Replay evidence will bind to ${bundle.authority_ref} and ${bundle.contract_hash}.`);
+  return outcomes;
+}
+
 function exportBundle() {
   if (!currentArtifacts) return;
   const bundle = currentArtifacts.authority_bundle;
@@ -189,21 +270,38 @@ function formatLabel(value) {
     .replace(/\b\w/g, (character) => character.toUpperCase());
 }
 
-function updateActiveNav() {
-  const links = document.querySelectorAll(".nav-link");
-  links.forEach((link) => link.classList.remove("active"));
-  const active = document.querySelector('.nav-link[href="#draft"]');
-  if (active) active.classList.add("active");
+function showPage(pageId) {
+  const targetPage = document.querySelector(`[data-page="${pageId}"]`) ? pageId : "draft";
+  document.querySelectorAll("[data-page]").forEach((page) => {
+    page.classList.toggle("active", page.dataset.page === targetPage);
+  });
+  document.querySelectorAll("[data-page-link]").forEach((link) => {
+    link.classList.toggle("active", link.dataset.pageLink === targetPage);
+  });
+  if (window.location.hash !== `#${targetPage}`) {
+    history.replaceState(null, "", `#${targetPage}`);
+  }
 }
 
-generateButton.addEventListener("click", generateArtifacts);
+generateButton.addEventListener("click", () => generateArtifacts({ navigate: true }));
 exportButton.addEventListener("click", exportBundle);
-form.addEventListener("input", scheduleLivePreview);
-form.addEventListener("change", scheduleLivePreview);
+newDraftButton.addEventListener("click", startNewDraft);
+form.addEventListener("input", () => {
+  saveDraftSession();
+  scheduleLivePreview();
+});
+form.addEventListener("change", () => {
+  saveDraftSession();
+  scheduleLivePreview();
+});
 
-document.querySelectorAll(".nav-link").forEach((link) => {
-  link.addEventListener("click", () => {
-    document.querySelectorAll(".nav-link").forEach((item) => item.classList.remove("active"));
-    link.classList.add("active");
+document.querySelectorAll("[data-page-link]").forEach((link) => {
+  link.addEventListener("click", (event) => {
+    event.preventDefault();
+    showPage(link.dataset.pageLink);
   });
 });
+
+restoreDraftSession();
+showPage(window.location.hash.replace("#", "") || "draft");
+scheduleLivePreview();

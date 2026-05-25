@@ -20,18 +20,18 @@
           </div>
         </div>
         <nav class="nav-list">
-          <a href="#overview" class="nav-link active">Overview</a>
-          <a href="#draft" class="nav-link">Draft Authority</a>
-          <a href="#preview" class="nav-link">Impact Preview</a>
-          <a href="#diff" class="nav-link">Authority Diff</a>
-          <a href="#publication" class="nav-link">Publication Review</a>
-          <a href="#bundles" class="nav-link">Published Bundles</a>
-          <a href="#diagnostics" class="nav-link">Diagnostics</a>
+          <a href="#overview" class="nav-link" data-page-link="overview">Overview</a>
+          <a href="#draft" class="nav-link active" data-page-link="draft">Draft Authority</a>
+          <a href="#preview" class="nav-link" data-page-link="preview">Impact Preview</a>
+          <a href="#diff" class="nav-link" data-page-link="diff">Authority Diff</a>
+          <a href="#publication" class="nav-link" data-page-link="publication">Publication Review</a>
+          <a href="#bundles" class="nav-link" data-page-link="bundles">Published Bundles</a>
+          <a href="#diagnostics" class="nav-link" data-page-link="diagnostics">Diagnostics</a>
         </nav>
       </aside>
 
       <main class="workspace">
-        <section id="overview" class="band overview-band">
+        <section id="overview" class="band page overview-band" data-page="overview">
           <img class="waveframe-logo" src="/assets/wf-logo.png" alt="Waveframe Labs" />
           <div class="section-kicker">Local operational workspace</div>
           <h1>Draft authority, inspect its meaning, export the publication bundle.</h1>
@@ -51,14 +51,18 @@
           </div>
         </section>
 
-        <section id="draft" class="band">
+        <section id="draft" class="band page active" data-page="draft">
           <div class="section-heading">
             <div>
               <div class="section-kicker">Step 1</div>
               <h2>Draft Authority</h2>
               <p class="section-intent">Describe the operational authority you want Ledger to publish. The form asks governance questions; Ledger turns the answers into deterministic artifacts.</p>
+              <p id="draft-session-status" class="session-status">draft_authority_session.v1 saved locally</p>
             </div>
-            <button id="generate-button" class="primary-action" type="button">Generate Semantic Artifacts</button>
+            <div class="action-row">
+              <button id="new-draft-button" class="secondary-action" type="button">New Draft</button>
+              <button id="generate-button" class="primary-action" type="button">Generate Semantic Artifacts</button>
+            </div>
           </div>
 
           <form id="authority-form" class="authority-form">
@@ -135,6 +139,11 @@
               <div class="authoring-copy">
                 <h3>Escalation Rules</h3>
                 <p>Define when normal execution needs governance intervention.</p>
+                <ul class="guidance-list" aria-label="Escalation threshold examples">
+                  <li>Financial transfer threshold</li>
+                  <li>Credential issuance threshold</li>
+                  <li>Production deployment threshold</li>
+                </ul>
               </div>
               <div class="form-grid">
                 <label class="wide">
@@ -180,7 +189,7 @@
           </form>
         </section>
 
-        <section id="preview" class="band">
+        <section id="preview" class="band page" data-page="preview">
           <div class="section-heading">
             <div>
               <div class="section-kicker">Step 2</div>
@@ -209,10 +218,15 @@
               <h3>Example governed outcomes</h3>
               <div id="preview-outcomes" class="outcome-grid"></div>
             </article>
+            <article class="artifact-panel wide-panel">
+              <h3>Operational outcome explorer</h3>
+              <p class="quiet">If this authority is published, Ledger will bind operational meaning to the generated semantic artifacts.</p>
+              <ul id="outcome-explorer" class="semantic-list"></ul>
+            </article>
           </div>
         </section>
 
-        <section id="diff" class="band">
+        <section id="diff" class="band page" data-page="diff">
           <div class="section-heading">
             <div>
               <div class="section-kicker">Change review</div>
@@ -225,7 +239,7 @@
           </div>
         </section>
 
-        <section id="publication" class="band">
+        <section id="publication" class="band page" data-page="publication">
           <div class="section-heading">
             <div>
               <div class="section-kicker">Step 3</div>
@@ -246,6 +260,7 @@
             <article class="artifact-panel">
               <h3>Publication meaning</h3>
               <p id="bundle-meaning" class="quiet">No bundle generated yet.</p>
+              <p class="explain-text publication-explain">Publishing creates a replayable governance authority that future execution evidence can bind to.</p>
             </article>
             <article class="artifact-panel">
               <h3>Publication consequences</h3>
@@ -274,7 +289,7 @@
           </div>
         </section>
 
-        <section id="bundles" class="band">
+        <section id="bundles" class="band page" data-page="bundles">
           <div class="section-heading">
             <div>
               <div class="section-kicker">Local registry</div>
@@ -286,7 +301,7 @@
           </div>
         </section>
 
-        <section id="diagnostics" class="band">
+        <section id="diagnostics" class="band page" data-page="diagnostics">
           <div class="section-heading">
             <div>
               <div class="section-kicker">Governance quality</div>
