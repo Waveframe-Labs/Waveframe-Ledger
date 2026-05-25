@@ -88,10 +88,10 @@ The initial UI navigation should be intentionally narrow:
 
 - Overview
 - Draft Authority
-- Impact Preview
-- Authority Diff
+- Semantic Preview
+- Change Review
 - Publication Review
-- Published Bundles
+- Authority Registry
 - Diagnostics
 
 No global admin console, user settings, organization switcher, billing surface, cloud sync status, or runtime operations pane should be introduced in the first version.
@@ -231,7 +231,7 @@ Must not:
 - ask for runtime infrastructure settings
 - derive human meaning in UI-only logic
 
-### Impact Preview
+### Semantic Preview
 
 Purpose: render deterministic authority meaning.
 
@@ -254,7 +254,7 @@ Must not:
 - run simulation
 - evaluate admissibility
 
-### Authority Diff
+### Change Review
 
 Purpose: review governance change impact between authority versions.
 
@@ -322,7 +322,7 @@ Must not:
 - mutate evidence
 - change execution outcomes
 
-### Published Bundles
+### Authority Registry
 
 Purpose: local bundle registry.
 

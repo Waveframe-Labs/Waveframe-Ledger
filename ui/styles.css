@@ -128,6 +128,10 @@ select {
   padding-top: 10px;
 }
 
+.overview-hero {
+  max-width: 940px;
+}
+
 .waveframe-logo {
   display: block;
   width: 190px;
@@ -158,6 +162,33 @@ h1 {
   margin-top: 8px;
   font-size: 2.5rem;
   line-height: 1.12;
+}
+
+.overview-lede {
+  max-width: 800px;
+  margin: 14px 0 0;
+  color: var(--muted);
+  font-size: 1.03rem;
+}
+
+.overview-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 22px;
+}
+
+.overview-section {
+  margin-top: 30px;
+  padding-top: 24px;
+  border-top: 1px solid var(--line);
+}
+
+.overview-section-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 16px;
 }
 
 h2 {
@@ -204,7 +235,9 @@ h3 {
 
 .overview-grid,
 .artifact-layout,
-.publication-grid {
+.publication-grid,
+.output-grid,
+.boundary-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 14px;
@@ -212,11 +245,15 @@ h3 {
 }
 
 .artifact-layout,
-.publication-grid {
+.publication-grid,
+.output-grid,
+.boundary-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .status-tile,
+.output-item,
+.boundary-item,
 .artifact-panel,
 .empty-state,
 .bundle-row,
@@ -241,6 +278,48 @@ h3 {
 
 .status-tile strong {
   overflow-wrap: anywhere;
+}
+
+.workflow-map {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin: 18px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.workflow-map li {
+  min-height: 150px;
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+
+.workflow-map strong {
+  color: var(--green);
+}
+
+.workflow-map span {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.output-item,
+.boundary-item {
+  padding: 18px;
+}
+
+.output-item p,
+.boundary-item p {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 0.91rem;
 }
 
 .authority-form {
@@ -732,6 +811,9 @@ button:focus {
   .overview-grid,
   .artifact-layout,
   .publication-grid,
+  .output-grid,
+  .boundary-grid,
+  .workflow-map,
   .registry-summary,
   .form-grid,
   .outcome-grid,
@@ -744,6 +826,11 @@ button:focus {
     align-items: stretch;
     flex-direction: column;
   }
+
+  .overview-section-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
 }
 
 @media (max-width: 560px) {
@@ -753,6 +840,8 @@ button:focus {
 
   .authority-form,
   .artifact-panel,
+  .output-item,
+  .boundary-item,
   .status-tile,
   .empty-state,
   .bundle-row,

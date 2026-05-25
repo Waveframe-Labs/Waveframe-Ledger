@@ -605,5 +605,5 @@ document.querySelectorAll("[data-page-link]").forEach((link) => {
 
 restoreDraftSession();
 renderBundleRegistry();
-showPage(window.location.hash.replace("#", "") || "draft");
+showPage(window.location.hash.replace("#", "") || "overview");
 scheduleLivePreview();

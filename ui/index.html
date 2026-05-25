@@ -20,38 +20,128 @@
           </div>
         </div>
         <nav class="nav-list">
-          <a href="#overview" class="nav-link" data-page-link="overview">Overview</a>
-          <a href="#draft" class="nav-link active" data-page-link="draft">Draft Authority</a>
-          <a href="#preview" class="nav-link" data-page-link="preview">Impact Preview</a>
-          <a href="#diff" class="nav-link" data-page-link="diff">Authority Diff</a>
+          <a href="#overview" class="nav-link active" data-page-link="overview">Overview</a>
+          <a href="#draft" class="nav-link" data-page-link="draft">Draft Authority</a>
+          <a href="#preview" class="nav-link" data-page-link="preview">Semantic Preview</a>
+          <a href="#diff" class="nav-link" data-page-link="diff">Change Review</a>
           <a href="#publication" class="nav-link" data-page-link="publication">Publication Review</a>
-          <a href="#bundles" class="nav-link" data-page-link="bundles">Published Bundles</a>
+          <a href="#bundles" class="nav-link" data-page-link="bundles">Authority Registry</a>
           <a href="#diagnostics" class="nav-link" data-page-link="diagnostics">Diagnostics</a>
         </nav>
       </aside>
 
       <main class="workspace">
-        <section id="overview" class="band page overview-band" data-page="overview">
-          <img class="waveframe-logo" src="/assets/wf-logo.png" alt="Waveframe Labs" />
-          <div class="section-kicker">Local operational workspace</div>
-          <h1>Draft authority, inspect its meaning, export the publication bundle.</h1>
-          <div class="overview-grid" aria-label="Workflow status">
-            <div class="status-tile">
-              <span class="status-label">Current authority</span>
-              <strong id="status-authority-ref">not generated</strong>
-            </div>
-            <div class="status-tile">
-              <span class="status-label">Semantic readiness</span>
-              <strong id="status-semantic">draft required</strong>
-            </div>
-            <div class="status-tile">
-              <span class="status-label">Publication object</span>
-              <strong id="status-bundle">not exported</strong>
+        <section id="overview" class="band page overview-band active" data-page="overview">
+          <div class="overview-hero">
+            <img class="waveframe-logo" src="/assets/wf-logo.png" alt="Waveframe Labs" />
+            <div class="section-kicker">Governance authoring workspace</div>
+            <h1>Create a publishable operational authority.</h1>
+            <p class="overview-lede">Ledger turns governance intent into deterministic semantic artifacts: an authority contract, impact preview, review context, and authority bundle ready for publication workflows.</p>
+            <div class="overview-actions" aria-label="Recommended actions">
+              <button class="primary-action" type="button" data-page-link="draft">Continue Draft</button>
+              <button class="secondary-action" type="button" data-page-link="publication">Review Publication</button>
+              <button class="secondary-action" type="button" data-page-link="bundles">Open Registry</button>
             </div>
           </div>
+
+          <section class="overview-section" aria-labelledby="current-work-title">
+            <div class="overview-section-heading">
+              <div>
+                <div class="section-kicker">Current work</div>
+                <h2 id="current-work-title">Authority workspace state</h2>
+              </div>
+            </div>
+            <div class="overview-grid" aria-label="Workflow status">
+              <div class="status-tile">
+                <span class="status-label">Current authority</span>
+                <strong id="status-authority-ref">not generated</strong>
+              </div>
+              <div class="status-tile">
+                <span class="status-label">Semantic readiness</span>
+                <strong id="status-semantic">draft required</strong>
+              </div>
+              <div class="status-tile">
+                <span class="status-label">Publication object</span>
+                <strong id="status-bundle">not exported</strong>
+              </div>
+            </div>
+          </section>
+
+          <section class="overview-section" aria-labelledby="workflow-title">
+            <div class="overview-section-heading">
+              <div>
+                <div class="section-kicker">Governance workflow</div>
+                <h2 id="workflow-title">From intent to publication object</h2>
+              </div>
+            </div>
+            <ol class="workflow-map">
+              <li>
+                <strong>Draft Authority</strong>
+                <span>Describe the protected system, governed action, approvals, escalation, validity, and continuity guarantees.</span>
+              </li>
+              <li>
+                <strong>Generate Semantics</strong>
+                <span>Ledger derives governance meaning, operational consequences, lifecycle implications, and example governed outcomes.</span>
+              </li>
+              <li>
+                <strong>Review Publication</strong>
+                <span>Inspect hashes, lineage, schema compatibility, publication manifest, and bundle composition before export.</span>
+              </li>
+              <li>
+                <strong>Track Lifecycle</strong>
+                <span>Exported bundles enter the local authority registry with publication, supersession, revocation, and lineage state.</span>
+              </li>
+            </ol>
+          </section>
+
+          <section class="overview-section" aria-labelledby="outputs-title">
+            <div class="overview-section-heading">
+              <div>
+                <div class="section-kicker">Ledger outputs</div>
+                <h2 id="outputs-title">Canonical artifacts produced here</h2>
+              </div>
+            </div>
+            <div class="output-grid">
+              <article class="output-item">
+                <h3>authority_contract.v1</h3>
+                <p>The structured authority that defines governed resources, admissibility requirements, escalation, continuity, and replay obligations.</p>
+              </article>
+              <article class="output-item">
+                <h3>governance_impact_preview.v1</h3>
+                <p>Deterministic governance meaning: summary, enforcement behavior, consequences, lifecycle implications, and governed outcomes.</p>
+              </article>
+              <article class="output-item">
+                <h3>governance_review_packet.v1</h3>
+                <p>Review context and immutable inputs for authority publication, without changing execution outcomes or bypassing Guard.</p>
+              </article>
+              <article class="output-item">
+                <h3>authority_bundle.v1</h3>
+                <p>The publishable governance envelope that binds authority, manifest, semantic artifacts, review context, lineage, and hashes.</p>
+              </article>
+            </div>
+          </section>
+
+          <section class="overview-section" aria-labelledby="boundaries-title">
+            <div class="overview-section-heading">
+              <div>
+                <div class="section-kicker">Ownership boundaries</div>
+                <h2 id="boundaries-title">What happens in Ledger</h2>
+              </div>
+            </div>
+            <div class="boundary-grid">
+              <article class="boundary-item">
+                <h3>Ledger owns semantic generation</h3>
+                <p>Authority meaning, preview text, publication implications, registry display posture, and bundle composition are generated by Ledger code.</p>
+              </article>
+              <article class="boundary-item">
+                <h3>Ledger does not execute authority</h3>
+                <p>This workspace does not call Guard, simulate admissibility, mutate evidence, publish to Cloud, or change runtime outcomes.</p>
+              </article>
+            </div>
+          </section>
         </section>
 
-        <section id="draft" class="band page active" data-page="draft">
+        <section id="draft" class="band page" data-page="draft">
           <div class="section-heading">
             <div>
               <div class="section-kicker">Step 1</div>
@@ -193,7 +283,7 @@
           <div class="section-heading">
             <div>
               <div class="section-kicker">Step 2</div>
-              <h2>Impact Preview</h2>
+              <h2>Semantic Preview</h2>
             </div>
             <span class="artifact-pill">governance_impact_preview.v1</span>
           </div>
@@ -230,7 +320,7 @@
           <div class="section-heading">
             <div>
               <div class="section-kicker">Change review</div>
-              <h2>Authority Diff</h2>
+              <h2>Change Review</h2>
             </div>
             <span class="artifact-pill muted">authority_diff_impact.v1 optional</span>
           </div>
@@ -293,7 +383,7 @@
           <div class="section-heading">
             <div>
               <div class="section-kicker">Local registry</div>
-              <h2>Published Bundles</h2>
+              <h2>Authority Registry</h2>
               <p class="section-intent">Inspect local authority lifecycle state for exported authority_bundle.v1 artifacts. The registry records publication posture; it does not publish to Cloud.</p>
             </div>
           </div>
