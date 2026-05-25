@@ -168,6 +168,12 @@ h3 {
   margin-bottom: 22px;
 }
 
+.section-intent {
+  max-width: 720px;
+  margin: 8px 0 0;
+  color: var(--muted);
+}
+
 .overview-grid,
 .artifact-layout,
 .publication-grid {
@@ -212,9 +218,34 @@ h3 {
 .authority-form {
   border: 1px solid var(--line);
   border-radius: 8px;
-  padding: 22px;
+  padding: 0;
   background: var(--panel);
   box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.authoring-section {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.36fr) minmax(0, 1fr);
+  gap: 26px;
+  padding: 24px;
+  border-bottom: 1px solid var(--line);
+}
+
+.authoring-section:last-child {
+  border-bottom: 0;
+}
+
+.authoring-copy h3 {
+  margin-bottom: 8px;
+}
+
+.authoring-copy p,
+.explain-text {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
 }
 
 .form-grid {
@@ -233,6 +264,13 @@ legend {
   color: var(--ink);
   font-size: 0.88rem;
   font-weight: 720;
+}
+
+label small,
+.check-row small {
+  color: var(--muted);
+  font-size: 0.8rem;
+  line-height: 1.35;
 }
 
 input,
@@ -261,7 +299,7 @@ button:focus {
 .guided-questions {
   display: grid;
   gap: 12px;
-  margin: 20px 0 0;
+  margin: 0;
   padding: 18px;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -275,9 +313,27 @@ button:focus {
 }
 
 .check-row input {
+  grid-row: span 2;
   width: 18px;
   min-height: 18px;
   margin-top: 2px;
+}
+
+.lifecycle-preview {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.lifecycle-preview span {
+  min-height: 42px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff0e8;
+  font-weight: 800;
 }
 
 .primary-action,
@@ -288,6 +344,11 @@ button:focus {
   padding: 0 15px;
   font-weight: 800;
   cursor: pointer;
+  white-space: nowrap;
+}
+
+.primary-action {
+  min-width: 254px;
 }
 
 .primary-action {
@@ -470,7 +531,9 @@ button:focus {
   .artifact-layout,
   .publication-grid,
   .form-grid,
-  .outcome-grid {
+  .outcome-grid,
+  .authoring-section,
+  .lifecycle-preview {
     grid-template-columns: 1fr;
   }
 

@@ -56,71 +56,127 @@
             <div>
               <div class="section-kicker">Step 1</div>
               <h2>Draft Authority</h2>
+              <p class="section-intent">Describe the operational authority you want Ledger to publish. The form asks governance questions; Ledger turns the answers into deterministic artifacts.</p>
             </div>
             <button id="generate-button" class="primary-action" type="button">Generate Semantic Artifacts</button>
           </div>
 
           <form id="authority-form" class="authority-form">
-            <div class="form-grid">
-              <label>
-                <span>What operational system are you governing?</span>
-                <input name="protected_system" value="Corporate Treasury Transfer System" />
-              </label>
-              <label>
-                <span>What action is being controlled?</span>
-                <input name="governed_action" value="transfer funds" />
-              </label>
-              <label>
-                <span>Authority reference name</span>
-                <input name="contract_id" value="treasury-policy" />
-              </label>
-              <label>
-                <span>Authority version</span>
-                <input name="contract_version" value="2.1.0" />
-              </label>
-              <label>
-                <span>Governance category</span>
-                <select name="governance_category">
-                  <option>Financial</option>
-                  <option>Access Control</option>
-                  <option>Operational</option>
-                  <option>Compliance</option>
-                  <option>Healthcare</option>
-                </select>
-              </label>
-              <label>
-                <span>Who is authorized to approve?</span>
-                <input name="approver_role" value="treasury-governance" />
-              </label>
-              <label>
-                <span>How many approvals are required?</span>
-                <input name="approval_count" type="number" min="1" value="1" />
-              </label>
-              <label>
-                <span>When does escalation occur?</span>
-                <input name="escalation_threshold" type="number" min="1" value="250000" />
-              </label>
-              <label>
-                <span>How long is admissibility valid?</span>
-                <input name="validity_days" type="number" min="1" value="30" />
-              </label>
-              <label class="wide">
-                <span>Which operational mutation targets are governed?</span>
-                <input name="mutation_targets" value="bank_api.transfer_funds" />
-              </label>
-            </div>
+            <section class="authoring-section">
+              <div class="authoring-copy">
+                <h3>Governance Intent</h3>
+                <p>Define the operational system and action this authority controls.</p>
+              </div>
+              <div class="form-grid">
+                <label>
+                  <span>What operational system is governed?</span>
+                  <input name="protected_system" value="Corporate Treasury Transfer System" />
+                  <small>This anchors the authority to a protected operational resource.</small>
+                </label>
+                <label>
+                  <span>What action is being controlled?</span>
+                  <input name="governed_action" value="transfer funds" />
+                  <small>Ledger uses this to frame governed outcomes and mutation scope.</small>
+                </label>
+                <label>
+                  <span>Authority reference</span>
+                  <input name="contract_id" value="treasury-policy" />
+                  <small>Stable authority identity for publication and replay binding.</small>
+                </label>
+                <label>
+                  <span>Authority version</span>
+                  <input name="contract_version" value="2.1.0" />
+                  <small>Version changes create a new governance posture.</small>
+                </label>
+                <label class="wide">
+                  <span>Which operational mutation targets are governed?</span>
+                  <input name="mutation_targets" value="bank_api.transfer_funds" />
+                  <small>Mutation targets identify the operational actions this authority is meant to constrain.</small>
+                </label>
+              </div>
+            </section>
 
-            <fieldset class="guided-questions">
-              <legend>Continuity guarantees</legend>
-              <label class="check-row">
-                <input name="continuity_revalidation" type="checkbox" checked />
-                <span>Should resumed workflows require continuity revalidation if authority posture changes?</span>
-              </label>
-              <label class="check-row">
-                <input name="revocation_invalidates_resume" type="checkbox" checked />
-                <span>Should revoked authorities invalidate resumed execution continuity?</span>
-              </label>
-            </fieldset>
+            <section class="authoring-section">
+              <div class="authoring-copy">
+                <h3>Admissibility Rules</h3>
+                <p>Describe what must be true before execution should be considered admissible.</p>
+              </div>
+              <div class="form-grid">
+                <label>
+                  <span>Who is authorized to approve execution?</span>
+                  <input name="approver_role" value="treasury-governance" />
+                  <small>Named authority roles avoid ambiguous approval semantics.</small>
+                </label>
+                <label>
+                  <span>How many independent approvals are required before execution is admissible?</span>
+                  <input name="approval_count" type="number" min="1" value="1" />
+                  <small>Independent approval count clarifies review strength before execution.</small>
+                </label>
+                <label>
+                  <span>How long is admissibility valid after approval?</span>
+                  <input name="validity_days" type="number" min="1" value="30" />
+                  <small>Validity windows prevent stale approvals from authorizing later execution.</small>
+                </label>
+                <label>
+                  <span>Governance category</span>
+                  <select name="governance_category">
+                    <option>Financial</option>
+                    <option>Access Control</option>
+                    <option>Operational</option>
+                    <option>Compliance</option>
+                    <option>Healthcare</option>
+                  </select>
+                  <small>Category helps reviewers understand the authority domain.</small>
+                </label>
+              </div>
+            </section>
+
+            <section class="authoring-section">
+              <div class="authoring-copy">
+                <h3>Escalation Rules</h3>
+                <p>Define when normal execution needs governance intervention.</p>
+              </div>
+              <div class="form-grid">
+                <label class="wide">
+                  <span>At what operational threshold should this action require escalation review?</span>
+                  <input name="escalation_threshold" type="number" min="1" value="250000" />
+                  <small>Thresholds turn operational risk into explicit review obligations.</small>
+                </label>
+              </div>
+            </section>
+
+            <section class="authoring-section">
+              <div class="authoring-copy">
+                <h3>Continuity Rules</h3>
+                <p>Specify what invalidates resumed or long-running execution.</p>
+              </div>
+              <fieldset class="guided-questions">
+                <legend>Continuity guarantees</legend>
+                <label class="check-row">
+                  <input name="continuity_revalidation" type="checkbox" checked />
+                  <span>Should resumed workflows require revalidation if governance posture changes before execution completes?</span>
+                  <small>Continuity revalidation prevents long-running workflows from executing under outdated governance posture.</small>
+                </label>
+                <label class="check-row">
+                  <input name="revocation_invalidates_resume" type="checkbox" checked />
+                  <span>Should revoked authorities invalidate resumed execution continuity?</span>
+                  <small>Revocation invalidation prevents paused work from continuing under authority that no longer exists.</small>
+                </label>
+              </fieldset>
+            </section>
+
+            <section class="authoring-section">
+              <div class="authoring-copy">
+                <h3>Lifecycle Behavior</h3>
+                <p>Ledger will model this draft as moving from draft, to review, to published authority.</p>
+              </div>
+              <div class="lifecycle-preview" aria-label="Lifecycle behavior">
+                <span>draft</span>
+                <span>review</span>
+                <span>published</span>
+              </div>
+              <p class="explain-text">Lifecycle posture matters because resumed workflows and replay evidence must remain bound to the authority version that governed execution.</p>
+            </section>
           </form>
         </section>
 
@@ -179,9 +235,21 @@
           </div>
 
           <div class="publication-grid">
+            <article class="artifact-panel posture-panel">
+              <h3>Semantic integrity posture</h3>
+              <p id="integrity-posture" class="quiet">Pending generation.</p>
+            </article>
+            <article class="artifact-panel posture-panel">
+              <h3>Lineage continuity</h3>
+              <p id="lineage-posture" class="quiet">Pending generation.</p>
+            </article>
             <article class="artifact-panel">
               <h3>Publication meaning</h3>
               <p id="bundle-meaning" class="quiet">No bundle generated yet.</p>
+            </article>
+            <article class="artifact-panel">
+              <h3>Publication consequences</h3>
+              <ul id="publication-consequences" class="semantic-list"></ul>
             </article>
             <article class="artifact-panel">
               <h3>Immutable inputs</h3>

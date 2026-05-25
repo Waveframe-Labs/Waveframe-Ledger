@@ -3,6 +3,7 @@ const generateButton = document.querySelector("#generate-button");
 const exportButton = document.querySelector("#export-button");
 let currentArtifacts = null;
 let exportedBundles = [];
+let livePreviewTimer = null;
 
 const $ = (selector) => document.querySelector(selector);
 
@@ -51,6 +52,13 @@ function setBusy(isBusy) {
   generateButton.textContent = isBusy ? "Generating..." : "Generate Semantic Artifacts";
 }
 
+function scheduleLivePreview() {
+  window.clearTimeout(livePreviewTimer);
+  livePreviewTimer = window.setTimeout(() => {
+    generateArtifacts();
+  }, 450);
+}
+
 function renderArtifacts(payload) {
   const authority = payload.authority_contract;
   const preview = payload.governance_impact_preview;
@@ -66,6 +74,13 @@ function renderArtifacts(payload) {
   renderOutcomes(preview.example_governed_outcomes);
 
   $("#bundle-meaning").textContent = bundle.publication_meaning;
+  $("#integrity-posture").textContent = bundle.schema_compatibility.compatible
+    ? "Semantic artifacts, manifest, and bundle schema expectations are aligned."
+    : "Schema posture requires review before publication export.";
+  $("#lineage-posture").textContent = bundle.lineage.source_hash && bundle.lineage.compilation_report_hash
+    ? "Source and compilation lineage are present for authority publication."
+    : "Lineage is incomplete; review source and compilation provenance before export.";
+  renderList("#publication-consequences", bundle.operational_implications);
   renderDefinitionList("#immutable-inputs", bundle.immutable_inputs);
   renderDefinitionList("#lineage-list", bundle.lineage);
   $("#schema-compatibility").textContent = bundle.schema_compatibility.compatible
@@ -183,6 +198,8 @@ function updateActiveNav() {
 
 generateButton.addEventListener("click", generateArtifacts);
 exportButton.addEventListener("click", exportBundle);
+form.addEventListener("input", scheduleLivePreview);
+form.addEventListener("change", scheduleLivePreview);
 
 document.querySelectorAll(".nav-link").forEach((link) => {
   link.addEventListener("click", () => {
