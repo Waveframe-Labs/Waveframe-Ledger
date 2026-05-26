@@ -213,7 +213,7 @@ function renderDiagnostics(items) {
   const summary = $("#diagnostics-summary");
   node.innerHTML = "";
   summary.innerHTML = "";
-  const diagnostics = items || [];
+  const diagnostics = (items || []).map(projectDiagnostic);
   const warningCount = diagnostics.filter((item) => item.severity === "warning").length;
   const infoCount = diagnostics.filter((item) => item.severity === "info").length;
   const domains = new Set(diagnostics.map((item) => item.domain).filter(Boolean));
@@ -231,42 +231,82 @@ function renderDiagnostics(items) {
     return;
   }
   for (const item of items) {
+    const projected = projectDiagnostic(item);
     const row = document.createElement("div");
-    row.className = `diagnostic-row ${item.severity || "info"}`;
+    row.className = `diagnostic-row ${projected.severity || "info"}`;
     const heading = document.createElement("div");
     heading.className = "diagnostic-heading";
     const title = document.createElement("strong");
-    title.textContent = `${item.title || formatLabel(item.code || "diagnostic")} (${(item.severity || "info").toUpperCase()})`;
+    title.textContent = projected.operational_guidance;
     const domain = document.createElement("span");
     domain.className = "diagnostic-domain";
-    domain.textContent = item.domain || "governance";
+    domain.textContent = projected.domain || "governance";
     heading.append(title, domain);
     const text = document.createElement("span");
-    text.textContent = item.text || "";
+    text.textContent = projected.governance_detail;
     row.append(heading, text);
-    if (item.recommendation) {
+    if (projected.recommendation) {
       const recommendation = document.createElement("p");
       recommendation.className = "diagnostic-recommendation";
-      recommendation.textContent = item.recommendation;
+      recommendation.textContent = projected.recommendation;
       row.appendChild(recommendation);
     }
-    if (item.rationale || item.operational_examples?.length || item.replay_implications?.length) {
+    if (projected.rationale || projected.operational_examples?.length || projected.replay_implications?.length || projected.technical_detail) {
       const details = document.createElement("details");
       details.className = "diagnostic-rationale";
       const summary = document.createElement("summary");
-      summary.textContent = "Why this diagnostic exists";
+      summary.textContent = "Governance detail and technical context";
       details.appendChild(summary);
-      if (item.rationale) {
+      if (projected.rationale) {
         const rationale = document.createElement("p");
-        rationale.textContent = item.rationale;
+        rationale.textContent = projected.rationale;
         details.appendChild(rationale);
       }
-      appendDetailList(details, "Operational examples", item.operational_examples);
-      appendDetailList(details, "Replay implications", item.replay_implications);
+      appendDetailList(details, "Operational examples", projected.operational_examples);
+      appendDetailList(details, "Replay implications", projected.replay_implications);
+      if (projected.technical_detail) {
+        const technical = document.createElement("pre");
+        technical.className = "technical-diagnostic";
+        technical.textContent = projected.technical_detail;
+        details.appendChild(technical);
+      }
       row.appendChild(details);
     }
     node.appendChild(row);
   }
+}
+
+function projectDiagnostic(item) {
+  const diagnostic = item || {};
+  const code = diagnostic.code || "diagnostic";
+  if (code === "publication_evidence_unavailable" || code === "publication_receipt_error") {
+    return {
+      severity: "warning",
+      domain: "publication",
+      operational_guidance: "Publication receipt has not been generated yet.",
+      governance_detail: "Current authority export could not create replayable publication evidence.",
+      recommendation: "Review the authority bundle and export again to create a publication receipt.",
+      rationale: "Publication receipts bind the exported authority to lineage, semantic artifact hashes, and publication posture.",
+      operational_examples: [
+        "A later review can confirm which authority bundle was exported and when.",
+      ],
+      replay_implications: [
+        "Without a receipt, future replay review has less publication evidence to bind against.",
+      ],
+      technical_detail: `${code}: ${diagnostic.text || diagnostic.recommendation || "receipt generation failed"}`,
+    };
+  }
+  return {
+    severity: diagnostic.severity || "info",
+    domain: diagnostic.domain || "governance",
+    operational_guidance: diagnostic.title || formatLabel(code),
+    governance_detail: diagnostic.text || "Governance posture should be reviewed.",
+    recommendation: diagnostic.recommendation || "",
+    rationale: diagnostic.rationale || "",
+    operational_examples: diagnostic.operational_examples || [],
+    replay_implications: diagnostic.replay_implications || [],
+    technical_detail: diagnostic.code ? `${diagnostic.code}: ${diagnostic.type || "diagnostic"}` : "",
+  };
 }
 
 function appendDetailList(node, label, items) {

@@ -932,6 +932,18 @@ textarea {
   color: var(--muted);
 }
 
+.technical-diagnostic {
+  margin: 10px 0 0;
+  padding: 10px;
+  border-radius: 6px;
+  background: #f4f5f1;
+  color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.76rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .diagnostic-row.error {
   border-left: 4px solid var(--red);
 }
