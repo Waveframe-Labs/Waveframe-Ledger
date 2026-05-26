@@ -112,7 +112,11 @@ function startNewDraft() {
 
 async function generateArtifacts(options = {}) {
   const shouldNavigate = options.navigate === true;
-  setBusy(true);
+  const isReview = options.review === true || shouldNavigate;
+  const isBackground = options.background === true;
+  if (!isBackground) {
+    setBusy(true);
+  }
   try {
     saveDraftSession();
     const response = await fetch("/api/compose", {
@@ -126,8 +130,8 @@ async function generateArtifacts(options = {}) {
     }
     currentArtifacts = payload;
     pendingRegistration = null;
-    renderArtifacts(payload);
-    exportButton.disabled = false;
+    renderArtifacts(payload, { reviewed: isReview });
+    exportButton.disabled = !isReview;
     registerButton.disabled = true;
     if (shouldNavigate) {
       showPage("preview");
@@ -135,7 +139,9 @@ async function generateArtifacts(options = {}) {
   } catch (error) {
     renderDiagnostics([{ severity: "error", code: "ui_generation_error", text: error.message }]);
   } finally {
-    setBusy(false);
+    if (!isBackground) {
+      setBusy(false);
+    }
   }
 }
 
@@ -170,20 +176,23 @@ function renderWorkflowState() {
 function scheduleLivePreview() {
   window.clearTimeout(livePreviewTimer);
   livePreviewTimer = window.setTimeout(() => {
-    generateArtifacts();
+    generateArtifacts({ background: true });
   }, 450);
 }
 
-function renderArtifacts(payload) {
+function renderArtifacts(payload, options = {}) {
+  const reviewed = options.reviewed === true;
   const preview = payload.governance_impact_preview;
   const bundle = payload.authority_bundle;
   $("#status-authority-ref").textContent = bundle.authority_ref;
-  $("#status-semantic").textContent = "ready";
-  $("#status-bundle").textContent = "ready to export";
-  $("#release-registration").textContent = "Bundle ready to export. Authority not registered locally.";
+  $("#status-semantic").textContent = reviewed ? "ready" : "changes need review";
+  $("#status-bundle").textContent = reviewed ? "ready to export" : "review impact before export";
+  $("#release-registration").textContent = reviewed
+    ? "Bundle ready to export. Authority not registered locally."
+    : "Review impact before exporting this authority bundle.";
   updateWorkflowState({
     draftReady: true,
-    impactReviewed: true,
+    impactReviewed: reviewed,
     bundleExported: false,
     receiptGenerated: false,
     authorityRegistered: false,
@@ -359,7 +368,7 @@ function projectDiagnostic(item) {
     rationale: diagnostic.rationale || "",
     operational_examples: diagnostic.operational_examples || [],
     replay_implications: diagnostic.replay_implications || [],
-    technical_detail: diagnostic.code ? `${diagnostic.code}: ${diagnostic.type || "diagnostic"}` : "",
+    technical_detail: diagnostic.technical_detail || (diagnostic.code ? `${diagnostic.code}: ${diagnostic.type || "diagnostic"}` : ""),
   };
 }
 
@@ -705,7 +714,7 @@ function handleRegistryAction(event) {
     renderBundleDetail(entry);
   } else if (action === "open-preview") {
     currentArtifacts = entry.artifacts;
-    renderArtifacts(currentArtifacts);
+    renderArtifacts(currentArtifacts, { reviewed: true });
     exportButton.disabled = false;
     showPage("preview");
   } else if (action === "open-diff") {
@@ -763,6 +772,20 @@ function buildOutcomeExplorer(preview, bundle) {
 
 async function exportBundle() {
   if (!currentArtifacts) return;
+  if (!workflowState.impactReviewed) {
+    renderDiagnostics([
+      {
+        severity: "warning",
+        code: "impact_review_required",
+        title: "Review impact before exporting.",
+        domain: "publication",
+        text: "The authority draft changed after the last reviewed impact.",
+        recommendation: "Click Review Impact, then export the authority bundle.",
+      },
+    ]);
+    showPage("diagnostics");
+    return;
+  }
   try {
     const bundle = currentArtifacts.authority_bundle;
     const publishedAt = new Date().toISOString();
@@ -770,7 +793,6 @@ async function exportBundle() {
     const notes = readPublicationNotes(publishedAt);
     const receipt = await buildPublicationReceipt(bundle, publishedAt, readiness, notes);
     $("#receipt-json").textContent = JSON.stringify(receipt, null, 2);
-    downloadBundle(bundle);
     pendingRegistration = { receipt, notes };
     registerButton.disabled = false;
     $("#status-bundle").textContent = "bundle exported";
@@ -782,6 +804,21 @@ async function exportBundle() {
       receiptGenerated: true,
       authorityRegistered: false,
     });
+    try {
+      downloadBundle(bundle);
+    } catch (downloadError) {
+      renderDiagnostics([
+        {
+          severity: "warning",
+          code: "bundle_download_unavailable",
+          title: "Bundle export evidence is ready",
+          domain: "publication",
+          text: "Ledger generated the publication receipt, but the browser did not complete the file download.",
+          recommendation: "Register the authority locally. You can export the bundle again from the registry if the file was not saved.",
+          technical_detail: String(downloadError?.message || downloadError || "download failed"),
+        },
+      ]);
+    }
   } catch (error) {
     pendingRegistration = null;
     registerButton.disabled = true;
@@ -954,7 +991,7 @@ function showPage(pageId) {
   }
 }
 
-generateButton.addEventListener("click", () => generateArtifacts({ navigate: true }));
+generateButton.addEventListener("click", () => generateArtifacts({ navigate: true, review: true }));
 exportButton.addEventListener("click", exportBundle);
 registerButton.addEventListener("click", registerAuthorityLocally);
 newDraftButton.addEventListener("click", startNewDraft);
