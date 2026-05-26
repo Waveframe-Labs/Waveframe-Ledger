@@ -730,6 +730,9 @@ async function exportBundle() {
     $("#status-bundle").textContent = "bundle exported";
     $("#release-registration").textContent = "Bundle exported. Authority is not registered locally yet.";
   } catch (error) {
+    pendingRegistration = null;
+    registerButton.disabled = true;
+    $("#release-registration").textContent = "Bundle export did not complete. Authority is not registered locally.";
     renderDiagnostics([
       {
         severity: "warning",
@@ -765,10 +768,14 @@ async function buildPublicationReceipt(bundle, publishedAt, readiness, notes) {
       publication_notes: notes,
     }),
   });
-  const receipt = await response.json();
+  const payload = await response.json();
   if (!response.ok) {
-    const reason = receipt.error || "Unable to generate publication receipt.";
+    const reason = payload.error || "Unable to generate publication receipt.";
     throw new Error(response.status === 404 ? "publication receipt service unavailable" : reason);
+  }
+  const receipt = payload.publication_receipt || payload;
+  if (!receipt || receipt.schema_version !== "publication_receipt.v1" || !receipt.receipt_hash || !receipt.bundle_hash) {
+    throw new Error("publication receipt response was incomplete");
   }
   return receipt;
 }
@@ -777,6 +784,9 @@ function operationalReceiptRecommendation(error) {
   const message = String(error?.message || "");
   if (message.includes("publication receipt service unavailable") || message.toLowerCase().includes("not found")) {
     return "Refresh the local Ledger UI server, then export again to create a replayable publication receipt.";
+  }
+  if (message.includes("publication receipt response was incomplete")) {
+    return "Ledger exported the bundle response without complete receipt evidence; refresh the local UI server and export again.";
   }
   return message || "Review the authority bundle and export again to create a publication receipt.";
 }

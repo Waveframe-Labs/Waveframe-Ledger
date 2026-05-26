@@ -501,6 +501,12 @@ textarea {
   background: var(--brand-dark);
 }
 
+.primary-action:disabled {
+  color: #8a958d;
+  background: #eceeea;
+  cursor: not-allowed;
+}
+
 .secondary-action {
   color: var(--charcoal);
   background: #fff0e8;

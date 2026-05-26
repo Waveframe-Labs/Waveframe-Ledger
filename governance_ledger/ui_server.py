@@ -62,7 +62,7 @@ class LedgerUIHandler(BaseHTTPRequestHandler):
                         else []
                     ),
                 )
-                self._write_json(receipt)
+                self._write_json(build_publication_receipt_response(receipt))
             except ValueError as exc:
                 self._write_json({"error": str(exc)}, status=400)
             except Exception as exc:  # pragma: no cover - defensive HTTP boundary
@@ -145,6 +145,16 @@ def compose_authority_publication(draft: dict[str, Any]) -> dict[str, Any]:
         "authority_registry_projection": build_authority_registry_projection(authority, bundle),
         "authority_release_narrative": build_authority_release_narrative(authority, preview, bundle),
         "diagnostics": diagnostics,
+    }
+
+
+def build_publication_receipt_response(receipt: dict[str, Any]) -> dict[str, Any]:
+    """Wrap a publication receipt in the UI export response shape."""
+    return {
+        "status": "exported",
+        "publication_receipt": receipt,
+        "receipt_hash": receipt["receipt_hash"],
+        "bundle_hash": receipt["bundle_hash"],
     }
 
 

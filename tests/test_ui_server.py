@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from governance_ledger.semantics.publication import build_publication_receipt
-from governance_ledger.ui_server import compose_authority_publication
+from governance_ledger.ui_server import build_publication_receipt_response, compose_authority_publication
 
 
 def test_ui_server_composes_artifacts_from_authoring_fields():
@@ -99,6 +99,13 @@ def test_ui_server_receipt_builder_supports_publication_notes():
     assert receipt["schema_version"] == "publication_receipt.v1"
     assert receipt["publication_notes"][0]["text"] == "Initial local publication receipt."
     assert receipt["readiness_confirmations"]["lineage_validated"] is True
+
+    response = build_publication_receipt_response(receipt)
+
+    assert response["status"] == "exported"
+    assert response["publication_receipt"] == receipt
+    assert response["receipt_hash"] == receipt["receipt_hash"]
+    assert response["bundle_hash"] == receipt["bundle_hash"]
 
 
 def _diagnostic(diagnostics: list[dict], code: str) -> dict:
