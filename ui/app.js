@@ -1,9 +1,11 @@
 const form = document.querySelector("#authority-form");
 const generateButton = document.querySelector("#generate-button");
 const exportButton = document.querySelector("#export-button");
+const registerButton = document.querySelector("#register-button");
 const newDraftButton = document.querySelector("#new-draft-button");
 const draftSessionStatus = document.querySelector("#draft-session-status");
 let currentArtifacts = null;
+let pendingRegistration = null;
 let livePreviewTimer = null;
 const DRAFT_SESSION_KEY = "governance-ledger:draft-authority-session:v1";
 const BUNDLE_REGISTRY_KEY = "governance-ledger:authority-bundle-registry:v1";
@@ -81,10 +83,13 @@ function startNewDraft() {
   window.localStorage.removeItem(DRAFT_SESSION_KEY);
   form.reset();
   currentArtifacts = null;
+  pendingRegistration = null;
   exportButton.disabled = true;
+  registerButton.disabled = true;
   $("#status-authority-ref").textContent = "not generated";
   $("#status-semantic").textContent = "draft required";
   $("#status-bundle").textContent = "not exported";
+  $("#release-registration").textContent = "Bundle not exported.";
   draftSessionStatus.textContent = "new draft_authority_session.v1 started locally";
   saveDraftSession();
 }
@@ -104,8 +109,10 @@ async function generateArtifacts(options = {}) {
       throw new Error(payload.error || "Unable to generate semantic artifacts.");
     }
     currentArtifacts = payload;
+    pendingRegistration = null;
     renderArtifacts(payload);
     exportButton.disabled = false;
+    registerButton.disabled = true;
     if (shouldNavigate) {
       showPage("preview");
     }
@@ -134,6 +141,7 @@ function renderArtifacts(payload) {
   $("#status-authority-ref").textContent = bundle.authority_ref;
   $("#status-semantic").textContent = "ready";
   $("#status-bundle").textContent = "ready to export";
+  $("#release-registration").textContent = "Bundle ready to export. Authority not registered locally.";
 
   $("#preview-summary").textContent = preview.governance_summary;
   renderList("#preview-enforcement", preview.enforcement_behavior);
@@ -383,8 +391,8 @@ function publishCurrentBundleToRegistry(receipt, publicationNotes) {
     schema_version: "authority_bundle_registry_entry.v1",
     registry_id: existing?.registry_id || `registry-${crypto.randomUUID()}`,
     authority_ref: bundle.authority_ref,
-    status: existing?.status || "published",
-    published_at: existing?.published_at || now,
+    status: existing?.status || "registered",
+    published_at: existing?.published_at || receipt?.published_at || now,
     superseded_by: existing?.superseded_by || null,
     governed_resource: projection.governed_resource || authority.protected_resource,
     governed_action: projection.governed_action || "unspecified action",
@@ -410,10 +418,10 @@ function publishCurrentBundleToRegistry(receipt, publicationNotes) {
     },
     lifecycle_timeline: appendLifecycleOnce(
       lifecycle,
-      "published",
+      "registered",
       receipt?.published_at || now,
       receipt?.bundle_hash || bundle.contract_hash,
-      "authority_bundle.v1 exported to the local registry with publication_receipt.v1.",
+      "Authority registered locally with authority_bundle.v1 and publication_receipt.v1.",
     ),
   };
 
@@ -446,12 +454,12 @@ function renderBundleRegistry() {
   summary.innerHTML = "";
   list.innerHTML = "";
 
-  const publishedCount = registry.authorities.filter((entry) => entry.status === "published").length;
+  const registeredCount = registry.authorities.filter((entry) => entry.status === "registered").length;
   const revokedCount = registry.authorities.filter((entry) => entry.status === "revoked").length;
   const supersededCount = registry.authorities.filter((entry) => entry.status === "superseded").length;
   summary.append(
     registryMetric("Authorities", registry.authorities.length),
-    registryMetric("Published", publishedCount),
+    registryMetric("Registered", registeredCount),
     registryMetric("Superseded", supersededCount),
     registryMetric("Revoked", revokedCount),
   );
@@ -533,7 +541,7 @@ function authorityRegistryCard(entry) {
 
   const meta = document.createElement("dl");
   meta.className = "authority-meta";
-  appendMeta(meta, "Published", formatDateTime(entry.published_at));
+  appendMeta(meta, "Registered", formatDateTime(entry.published_at));
   appendMeta(meta, "Superseded by", entry.superseded_by || "none");
   appendMeta(meta, "Continuity", entry.continuity_posture);
   appendMeta(meta, "Escalation", entry.escalation_threshold);
@@ -717,23 +725,33 @@ async function exportBundle() {
     const receipt = await buildPublicationReceipt(bundle, publishedAt, readiness, notes);
     $("#receipt-json").textContent = JSON.stringify(receipt, null, 2);
     downloadBundle(bundle);
-    const entry = publishCurrentBundleToRegistry(receipt, notes);
-    $("#status-bundle").textContent = "exported to local registry";
-    renderBundleDetail(entry, "receipt");
-    showPage("bundles");
+    pendingRegistration = { receipt, notes };
+    registerButton.disabled = false;
+    $("#status-bundle").textContent = "bundle exported";
+    $("#release-registration").textContent = "Bundle exported. Authority is not registered locally yet.";
   } catch (error) {
     renderDiagnostics([
       {
-        severity: "error",
+        severity: "warning",
         code: "publication_evidence_unavailable",
         title: "Publication evidence could not be recorded",
         domain: "publication",
-        text: "Ledger could not create the publication receipt for this authority export.",
-        recommendation: error.message,
+        text: "Ledger could not create the publication receipt for this bundle export.",
+        recommendation: operationalReceiptRecommendation(error),
       },
     ]);
     showPage("diagnostics");
   }
+}
+
+function registerAuthorityLocally() {
+  if (!currentArtifacts || !pendingRegistration) return;
+  const entry = publishCurrentBundleToRegistry(pendingRegistration.receipt, pendingRegistration.notes);
+  $("#status-bundle").textContent = "registered locally";
+  $("#release-registration").textContent = "Authority registered locally. Registry lifecycle now has a registered authority event.";
+  registerButton.disabled = true;
+  renderBundleDetail(entry, "receipt");
+  showPage("bundles");
 }
 
 async function buildPublicationReceipt(bundle, publishedAt, readiness, notes) {
@@ -749,9 +767,18 @@ async function buildPublicationReceipt(bundle, publishedAt, readiness, notes) {
   });
   const receipt = await response.json();
   if (!response.ok) {
-    throw new Error(receipt.error || "Unable to generate publication receipt.");
+    const reason = receipt.error || "Unable to generate publication receipt.";
+    throw new Error(response.status === 404 ? "publication receipt service unavailable" : reason);
   }
   return receipt;
+}
+
+function operationalReceiptRecommendation(error) {
+  const message = String(error?.message || "");
+  if (message.includes("publication receipt service unavailable") || message.toLowerCase().includes("not found")) {
+    return "Refresh the local Ledger UI server, then export again to create a replayable publication receipt.";
+  }
+  return message || "Review the authority bundle and export again to create a publication receipt.";
 }
 
 function readReadinessConfirmations() {
@@ -823,6 +850,7 @@ function showPage(pageId) {
 
 generateButton.addEventListener("click", () => generateArtifacts({ navigate: true }));
 exportButton.addEventListener("click", exportBundle);
+registerButton.addEventListener("click", registerAuthorityLocally);
 newDraftButton.addEventListener("click", startNewDraft);
 form.addEventListener("input", () => {
   saveDraftSession();

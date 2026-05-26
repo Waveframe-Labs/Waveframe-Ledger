@@ -267,12 +267,12 @@
             <section class="authoring-section">
               <div class="authoring-copy">
                 <h3>Lifecycle Behavior</h3>
-                <p>Ledger will model this draft as moving from draft, to review, to published authority.</p>
+                <p>Ledger will model this draft as moving from draft, to review, to exported bundle, to registered authority.</p>
               </div>
               <div class="lifecycle-preview" aria-label="Lifecycle behavior">
                 <span>draft</span>
                 <span>review</span>
-                <span>published</span>
+                <span>registered</span>
               </div>
               <p class="explain-text">Lifecycle posture matters because resumed workflows and replay evidence must remain bound to the authority version that governed execution.</p>
             </section>
@@ -310,7 +310,7 @@
             </article>
             <article class="artifact-panel wide-panel">
               <h3>Operational outcome explorer</h3>
-              <p class="quiet">If this authority is published, Ledger will bind operational meaning to the generated semantic artifacts.</p>
+              <p class="quiet">If this authority is registered, Ledger will bind operational meaning to the generated semantic artifacts.</p>
               <ul id="outcome-explorer" class="semantic-list"></ul>
             </article>
           </div>
@@ -346,9 +346,12 @@
             <div>
               <div class="section-kicker">Step 3</div>
               <h2>Publish Authority</h2>
-              <p class="section-intent">Confirm publication posture, add append-only context, and export the bundle with a deterministic publication receipt.</p>
+              <p class="section-intent">Confirm publication posture, export the bundle, then register the authority lifecycle event locally.</p>
             </div>
-            <button id="export-button" class="secondary-action" type="button" disabled>Publish Authority Bundle</button>
+            <div class="action-row">
+              <button id="export-button" class="secondary-action" type="button" disabled>Export Bundle</button>
+              <button id="register-button" class="primary-action compact-action" type="button" disabled>Register Authority Locally</button>
+            </div>
           </div>
 
           <article class="release-narrative">
@@ -367,6 +370,10 @@
               <div>
                 <span>Lifecycle effect</span>
                 <strong id="release-lifecycle">Pending impact review.</strong>
+              </div>
+              <div>
+                <span>Registration state</span>
+                <strong id="release-registration">Bundle not exported.</strong>
               </div>
             </div>
           </article>
@@ -483,7 +490,7 @@
               <span>Status</span>
               <select id="registry-status-filter">
                 <option value="all">All lifecycle states</option>
-                <option value="published">Published</option>
+                <option value="registered">Registered</option>
                 <option value="superseded">Superseded</option>
                 <option value="revoked">Revoked</option>
               </select>

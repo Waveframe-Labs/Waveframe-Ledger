@@ -53,7 +53,7 @@
             "minLength": 1
           },
           "status": {
-            "enum": ["published", "superseded", "revoked"]
+            "enum": ["registered", "published", "superseded", "revoked"]
           },
           "published_at": {
             "type": "string",
@@ -115,7 +115,7 @@
               ],
               "properties": {
                 "event": {
-                  "enum": ["drafted", "reviewed", "published", "superseded", "revoked"]
+                  "enum": ["drafted", "reviewed", "exported", "registered", "published", "superseded", "revoked"]
                 },
                 "timestamp": {
                   "type": "string",

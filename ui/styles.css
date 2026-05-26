@@ -484,6 +484,10 @@ textarea {
   min-width: 254px;
 }
 
+.compact-action {
+  min-width: 190px;
+}
+
 .secondary-action {
   min-width: 112px;
 }

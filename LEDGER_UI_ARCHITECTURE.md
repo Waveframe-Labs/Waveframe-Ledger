@@ -342,7 +342,8 @@ Responsibilities:
 - show governed resource, governed action, continuity posture, escalation threshold, and semantic integrity posture
 - show immutable hashes, lineage summary, and replay metadata when present
 - support local artifact actions: view bundle, open semantic preview, open diff, export bundle, supersede, revoke, and view lineage
-- render lifecycle timeline events for drafted, reviewed, published, superseded, and revoked states
+- render lifecycle timeline events for drafted, reviewed, exported, registered, superseded, and revoked states
+- distinguish exported bundle artifacts from locally registered authority lifecycle events
 
 Must not:
 
