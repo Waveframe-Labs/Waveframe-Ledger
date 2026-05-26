@@ -9,6 +9,12 @@ let currentArtifacts = null;
 let pendingRegistration = null;
 let livePreviewTimer = null;
 let reviewBusy = false;
+let workflowTimestamps = {
+  draftSaved: null,
+  reviewed: null,
+  exported: null,
+  registered: null,
+};
 let workflowState = {
   draftReady: false,
   impactReviewed: false,
@@ -67,6 +73,7 @@ function saveDraftSession() {
   const session = buildDraftSession(readDraft());
   window.localStorage.setItem(DRAFT_SESSION_KEY, JSON.stringify(session));
   draftSessionStatus.textContent = `draft_authority_session.v1 saved locally ${new Date(session.updated_at).toLocaleTimeString()}`;
+  workflowTimestamps.draftSaved = session.updated_at;
   updateWorkflowState({ draftReady: true });
   return session;
 }
@@ -94,6 +101,12 @@ function startNewDraft() {
   form.reset();
   currentArtifacts = null;
   pendingRegistration = null;
+  workflowTimestamps = {
+    draftSaved: null,
+    reviewed: null,
+    exported: null,
+    registered: null,
+  };
   exportButton.disabled = true;
   registerButton.disabled = true;
   $("#status-authority-ref").textContent = "not generated";
@@ -132,6 +145,9 @@ async function generateArtifacts(options = {}) {
     }
     currentArtifacts = payload;
     pendingRegistration = null;
+    if (isReview) {
+      workflowTimestamps.reviewed = new Date().toISOString();
+    }
     renderArtifacts(payload, { reviewed: isReview });
     exportButton.disabled = !isReview;
     registerButton.disabled = true;
@@ -181,6 +197,7 @@ function renderWorkflowState() {
     node.querySelector("strong").textContent = complete ? completeLabel : "Pending";
   }
   syncPublicationActions();
+  renderAuthorityContext();
 }
 
 function syncPublicationActions() {
@@ -214,6 +231,30 @@ function renderOperatorGuidance(title, body) {
     guidance.querySelector("strong").textContent = "Authority registered locally.";
     guidance.querySelector("span").textContent = "The registry now holds lifecycle lineage, receipt posture, and replay-ready publication evidence.";
   }
+}
+
+function renderAuthorityContext() {
+  const authorityRef = currentArtifacts?.authority_bundle?.authority_ref || `${readDraft().contract_id || "authority"}@${readDraft().contract_version || "draft"}`;
+  const registryEntry = currentArtifacts?.authority_bundle ? findRegistryEntry(currentArtifacts.authority_bundle.authority_ref) : null;
+  $("#context-authority-ref").textContent = authorityRef;
+  $("#context-reviewed-at").textContent = workflowTimestamps.reviewed
+    ? relativeTime(workflowTimestamps.reviewed)
+    : "not reviewed";
+  $("#context-lineage").textContent = registryEntry
+    ? `${formatLabel(registryEntry.status)} lineage`
+    : "draft lineage";
+  setContextChip("#context-draft-state", true, "Draft");
+  setContextChip("#context-review-state", workflowState.impactReviewed, workflowState.impactReviewed ? "Impact reviewed" : "Impact pending");
+  setContextChip("#context-export-state", workflowState.bundleExported, workflowState.bundleExported ? "Exported" : "Not exported");
+  setContextChip("#context-register-state", workflowState.authorityRegistered, workflowState.authorityRegistered ? "Registered" : "Not registered");
+}
+
+function setContextChip(selector, complete, text) {
+  const node = $(selector);
+  if (!node) return;
+  node.textContent = text;
+  node.classList.toggle("complete", complete);
+  node.classList.toggle("active", !complete);
 }
 
 function scheduleLivePreview() {
@@ -877,6 +918,7 @@ async function exportBundle() {
     const receipt = await buildPublicationReceipt(bundle, publishedAt, readiness, notes);
     $("#receipt-json").textContent = JSON.stringify(receipt, null, 2);
     pendingRegistration = { receipt, notes };
+    workflowTimestamps.exported = publishedAt;
     registerButton.disabled = false;
     $("#status-bundle").textContent = "bundle exported";
     $("#release-registration").textContent = "Bundle exported. Authority is not registered locally yet.";
@@ -960,6 +1002,7 @@ function registerAuthorityLocally() {
     return;
   }
   const entry = publishCurrentBundleToRegistry(pendingRegistration.receipt, pendingRegistration.notes);
+  workflowTimestamps.registered = new Date().toISOString();
   $("#status-bundle").textContent = "registered locally";
   $("#release-registration").textContent = "Authority registered locally. Registry lifecycle now has a registered authority event.";
   renderOperatorGuidance(
@@ -1154,6 +1197,17 @@ function formatDateTime(value) {
   return new Date(value).toLocaleString();
 }
 
+function relativeTime(value) {
+  if (!value) return "not recorded";
+  const elapsedSeconds = Math.max(0, Math.round((Date.now() - new Date(value).getTime()) / 1000));
+  if (elapsedSeconds < 60) return "just now";
+  const elapsedMinutes = Math.round(elapsedSeconds / 60);
+  if (elapsedMinutes < 60) return `${elapsedMinutes}m ago`;
+  const elapsedHours = Math.round(elapsedMinutes / 60);
+  if (elapsedHours < 24) return `${elapsedHours}h ago`;
+  return formatDateTime(value);
+}
+
 function showPage(pageId) {
   const targetPage = document.querySelector(`[data-page="${pageId}"]`) ? pageId : "draft";
   document.querySelectorAll("[data-page]").forEach((page) => {
@@ -1175,6 +1229,9 @@ newDraftButton.addEventListener("click", startNewDraft);
 form.addEventListener("input", () => {
   saveDraftSession();
   pendingRegistration = null;
+  workflowTimestamps.reviewed = null;
+  workflowTimestamps.exported = null;
+  workflowTimestamps.registered = null;
   exportButton.disabled = true;
   registerButton.disabled = true;
   updateWorkflowState({
@@ -1188,6 +1245,9 @@ form.addEventListener("input", () => {
 form.addEventListener("change", () => {
   saveDraftSession();
   pendingRegistration = null;
+  workflowTimestamps.reviewed = null;
+  workflowTimestamps.exported = null;
+  workflowTimestamps.registered = null;
   exportButton.disabled = true;
   registerButton.disabled = true;
   updateWorkflowState({
@@ -1212,6 +1272,7 @@ document.querySelectorAll("[data-page-link]").forEach((link) => {
 
 restoreDraftSession();
 renderWorkflowState();
+renderAuthorityContext();
 renderBundleRegistry();
 renderChangeReview(currentArtifacts, { reviewed: workflowState.impactReviewed });
 showPage(window.location.hash.replace("#", "") || "overview");

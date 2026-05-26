@@ -31,6 +31,29 @@
       </aside>
 
       <main class="workspace">
+        <header class="authority-context" aria-label="Current authority context">
+          <div class="authority-context-main">
+            <span class="section-kicker">Current authority</span>
+            <strong id="context-authority-ref">treasury-policy@2.1.0</strong>
+          </div>
+          <div class="authority-context-state" aria-label="Authority lifecycle state">
+            <span id="context-draft-state" class="context-chip active">Draft</span>
+            <span id="context-review-state" class="context-chip">Impact pending</span>
+            <span id="context-export-state" class="context-chip">Not exported</span>
+            <span id="context-register-state" class="context-chip">Not registered</span>
+          </div>
+          <dl class="authority-context-meta">
+            <div>
+              <dt>Last reviewed</dt>
+              <dd id="context-reviewed-at">not reviewed</dd>
+            </div>
+            <div>
+              <dt>Lineage</dt>
+              <dd id="context-lineage">draft lineage</dd>
+            </div>
+          </dl>
+        </header>
+
         <div class="workflow-state-banner" aria-label="Authority workflow state">
           <div class="workflow-state-step" data-workflow-step="draft">
             <span>Draft Ready</span>
@@ -183,11 +206,11 @@
           </div>
 
           <form id="authority-form" class="authority-form">
-            <section class="authoring-section">
-              <div class="authoring-copy">
+            <details class="authoring-section governance-module" open>
+              <summary class="authoring-copy">
                 <h3>Governance Intent</h3>
                 <p>Define the operational system and action this authority controls.</p>
-              </div>
+              </summary>
               <div class="form-grid">
                 <label>
                   <span>What operational system is governed?</span>
@@ -215,13 +238,13 @@
                   <small>Mutation targets identify the operational actions this authority is meant to constrain.</small>
                 </label>
               </div>
-            </section>
+            </details>
 
-            <section class="authoring-section">
-              <div class="authoring-copy">
+            <details class="authoring-section governance-module">
+              <summary class="authoring-copy">
                 <h3>Admissibility Rules</h3>
                 <p>Describe what must be true before execution should be considered admissible.</p>
-              </div>
+              </summary>
               <div class="form-grid">
                 <label>
                   <span>Who is authorized to approve execution?</span>
@@ -250,11 +273,11 @@
                   <small>Category helps reviewers understand the authority domain.</small>
                 </label>
               </div>
-            </section>
+            </details>
 
-            <section class="authoring-section">
-              <div class="authoring-copy">
-                <h3>Escalation Rules</h3>
+            <details class="authoring-section governance-module">
+              <summary class="authoring-copy">
+                <h3>Escalation Policies</h3>
                 <p>Define when normal execution needs governance intervention.</p>
                 <div class="guidance-cards" aria-label="Escalation threshold examples">
                   <article>
@@ -270,7 +293,7 @@
                     <span>Example: require escalation for high-impact deployment changes.</span>
                   </article>
                 </div>
-              </div>
+              </summary>
               <div class="form-grid">
                 <label class="wide">
                   <span>At what operational threshold should this action require escalation review?</span>
@@ -278,13 +301,13 @@
                   <small>Thresholds turn operational risk into explicit review obligations.</small>
                 </label>
               </div>
-            </section>
+            </details>
 
-            <section class="authoring-section">
-              <div class="authoring-copy">
-                <h3>Continuity Rules</h3>
+            <details class="authoring-section governance-module">
+              <summary class="authoring-copy">
+                <h3>Continuity Requirements</h3>
                 <p>Specify what invalidates resumed or long-running execution.</p>
-              </div>
+              </summary>
               <fieldset class="guided-questions">
                 <legend>Continuity guarantees</legend>
                 <label class="check-row">
@@ -298,20 +321,20 @@
                   <small>Revocation invalidation prevents paused work from continuing under authority that no longer exists.</small>
                 </label>
               </fieldset>
-            </section>
+            </details>
 
-            <section class="authoring-section">
-              <div class="authoring-copy">
-                <h3>Lifecycle Behavior</h3>
-                <p>Ledger will model this draft as moving from draft, to review, to exported bundle, to registered authority.</p>
-              </div>
+            <details class="authoring-section governance-module">
+              <summary class="authoring-copy">
+                <h3>Lifecycle, Replay, and Evidence</h3>
+                <p>Review how this authority moves through publication and binds future evidence.</p>
+              </summary>
               <div class="lifecycle-preview" aria-label="Lifecycle behavior">
                 <span>draft</span>
                 <span>review</span>
                 <span>registered</span>
               </div>
               <p class="explain-text">Lifecycle posture matters because resumed workflows and replay evidence must remain bound to the authority version that governed execution.</p>
-            </section>
+            </details>
           </form>
         </section>
 

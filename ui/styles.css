@@ -123,24 +123,107 @@ select {
   background: var(--paper);
 }
 
+.authority-context {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  max-width: 1180px;
+  display: grid;
+  grid-template-columns: minmax(180px, 0.28fr) minmax(320px, 1fr) minmax(220px, 0.38fr);
+  gap: 14px;
+  align-items: center;
+  margin: 0 auto 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(10px);
+}
+
+.authority-context-main {
+  display: grid;
+  gap: 3px;
+}
+
+.authority-context-main strong {
+  overflow-wrap: anywhere;
+}
+
+.authority-context-state {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+
+.context-chip {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  color: var(--muted);
+  background: #f7f6f2;
+  font-size: 0.76rem;
+  font-weight: 850;
+}
+
+.context-chip.active {
+  color: var(--brand-dark);
+  border-color: #ffb48b;
+  background: #fff1e9;
+}
+
+.context-chip.complete {
+  color: var(--green);
+  border-color: #c9d6cb;
+  background: #f6faf6;
+}
+
+.authority-context-meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+
+.authority-context-meta div {
+  min-width: 0;
+}
+
+.authority-context-meta dt {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.authority-context-meta dd {
+  margin: 2px 0 0;
+  overflow-wrap: anywhere;
+  font-size: 0.82rem;
+  font-weight: 780;
+}
+
 .workflow-state-banner {
   max-width: 1180px;
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 8px;
-  margin: 0 auto 16px;
-  padding: 10px;
+  gap: 6px;
+  margin: 0 auto 12px;
+  padding: 7px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: #faf9f6;
 }
 
 .workflow-state-step {
-  min-height: 66px;
+  min-height: 48px;
   display: grid;
   align-content: center;
-  gap: 3px;
-  padding: 10px;
+  gap: 1px;
+  padding: 7px 9px;
   border: 1px solid var(--line);
   border-radius: 7px;
   background: var(--panel);
@@ -148,14 +231,14 @@ select {
 
 .workflow-state-step span {
   color: #73787e;
-  font-size: 0.76rem;
+  font-size: 0.68rem;
   font-weight: 850;
   text-transform: uppercase;
 }
 
 .workflow-state-step strong {
   color: var(--muted);
-  font-size: 0.95rem;
+  font-size: 0.82rem;
 }
 
 .workflow-state-step.complete {
@@ -182,8 +265,8 @@ select {
   grid-template-columns: minmax(180px, 0.28fr) minmax(0, 1fr);
   gap: 12px;
   align-items: center;
-  margin: 0 auto 18px;
-  padding: 14px 16px;
+  margin: 0 auto 16px;
+  padding: 12px 14px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--panel);
@@ -429,13 +512,56 @@ h3 {
 .authoring-section {
   display: grid;
   grid-template-columns: minmax(220px, 0.36fr) minmax(0, 1fr);
-  gap: 26px;
-  padding: 24px;
+  gap: 18px;
+  padding: 18px;
   border-bottom: 1px solid var(--line);
 }
 
 .authoring-section:last-child {
   border-bottom: 0;
+}
+
+.governance-module {
+  grid-template-columns: minmax(240px, 0.32fr) minmax(0, 1fr);
+}
+
+.governance-module:not([open]) {
+  grid-template-columns: 1fr;
+  padding: 0;
+}
+
+.governance-module:not([open]) .authoring-copy {
+  padding: 14px 18px;
+}
+
+.governance-module summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+.governance-module summary::-webkit-details-marker {
+  display: none;
+}
+
+.governance-module summary::after {
+  content: "Open module";
+  display: inline-flex;
+  width: max-content;
+  margin-top: 10px;
+  padding: 3px 8px;
+  border: 1px solid #efb28e;
+  border-radius: 7px;
+  color: var(--brand-dark);
+  background: #fff;
+  font-size: 0.72rem;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.governance-module[open] summary::after {
+  content: "Module open";
+  color: var(--green);
+  border-color: #c9d6cb;
 }
 
 .authoring-copy h3 {
@@ -478,7 +604,7 @@ h3 {
 .form-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
+  gap: 12px;
 }
 
 label {
@@ -504,7 +630,7 @@ input,
 textarea,
 select {
   width: 100%;
-  min-height: 42px;
+  min-height: 38px;
   border: 1px solid var(--line-strong);
   border-radius: 7px;
   padding: 9px 11px;
@@ -531,9 +657,9 @@ textarea {
 
 .guided-questions {
   display: grid;
-  gap: 12px;
+  gap: 10px;
   margin: 0;
-  padding: 18px;
+  padding: 14px;
   border: 1px solid var(--line);
   border-radius: 8px;
 }
@@ -1175,7 +1301,9 @@ textarea {
   .outcome-grid,
   .authoring-section,
   .lifecycle-preview,
-  .workflow-state-banner {
+  .workflow-state-banner,
+  .authority-context,
+  .authority-context-meta {
     grid-template-columns: 1fr;
   }
 
