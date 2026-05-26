@@ -82,11 +82,12 @@
         </aside>
 
         <section id="overview" class="band page overview-band active" data-page="overview">
-          <div class="overview-hero">
-            <img class="waveframe-logo" src="/assets/wf-logo.png" alt="Waveframe Labs" />
-            <div class="section-kicker">Governance authoring workspace</div>
-            <h1>Create a publishable operational authority.</h1>
-            <p class="overview-lede">Ledger turns governance intent into a publishable authority record: what is governed, what changes operationally, and what future evidence can bind to.</p>
+          <div class="overview-hero compact-hero">
+            <div>
+              <div class="section-kicker">Governance operations</div>
+              <h1>Current Governance Posture</h1>
+              <p class="overview-lede">Authority state, lifecycle alerts, replay readiness, and pending governance actions for the local Ledger workspace.</p>
+            </div>
             <div class="overview-actions" aria-label="Recommended actions">
               <button class="primary-action" type="button" data-page-link="draft">Create Authority</button>
               <button class="secondary-action" type="button" data-page-link="publication">Publish Authority</button>
@@ -94,98 +95,71 @@
             </div>
           </div>
 
-          <section class="overview-section" aria-labelledby="current-work-title">
+          <section class="overview-section operational-overview" aria-labelledby="current-work-title">
             <div class="overview-section-heading">
               <div>
-                <div class="section-kicker">Current work</div>
-                <h2 id="current-work-title">Authority workspace state</h2>
+                <div class="section-kicker">Active posture</div>
+                <h2 id="current-work-title">Authority Summary</h2>
               </div>
             </div>
-            <div class="overview-grid" aria-label="Workflow status">
-              <div class="status-tile">
-                <span class="status-label">Current authority</span>
-                <strong id="status-authority-ref">not generated</strong>
-              </div>
-              <div class="status-tile">
-                <span class="status-label">Semantic readiness</span>
-                <strong id="status-semantic">draft required</strong>
-              </div>
-              <div class="status-tile">
-                <span class="status-label">Publication object</span>
-                <strong id="status-bundle">not exported</strong>
-              </div>
-            </div>
-          </section>
-
-          <section class="overview-section" aria-labelledby="workflow-title">
-            <div class="overview-section-heading">
-              <div>
-                <div class="section-kicker">Governance workflow</div>
-                <h2 id="workflow-title">From intent to publication object</h2>
-              </div>
-            </div>
-            <ol class="workflow-map">
-              <li>
-                <strong>Create Authority</strong>
-                <span>Describe the protected system, governed action, approvals, escalation, validity, and continuity guarantees.</span>
-              </li>
-              <li>
-                <strong>Review Impact</strong>
-                <span>Inspect governance meaning, operational consequences, lifecycle implications, and example governed outcomes.</span>
-              </li>
-              <li>
-                <strong>Publish Authority</strong>
-                <span>Confirm readiness posture, record publication notes, and export the authority bundle.</span>
-              </li>
-              <li>
-                <strong>Track Lifecycle</strong>
-                <span>Exported bundles enter the local authority registry with publication, supersession, revocation, and lineage state.</span>
-              </li>
-            </ol>
-          </section>
-
-          <section class="overview-section" aria-labelledby="outputs-title">
-            <div class="overview-section-heading">
-              <div>
-                <div class="section-kicker">Ledger outputs</div>
-                <h2 id="outputs-title">Canonical artifacts produced here</h2>
-              </div>
-            </div>
-            <div class="output-grid">
-              <article class="output-item">
-                <h3>authority_contract.v1</h3>
-                <p>The operational authority defining governed resources, approval expectations, escalation, continuity, and replay obligations.</p>
+            <div class="operations-grid">
+              <article class="authority-summary-card">
+                <div class="summary-card-header">
+                  <div>
+                    <span class="status-label">Current authority</span>
+                    <strong id="status-authority-ref">not generated</strong>
+                  </div>
+                  <span id="overview-authority-state" class="status-badge">Draft</span>
+                </div>
+                <dl class="summary-metrics">
+                  <div>
+                    <dt>Semantic readiness</dt>
+                    <dd id="status-semantic">draft required</dd>
+                  </div>
+                  <div>
+                    <dt>Publication object</dt>
+                    <dd id="status-bundle">not exported</dd>
+                  </div>
+                  <div>
+                    <dt>Replay readiness</dt>
+                    <dd id="overview-replay-readiness">receipt pending</dd>
+                  </div>
+                  <div>
+                    <dt>Continuity posture</dt>
+                    <dd id="overview-continuity-posture">review pending</dd>
+                  </div>
+                </dl>
               </article>
-              <article class="output-item">
-                <h3>governance_impact_preview.v1</h3>
-                <p>Governance meaning: summary, enforcement behavior, consequences, lifecycle implications, and governed outcomes.</p>
+              <article class="operations-panel">
+                <h3>Pending governance actions</h3>
+                <ul id="overview-pending-actions" class="operations-list"></ul>
               </article>
-              <article class="output-item">
-                <h3>governance_review_packet.v1</h3>
-                <p>Review context and immutable inputs for authority publication, without changing execution outcomes.</p>
-              </article>
-              <article class="output-item">
-                <h3>authority_bundle.v1</h3>
-                <p>The publishable authority envelope that binds governance meaning, review context, lineage, and integrity evidence.</p>
+              <article class="operations-panel">
+                <h3>Lifecycle alerts</h3>
+                <ul id="overview-lifecycle-alerts" class="operations-list"></ul>
               </article>
             </div>
           </section>
 
-          <section class="overview-section" aria-labelledby="boundaries-title">
+          <section class="overview-section operations-split" aria-labelledby="registry-posture-title">
             <div class="overview-section-heading">
               <div>
-                <div class="section-kicker">Ownership boundaries</div>
-                <h2 id="boundaries-title">What happens in Ledger</h2>
+                <div class="section-kicker">Registry posture</div>
+                <h2 id="registry-posture-title">Lifecycle and Drift</h2>
               </div>
             </div>
-            <div class="boundary-grid">
-              <article class="boundary-item">
-                <h3>Ledger owns semantic generation</h3>
-                <p>Authority meaning, preview text, publication implications, registry display posture, and bundle composition are generated by Ledger code.</p>
+            <div class="operations-grid secondary-grid">
+              <article class="operations-panel">
+                <h3>Registry health</h3>
+                <dl id="overview-registry-health" class="compact-dl"></dl>
               </article>
-              <article class="boundary-item">
-                <h3>Ledger does not execute authority</h3>
-                <p>This workspace does not call Guard, simulate admissibility, mutate evidence, publish to Cloud, or change runtime outcomes.</p>
+              <article class="operations-panel">
+                <h3>Recent activity</h3>
+                <ol id="overview-activity-feed" class="activity-feed"></ol>
+              </article>
+              <article class="operations-panel">
+                <h3>Authority relationships</h3>
+                <ol id="overview-relationship-feed" class="activity-feed"></ol>
               </article>
             </div>
           </section>
