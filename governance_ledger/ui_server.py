@@ -136,6 +136,7 @@ def compose_authority_publication(draft: dict[str, Any]) -> dict[str, Any]:
         governance_review_packets=[review_packet],
     )
     diagnostics = build_ui_diagnostics(authority, draft, bundle)
+    release_narrative = build_authority_release_narrative(authority, preview, bundle)
     return {
         "authority_contract": authority,
         "governance_impact_preview": preview,
@@ -143,7 +144,14 @@ def compose_authority_publication(draft: dict[str, Any]) -> dict[str, Any]:
         "publication_manifest": manifest,
         "authority_bundle": bundle,
         "authority_registry_projection": build_authority_registry_projection(authority, bundle),
-        "authority_release_narrative": build_authority_release_narrative(authority, preview, bundle),
+        "authority_release_narrative": release_narrative,
+        "authority_workspace_projection": build_authority_workspace_projection(
+            authority,
+            preview,
+            bundle,
+            diagnostics,
+            release_narrative,
+        ),
         "diagnostics": diagnostics,
     }
 
@@ -336,6 +344,52 @@ def build_authority_registry_projection(authority: dict[str, Any], bundle: dict[
         "semantic_integrity_posture": "compatible"
         if bundle["schema_compatibility"]["compatible"]
         else "requires review",
+    }
+
+
+def build_authority_workspace_projection(
+    authority: dict[str, Any],
+    preview: dict[str, Any],
+    bundle: dict[str, Any],
+    diagnostics: list[dict[str, Any]],
+    release_narrative: dict[str, Any],
+) -> dict[str, Any]:
+    """Build the canonical UI projection for local authority workspace state."""
+    warning_count = sum(1 for item in diagnostics if item.get("severity") == "warning")
+    return {
+        "schema_version": "authority_workspace_projection.v1",
+        "authority_ref": bundle["authority_ref"],
+        "lifecycle_posture": "draft",
+        "review_state": "impact_pending",
+        "export_state": "not_exported",
+        "registration_state": "not_registered",
+        "operational_change": release_narrative["operational_change"],
+        "continuity_posture": release_narrative["continuity_summary"],
+        "lifecycle_effect": release_narrative["lifecycle_summary"],
+        "publication_meaning": release_narrative["headline"],
+        "publication_summary": release_narrative["publication_summary"],
+        "registry_posture": "Authority is not registered locally.",
+        "replay_posture": "Export will create publication receipt evidence that future replay can bind against.",
+        "diagnostics_summary": {
+            "findings": len(diagnostics),
+            "warnings": warning_count,
+            "info": len(diagnostics) - warning_count,
+        },
+        "timeline": [
+            {
+                "event": "drafted",
+                "detail": f"{bundle['authority_ref']} authority draft compiled from local authoring fields.",
+            },
+            {
+                "event": "semantic_artifacts_generated",
+                "detail": "Ledger generated deterministic preview, review packet, bundle, diagnostics, and workspace projection.",
+            },
+        ],
+        "semantic_sources": {
+            "preview": preview["schema_version"],
+            "bundle": bundle["schema_version"],
+            "release_narrative": release_narrative["schema_version"],
+        },
     }
 
 

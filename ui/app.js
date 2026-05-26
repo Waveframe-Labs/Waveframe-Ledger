@@ -113,6 +113,7 @@ function startNewDraft() {
   $("#status-semantic").textContent = "draft required";
   $("#status-bundle").textContent = "not exported";
   $("#release-registration").textContent = "Bundle not exported.";
+  renderPublicationProjection(null);
   $("#receipt-json").textContent = "No publication receipt generated yet.";
   updateWorkflowState({
     draftReady: true,
@@ -269,12 +270,10 @@ function renderArtifacts(payload, options = {}) {
   const reviewed = options.reviewed === true;
   const preview = payload.governance_impact_preview;
   const bundle = payload.authority_bundle;
+  const workspaceProjection = authorityWorkspaceProjection(payload);
   $("#status-authority-ref").textContent = bundle.authority_ref;
   $("#status-semantic").textContent = reviewed ? "ready" : "changes need review";
   $("#status-bundle").textContent = reviewed ? "ready to export" : "review impact before export";
-  $("#release-registration").textContent = reviewed
-    ? "Bundle ready to export. Authority not registered locally."
-    : "Review impact before exporting this authority bundle.";
   updateWorkflowState({
     draftReady: true,
     impactReviewed: reviewed,
@@ -306,19 +305,58 @@ function renderArtifacts(payload, options = {}) {
   $("#manifest-json").textContent = JSON.stringify(payload.publication_manifest, null, 2);
   $("#bundle-json").textContent = JSON.stringify(bundle, null, 2);
   $("#receipt-json").textContent = "No publication receipt generated yet.";
-  renderReleaseNarrative(payload.authority_release_narrative);
+  renderPublicationProjection(workspaceProjection);
   renderChangeReview(payload, { reviewed });
   renderOperationsOverview();
 
   renderDiagnostics(payload.diagnostics);
 }
 
-function renderReleaseNarrative(narrative) {
-  $("#release-headline").textContent = narrative?.headline || "Review impact before publishing.";
-  $("#release-summary").textContent = narrative?.publication_summary || "Create or restore an authority draft to see what publishing changes operationally.";
-  $("#release-operational").textContent = narrative?.operational_change || "Pending impact review.";
-  $("#release-continuity").textContent = narrative?.continuity_summary || "Pending impact review.";
-  $("#release-lifecycle").textContent = narrative?.lifecycle_summary || "Pending impact review.";
+function authorityWorkspaceProjection(payload = currentArtifacts) {
+  if (!payload) return null;
+  const projection = payload.authority_workspace_projection || {};
+  const narrative = payload.authority_release_narrative || {};
+  const bundle = payload.authority_bundle || {};
+  const registryEntry = bundle.authority_ref ? findRegistryEntry(bundle.authority_ref) : null;
+  return {
+    schema_version: "authority_workspace_projection.v1",
+    authority_ref: bundle.authority_ref || narrative.authority_ref || projection.authority_ref,
+    lifecycle_posture: registryEntry?.status || projection.lifecycle_posture || "draft",
+    review_state: workflowState.impactReviewed ? "impact_reviewed" : projection.review_state || "impact_pending",
+    export_state: workflowState.bundleExported ? "exported" : projection.export_state || "not_exported",
+    registration_state: workflowState.authorityRegistered || registryEntry ? "registered" : projection.registration_state || "not_registered",
+    operational_change: projection.operational_change || narrative.operational_change,
+    continuity_posture: projection.continuity_posture || narrative.continuity_summary,
+    lifecycle_effect: projection.lifecycle_effect || narrative.lifecycle_summary,
+    publication_meaning: projection.publication_meaning || narrative.headline,
+    publication_summary: projection.publication_summary || narrative.publication_summary,
+    registry_posture: publicationRegistryPosture(registryEntry),
+    replay_posture: registryEntry?.publication_receipt?.receipt_hash
+      ? `Replay review can bind to receipt ${registryEntry.publication_receipt.receipt_hash}.`
+      : projection.replay_posture,
+  };
+}
+
+function publicationRegistryPosture(registryEntry) {
+  if (registryEntry) {
+    return "Authority registered locally. Registry lifecycle now has a registered authority event.";
+  }
+  if (workflowState.receiptGenerated) {
+    return "Bundle exported. Authority is not registered locally yet.";
+  }
+  if (workflowState.impactReviewed) {
+    return "Bundle ready to export. Authority not registered locally.";
+  }
+  return "Review impact before exporting this authority bundle.";
+}
+
+function renderPublicationProjection(projection) {
+  $("#release-headline").textContent = projection?.publication_meaning || "Review impact before publishing.";
+  $("#release-summary").textContent = projection?.publication_summary || "Create or restore an authority draft to see what publishing changes operationally.";
+  $("#release-operational").textContent = projection?.operational_change || "Pending impact review.";
+  $("#release-continuity").textContent = projection?.continuity_posture || "Pending impact review.";
+  $("#release-lifecycle").textContent = projection?.lifecycle_effect || "Pending impact review.";
+  $("#release-registration").textContent = projection?.registry_posture || "Bundle not exported.";
 }
 
 function renderList(selector, items) {
@@ -562,6 +600,7 @@ function publishCurrentBundleToRegistry(receipt, publicationNotes) {
       authority_bundle: bundle,
       publication_receipt: receipt,
       authority_registry_projection: projection,
+      authority_workspace_projection: currentArtifacts.authority_workspace_projection,
       diagnostics: currentArtifacts.diagnostics || [],
     },
     lifecycle_timeline: appendLifecycleOnce(
@@ -1081,7 +1120,6 @@ async function exportBundle() {
     workflowTimestamps.exported = publishedAt;
     registerButton.disabled = false;
     $("#status-bundle").textContent = "bundle exported";
-    $("#release-registration").textContent = "Bundle exported. Authority is not registered locally yet.";
     renderOperatorGuidance(
       "Bundle exported with receipt evidence.",
       "Ledger created a publication receipt. Register locally to record the authority lifecycle event.",
@@ -1093,6 +1131,7 @@ async function exportBundle() {
       receiptGenerated: true,
       authorityRegistered: false,
     });
+    renderPublicationProjection(authorityWorkspaceProjection());
     try {
       downloadBundle(bundle);
     } catch (downloadError) {
@@ -1164,7 +1203,6 @@ function registerAuthorityLocally() {
   const entry = publishCurrentBundleToRegistry(pendingRegistration.receipt, pendingRegistration.notes);
   workflowTimestamps.registered = new Date().toISOString();
   $("#status-bundle").textContent = "registered locally";
-  $("#release-registration").textContent = "Authority registered locally. Registry lifecycle now has a registered authority event.";
   renderOperatorGuidance(
     "Authority registered locally.",
     `${entry.authority_ref} is now visible in the registry with lifecycle lineage and receipt evidence.`,
@@ -1177,6 +1215,7 @@ function registerAuthorityLocally() {
     receiptGenerated: true,
     authorityRegistered: true,
   });
+  renderPublicationProjection(authorityWorkspaceProjection());
   renderBundleDetail(entry, "receipt");
   showPage("bundles");
 }
