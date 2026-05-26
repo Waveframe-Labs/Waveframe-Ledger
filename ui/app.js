@@ -1,5 +1,6 @@
 const form = document.querySelector("#authority-form");
 const generateButton = document.querySelector("#generate-button");
+const publicationReviewButton = document.querySelector("#publication-review-button");
 const exportButton = document.querySelector("#export-button");
 const registerButton = document.querySelector("#register-button");
 const newDraftButton = document.querySelector("#new-draft-button");
@@ -7,6 +8,7 @@ const draftSessionStatus = document.querySelector("#draft-session-status");
 let currentArtifacts = null;
 let pendingRegistration = null;
 let livePreviewTimer = null;
+let reviewBusy = false;
 let workflowState = {
   draftReady: false,
   impactReviewed: false,
@@ -146,8 +148,14 @@ async function generateArtifacts(options = {}) {
 }
 
 function setBusy(isBusy) {
+  reviewBusy = isBusy;
   generateButton.disabled = isBusy;
   generateButton.textContent = isBusy ? "Preparing impact..." : "Review Impact";
+  publicationReviewButton.disabled = isBusy;
+  publicationReviewButton.textContent = isBusy ? "Reviewing Impact..." : "Review Impact";
+  if (!isBusy) {
+    syncPublicationActions();
+  }
 }
 
 function updateWorkflowState(partial) {
@@ -171,6 +179,14 @@ function renderWorkflowState() {
     node.classList.toggle("current", !complete && step === firstPending);
     node.querySelector("strong").textContent = complete ? completeLabel : "Pending";
   }
+  syncPublicationActions();
+}
+
+function syncPublicationActions() {
+  const hasArtifacts = Boolean(currentArtifacts);
+  publicationReviewButton.disabled = reviewBusy || !workflowState.draftReady || workflowState.impactReviewed;
+  exportButton.disabled = !hasArtifacts || !workflowState.impactReviewed;
+  registerButton.disabled = !pendingRegistration || workflowState.authorityRegistered;
 }
 
 function scheduleLivePreview() {
@@ -992,6 +1008,7 @@ function showPage(pageId) {
 }
 
 generateButton.addEventListener("click", () => generateArtifacts({ navigate: true, review: true }));
+publicationReviewButton.addEventListener("click", () => generateArtifacts({ review: true }));
 exportButton.addEventListener("click", exportBundle);
 registerButton.addEventListener("click", registerAuthorityLocally);
 newDraftButton.addEventListener("click", startNewDraft);
