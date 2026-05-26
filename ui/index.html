@@ -53,13 +53,17 @@
             <strong>Pending</strong>
           </div>
         </div>
+        <aside id="operator-guidance" class="operator-guidance" aria-live="polite">
+          <strong>Start by defining the authority.</strong>
+          <span>Ledger will keep operational meaning visible as the authority moves from draft to local registration.</span>
+        </aside>
 
         <section id="overview" class="band page overview-band active" data-page="overview">
           <div class="overview-hero">
             <img class="waveframe-logo" src="/assets/wf-logo.png" alt="Waveframe Labs" />
             <div class="section-kicker">Governance authoring workspace</div>
             <h1>Create a publishable operational authority.</h1>
-            <p class="overview-lede">Ledger turns governance intent into deterministic semantic artifacts: an authority contract, impact preview, review context, and authority bundle ready for publication workflows.</p>
+            <p class="overview-lede">Ledger turns governance intent into a publishable authority record: what is governed, what changes operationally, and what future evidence can bind to.</p>
             <div class="overview-actions" aria-label="Recommended actions">
               <button class="primary-action" type="button" data-page-link="draft">Create Authority</button>
               <button class="secondary-action" type="button" data-page-link="publication">Publish Authority</button>
@@ -127,19 +131,19 @@
             <div class="output-grid">
               <article class="output-item">
                 <h3>authority_contract.v1</h3>
-                <p>The structured authority that defines governed resources, admissibility requirements, escalation, continuity, and replay obligations.</p>
+                <p>The operational authority defining governed resources, approval expectations, escalation, continuity, and replay obligations.</p>
               </article>
               <article class="output-item">
                 <h3>governance_impact_preview.v1</h3>
-                <p>Deterministic governance meaning: summary, enforcement behavior, consequences, lifecycle implications, and governed outcomes.</p>
+                <p>Governance meaning: summary, enforcement behavior, consequences, lifecycle implications, and governed outcomes.</p>
               </article>
               <article class="output-item">
                 <h3>governance_review_packet.v1</h3>
-                <p>Review context and immutable inputs for authority publication, without changing execution outcomes or bypassing Guard.</p>
+                <p>Review context and immutable inputs for authority publication, without changing execution outcomes.</p>
               </article>
               <article class="output-item">
                 <h3>authority_bundle.v1</h3>
-                <p>The publishable governance envelope that binds authority, manifest, semantic artifacts, review context, lineage, and hashes.</p>
+                <p>The publishable authority envelope that binds governance meaning, review context, lineage, and integrity evidence.</p>
               </article>
             </div>
           </section>
@@ -353,22 +357,31 @@
             <div>
               <div class="section-kicker">Change review</div>
               <h2>Change Review</h2>
-              <p class="section-intent">Compare authority revisions by operational consequence: thresholds, continuity posture, replay expectations, lifecycle changes, and supersession context.</p>
+              <p class="section-intent">Review how this authority changes operational governance before it becomes the next registered version.</p>
             </div>
-            <span class="artifact-pill muted">No prior authority selected</span>
+            <span id="change-review-status" class="artifact-pill muted">No lineage selected</span>
           </div>
+          <article id="change-narrative" class="change-narrative">
+            <div class="section-kicker">Governance change management</div>
+            <h3>Review a draft or registered authority to see operational change.</h3>
+            <p class="quiet">Change Review explains threshold posture, continuity implications, replay expectations, and lifecycle context in operator language.</p>
+          </article>
           <div class="change-review-grid">
             <article class="artifact-panel">
-              <h3>What changed operationally?</h3>
-              <p class="quiet">Select or import a prior authority to review threshold changes, role changes, continuity changes, and lifecycle impact.</p>
+              <h3>Operational change</h3>
+              <p id="change-operational" class="quiet">Review impact to generate the current authority posture.</p>
             </article>
             <article class="artifact-panel">
               <h3>Lifecycle continuity</h3>
-              <p class="quiet">Future revisions will show supersession path, resumed execution impact, and replay continuity obligations here.</p>
+              <p id="change-continuity" class="quiet">Registered lineage will show supersession path, resumed execution impact, and replay continuity obligations here.</p>
+            </article>
+            <article class="artifact-panel">
+              <h3>Replay posture</h3>
+              <p id="change-replay" class="quiet">Replay implications appear after the authority impact has been reviewed.</p>
             </article>
             <article class="artifact-panel wide-panel">
-              <h3>Governance narrative</h3>
-              <p class="quiet">A change narrative will summarize why the revision matters before exposing the underlying diff artifact.</p>
+              <h3>Lineage chain</h3>
+              <ol id="change-lineage" class="lineage-chain"></ol>
             </article>
           </div>
         </section>
@@ -540,11 +553,14 @@
           </div>
           <div id="bundle-registry-summary" class="registry-summary" aria-label="Authority registry summary"></div>
           <div id="bundle-registry" class="bundle-registry">
-            <div class="empty-state">No local bundle exports in this browser session.</div>
+            <div class="empty-state">
+              <strong>No registered authorities yet.</strong>
+              <span>Export and register an authority to start a local lifecycle chain with lineage, receipts, and replay-ready evidence.</span>
+            </div>
           </div>
           <article id="bundle-detail" class="artifact-panel registry-detail">
             <h3>Registry detail</h3>
-            <p class="quiet">Export an authority bundle to inspect its publication lineage and immutable inputs.</p>
+            <p class="quiet">Register an authority to inspect lifecycle lineage, publication receipt posture, and immutable inputs.</p>
           </article>
         </section>
 
@@ -558,7 +574,10 @@
           </div>
           <div id="diagnostics-summary" class="diagnostics-summary" aria-label="Diagnostics summary"></div>
           <div id="diagnostics-list" class="diagnostics-list">
-            <div class="empty-state">Diagnostics will appear after artifact generation.</div>
+            <div class="empty-state">
+              <strong>No diagnostics yet.</strong>
+              <span>Review impact to receive deterministic governance quality guidance. Diagnostics are advisory; they do not block publication.</span>
+            </div>
           </div>
         </section>
       </main>

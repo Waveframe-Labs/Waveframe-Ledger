@@ -161,6 +161,7 @@ function setBusy(isBusy) {
 function updateWorkflowState(partial) {
   workflowState = { ...workflowState, ...partial };
   renderWorkflowState();
+  renderOperatorGuidance();
 }
 
 function renderWorkflowState() {
@@ -187,6 +188,32 @@ function syncPublicationActions() {
   publicationReviewButton.disabled = reviewBusy || !workflowState.draftReady || workflowState.impactReviewed;
   exportButton.disabled = !hasArtifacts || !workflowState.impactReviewed;
   registerButton.disabled = !pendingRegistration || workflowState.authorityRegistered;
+}
+
+function renderOperatorGuidance(title, body) {
+  const guidance = $("#operator-guidance");
+  if (!guidance) return;
+  if (title && body) {
+    guidance.querySelector("strong").textContent = title;
+    guidance.querySelector("span").textContent = body;
+    return;
+  }
+  if (!workflowState.draftReady) {
+    guidance.querySelector("strong").textContent = "Start by defining the authority.";
+    guidance.querySelector("span").textContent = "Describe the governed system, action, approvals, escalation, and continuity posture.";
+  } else if (!workflowState.impactReviewed) {
+    guidance.querySelector("strong").textContent = "Review operational impact next.";
+    guidance.querySelector("span").textContent = "Ledger has a draft. Review impact to confirm governance meaning before export.";
+  } else if (!workflowState.bundleExported) {
+    guidance.querySelector("strong").textContent = "Impact is reviewed.";
+    guidance.querySelector("span").textContent = "Export the authority bundle to create receipt evidence and prepare local registration.";
+  } else if (!workflowState.authorityRegistered) {
+    guidance.querySelector("strong").textContent = "Bundle exported with receipt evidence.";
+    guidance.querySelector("span").textContent = "Register the authority locally to record the lifecycle event and make it visible in the registry.";
+  } else {
+    guidance.querySelector("strong").textContent = "Authority registered locally.";
+    guidance.querySelector("span").textContent = "The registry now holds lifecycle lineage, receipt posture, and replay-ready publication evidence.";
+  }
 }
 
 function scheduleLivePreview() {
@@ -238,6 +265,7 @@ function renderArtifacts(payload, options = {}) {
   $("#bundle-json").textContent = JSON.stringify(bundle, null, 2);
   $("#receipt-json").textContent = "No publication receipt generated yet.";
   renderReleaseNarrative(payload.authority_release_narrative);
+  renderChangeReview(payload, { reviewed });
 
   renderDiagnostics(payload.diagnostics);
 }
@@ -305,7 +333,11 @@ function renderDiagnostics(items) {
   if (!items || items.length === 0) {
     const empty = document.createElement("div");
     empty.className = "empty-state";
-    empty.textContent = "No advisory diagnostics for the current draft.";
+    const title = document.createElement("strong");
+    title.textContent = "No advisory diagnostics.";
+    const text = document.createElement("span");
+    text.textContent = "This draft has no current quality warnings. Continue reviewing publication posture before export.";
+    empty.append(title, text);
     node.appendChild(empty);
     return;
   }
@@ -438,6 +470,7 @@ function saveBundleRegistry(registry) {
   registry.updated_at = new Date().toISOString();
   window.localStorage.setItem(BUNDLE_REGISTRY_KEY, JSON.stringify(registry));
   renderBundleRegistry();
+  renderChangeReview(currentArtifacts, { reviewed: workflowState.impactReviewed });
 }
 
 function publishCurrentBundleToRegistry(receipt, publicationNotes) {
@@ -538,7 +571,11 @@ function renderBundleRegistry() {
   if (registry.authorities.length === 0) {
     const empty = document.createElement("div");
     empty.className = "empty-state";
-    empty.textContent = "No authority bundles have been exported to the local registry.";
+    const title = document.createElement("strong");
+    title.textContent = "No registered authorities yet.";
+    const text = document.createElement("span");
+    text.textContent = "Register an exported bundle to start a local authority lifecycle with lineage, receipts, and replay-ready evidence.";
+    empty.append(title, text);
     list.appendChild(empty);
     renderBundleDetail(null);
     return;
@@ -547,7 +584,11 @@ function renderBundleRegistry() {
   if (filtered.length === 0) {
     const empty = document.createElement("div");
     empty.className = "empty-state";
-    empty.textContent = "No authorities match the current registry filters.";
+    const title = document.createElement("strong");
+    title.textContent = "No authorities match these filters.";
+    const text = document.createElement("span");
+    text.textContent = "Try clearing search terms or expanding lifecycle and continuity filters.";
+    empty.append(title, text);
     list.appendChild(empty);
     renderBundleDetail(null);
     return;
@@ -631,6 +672,14 @@ function authorityRegistryCard(entry) {
     timeline.appendChild(item);
   }
 
+  const relationship = document.createElement("div");
+  relationship.className = "authority-relationship";
+  const relationshipTitle = document.createElement("strong");
+  relationshipTitle.textContent = "Lifecycle relationship";
+  const relationshipText = document.createElement("span");
+  relationshipText.textContent = relationshipSummary(entry);
+  relationship.append(relationshipTitle, relationshipText);
+
   const actions = document.createElement("div");
   actions.className = "authority-actions";
   for (const action of [
@@ -652,8 +701,18 @@ function authorityRegistryCard(entry) {
     actions.appendChild(button);
   }
 
-  article.append(header, meta, timeline, actions);
+  article.append(header, meta, relationship, timeline, actions);
   return article;
+}
+
+function relationshipSummary(entry) {
+  if (entry.status === "revoked") {
+    return "This authority is revoked locally. Resumed execution should be reviewed against revocation posture.";
+  }
+  if (entry.status === "superseded") {
+    return `This authority has been superseded by ${entry.superseded_by || "a successor authority"}. Review continuity before relying on resumed work.`;
+  }
+  return "This authority is the active local lifecycle record for its authority reference.";
 }
 
 function appendMeta(list, label, value) {
@@ -672,7 +731,7 @@ function renderBundleDetail(entry, mode = "summary") {
     title.textContent = "Registry detail";
     const empty = document.createElement("p");
     empty.className = "quiet";
-    empty.textContent = "Export an authority bundle to inspect its publication lineage and immutable inputs.";
+    empty.textContent = "Register an authority to inspect lifecycle lineage, receipt posture, and immutable inputs.";
     detail.append(title, empty);
     return;
   }
@@ -755,6 +814,10 @@ function handleRegistryAction(event) {
         `Superseded by ${item.superseded_by || supersededBy}.`,
       ),
     }));
+    renderOperatorGuidance(
+      "Authority marked superseded.",
+      `${entry.authority_ref} now has a supersession lifecycle event. Review lineage and continuity before resumed execution relies on older posture.`,
+    );
     renderBundleDetail(updated, "lineage");
   } else if (action === "revoke") {
     const updated = updateRegistryEntry(entry.authority_ref, (item) => ({
@@ -768,6 +831,10 @@ function handleRegistryAction(event) {
         "Authority marked revoked in the local registry.",
       ),
     }));
+    renderOperatorGuidance(
+      "Authority marked revoked.",
+      `${entry.authority_ref} is revoked in the local registry. Future review should treat resumed execution under this authority as invalidated posture.`,
+    );
     renderBundleDetail(updated, "lineage");
   } else if (action === "view-lineage") {
     renderBundleDetail(entry, "lineage");
@@ -813,6 +880,10 @@ async function exportBundle() {
     registerButton.disabled = false;
     $("#status-bundle").textContent = "bundle exported";
     $("#release-registration").textContent = "Bundle exported. Authority is not registered locally yet.";
+    renderOperatorGuidance(
+      "Bundle exported with receipt evidence.",
+      "Ledger created a publication receipt. Register locally to record the authority lifecycle event.",
+    );
     updateWorkflowState({
       draftReady: true,
       impactReviewed: true,
@@ -891,6 +962,10 @@ function registerAuthorityLocally() {
   const entry = publishCurrentBundleToRegistry(pendingRegistration.receipt, pendingRegistration.notes);
   $("#status-bundle").textContent = "registered locally";
   $("#release-registration").textContent = "Authority registered locally. Registry lifecycle now has a registered authority event.";
+  renderOperatorGuidance(
+    "Authority registered locally.",
+    `${entry.authority_ref} is now visible in the registry with lifecycle lineage and receipt evidence.`,
+  );
   registerButton.disabled = true;
   updateWorkflowState({
     draftReady: true,
@@ -901,6 +976,91 @@ function registerAuthorityLocally() {
   });
   renderBundleDetail(entry, "receipt");
   showPage("bundles");
+}
+
+function renderChangeReview(payload, options = {}) {
+  const status = $("#change-review-status");
+  const narrative = $("#change-narrative");
+  const operational = $("#change-operational");
+  const continuity = $("#change-continuity");
+  const replay = $("#change-replay");
+  const lineage = $("#change-lineage");
+  if (!status || !narrative || !operational || !continuity || !replay || !lineage) return;
+  lineage.innerHTML = "";
+  if (!payload?.authority_bundle) {
+    status.textContent = "No authority reviewed";
+    narrative.querySelector("h3").textContent = "Review a draft or registered authority to see operational change.";
+    narrative.querySelector("p").textContent = "Change Review explains threshold posture, continuity implications, replay expectations, and lifecycle context in operator language.";
+    operational.textContent = "Review impact to generate the current authority posture.";
+    continuity.textContent = "Registered lineage will show supersession path, resumed execution impact, and replay continuity obligations here.";
+    replay.textContent = "Replay implications appear after the authority impact has been reviewed.";
+    appendLineageEmpty(lineage);
+    return;
+  }
+  const bundle = payload.authority_bundle;
+  const preview = payload.governance_impact_preview || {};
+  const registryEntry = findRegistryEntry(bundle.authority_ref);
+  status.textContent = registryEntry ? `${formatLabel(registryEntry.status)} lineage` : "Draft lineage";
+  narrative.querySelector("h3").textContent = options.reviewed
+    ? `${bundle.authority_ref} is ready for publication review.`
+    : `${bundle.authority_ref} has unreviewed draft changes.`;
+  narrative.querySelector("p").textContent = options.reviewed
+    ? "This review summarizes what changes operationally before the authority is exported or registered."
+    : "Review impact to confirm the latest authored constraints before exporting this authority.";
+  operational.textContent = firstText(preview.enforcement_behavior)
+    || firstText(bundle.operational_implications)
+    || "Operational impact will appear after review.";
+  continuity.textContent = firstText(bundle.continuity_implications)
+    || "No continuity implication has been derived yet. Review continuity posture before publication.";
+  replay.textContent = replaySummary(bundle, registryEntry);
+  renderLineageChain(lineage, registryEntry, bundle);
+}
+
+function appendLineageEmpty(node) {
+  const item = document.createElement("li");
+  const title = document.createElement("strong");
+  title.textContent = "No lineage yet";
+  const text = document.createElement("span");
+  text.textContent = "Register an authority to create lifecycle history.";
+  item.append(title, text);
+  node.appendChild(item);
+}
+
+function renderLineageChain(node, registryEntry, bundle) {
+  if (registryEntry?.lifecycle_timeline?.length) {
+    for (const event of registryEntry.lifecycle_timeline) {
+      const item = document.createElement("li");
+      const title = document.createElement("strong");
+      title.textContent = formatLabel(event.event);
+      const text = document.createElement("span");
+      text.textContent = `${formatDateTime(event.timestamp)} | ${event.detail || event.hash || "lifecycle event recorded"}`;
+      item.append(title, text);
+      node.appendChild(item);
+    }
+    return;
+  }
+  const draft = document.createElement("li");
+  const draftTitle = document.createElement("strong");
+  draftTitle.textContent = "Draft";
+  const draftText = document.createElement("span");
+  draftText.textContent = `${bundle.authority_ref} has generated authority meaning but has not been registered locally.`;
+  draft.append(draftTitle, draftText);
+  node.appendChild(draft);
+}
+
+function replaySummary(bundle, registryEntry) {
+  if (registryEntry?.publication_receipt?.receipt_hash) {
+    return `Replay review can bind to receipt ${registryEntry.publication_receipt.receipt_hash}.`;
+  }
+  if (bundle?.immutable_inputs?.preview_hash) {
+    return "Export will create publication receipt evidence that binds this authority to semantic artifact hashes.";
+  }
+  return "Replay posture will appear after authority impact has been reviewed.";
+}
+
+function firstText(value) {
+  if (!Array.isArray(value)) return "";
+  return value.find((item) => typeof item === "string" && item) || "";
 }
 
 async function buildPublicationReceipt(bundle, publishedAt, readiness, notes) {
@@ -1053,5 +1213,6 @@ document.querySelectorAll("[data-page-link]").forEach((link) => {
 restoreDraftSession();
 renderWorkflowState();
 renderBundleRegistry();
+renderChangeReview(currentArtifacts, { reviewed: workflowState.impactReviewed });
 showPage(window.location.hash.replace("#", "") || "overview");
 scheduleLivePreview();
