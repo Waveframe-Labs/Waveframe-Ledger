@@ -109,6 +109,58 @@ select {
   padding: 32px;
 }
 
+.workflow-state-banner {
+  max-width: 1180px;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0 auto 16px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fcfbf8;
+}
+
+.workflow-state-step {
+  min-height: 66px;
+  display: grid;
+  align-content: center;
+  gap: 3px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+}
+
+.workflow-state-step span {
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
+.workflow-state-step strong {
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.workflow-state-step.complete {
+  border-color: rgba(47, 89, 70, 0.42);
+  background: #f2f8f2;
+}
+
+.workflow-state-step.complete strong {
+  color: var(--green);
+}
+
+.workflow-state-step.current {
+  border-color: rgba(255, 90, 0, 0.38);
+  background: #fff0e8;
+}
+
+.workflow-state-step.current strong {
+  color: var(--brand-dark);
+}
+
 .band {
   max-width: 1180px;
   margin: 0 auto 28px;
@@ -357,21 +409,30 @@ h3 {
   font-size: 0.92rem;
 }
 
-.guidance-list {
+.guidance-cards {
   display: grid;
   gap: 7px;
   margin: 14px 0 0;
-  padding: 0;
-  list-style: none;
 }
 
-.guidance-list li {
-  padding: 8px 10px;
+.guidance-cards article {
+  display: grid;
+  gap: 4px;
+  padding: 10px 11px;
   border: 1px solid var(--line);
   border-radius: 6px;
   background: #fbfbf8;
+}
+
+.guidance-cards strong {
+  color: var(--ink);
+  font-size: 0.82rem;
+}
+
+.guidance-cards span {
   color: var(--muted);
-  font-size: 0.84rem;
+  font-size: 0.78rem;
+  line-height: 1.35;
 }
 
 .form-grid {
@@ -1005,7 +1066,8 @@ textarea {
   .form-grid,
   .outcome-grid,
   .authoring-section,
-  .lifecycle-preview {
+  .lifecycle-preview,
+  .workflow-state-banner {
     grid-template-columns: 1fr;
   }
 

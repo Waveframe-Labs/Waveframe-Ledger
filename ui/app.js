@@ -7,6 +7,13 @@ const draftSessionStatus = document.querySelector("#draft-session-status");
 let currentArtifacts = null;
 let pendingRegistration = null;
 let livePreviewTimer = null;
+let workflowState = {
+  draftReady: false,
+  impactReviewed: false,
+  bundleExported: false,
+  receiptGenerated: false,
+  authorityRegistered: false,
+};
 const DRAFT_SESSION_KEY = "governance-ledger:draft-authority-session:v1";
 const BUNDLE_REGISTRY_KEY = "governance-ledger:authority-bundle-registry:v1";
 
@@ -58,6 +65,7 @@ function saveDraftSession() {
   const session = buildDraftSession(readDraft());
   window.localStorage.setItem(DRAFT_SESSION_KEY, JSON.stringify(session));
   draftSessionStatus.textContent = `draft_authority_session.v1 saved locally ${new Date(session.updated_at).toLocaleTimeString()}`;
+  updateWorkflowState({ draftReady: true });
   return session;
 }
 
@@ -90,6 +98,14 @@ function startNewDraft() {
   $("#status-semantic").textContent = "draft required";
   $("#status-bundle").textContent = "not exported";
   $("#release-registration").textContent = "Bundle not exported.";
+  $("#receipt-json").textContent = "No publication receipt generated yet.";
+  updateWorkflowState({
+    draftReady: true,
+    impactReviewed: false,
+    bundleExported: false,
+    receiptGenerated: false,
+    authorityRegistered: false,
+  });
   draftSessionStatus.textContent = "new draft_authority_session.v1 started locally";
   saveDraftSession();
 }
@@ -128,6 +144,29 @@ function setBusy(isBusy) {
   generateButton.textContent = isBusy ? "Preparing impact..." : "Review Impact";
 }
 
+function updateWorkflowState(partial) {
+  workflowState = { ...workflowState, ...partial };
+  renderWorkflowState();
+}
+
+function renderWorkflowState() {
+  const steps = [
+    ["draft", workflowState.draftReady, "Ready"],
+    ["impact", workflowState.impactReviewed, "Reviewed"],
+    ["exported", workflowState.bundleExported, "Exported"],
+    ["receipt", workflowState.receiptGenerated, "Generated"],
+    ["registered", workflowState.authorityRegistered, "Registered"],
+  ];
+  const firstPending = steps.find(([_, complete]) => !complete)?.[0] || null;
+  for (const [step, complete, completeLabel] of steps) {
+    const node = document.querySelector(`[data-workflow-step="${step}"]`);
+    if (!node) continue;
+    node.classList.toggle("complete", complete);
+    node.classList.toggle("current", !complete && step === firstPending);
+    node.querySelector("strong").textContent = complete ? completeLabel : "Pending";
+  }
+}
+
 function scheduleLivePreview() {
   window.clearTimeout(livePreviewTimer);
   livePreviewTimer = window.setTimeout(() => {
@@ -142,6 +181,13 @@ function renderArtifacts(payload) {
   $("#status-semantic").textContent = "ready";
   $("#status-bundle").textContent = "ready to export";
   $("#release-registration").textContent = "Bundle ready to export. Authority not registered locally.";
+  updateWorkflowState({
+    draftReady: true,
+    impactReviewed: true,
+    bundleExported: false,
+    receiptGenerated: false,
+    authorityRegistered: false,
+  });
 
   $("#preview-summary").textContent = preview.governance_summary;
   renderList("#preview-enforcement", preview.enforcement_behavior);
@@ -165,7 +211,7 @@ function renderArtifacts(payload) {
     : "Schema compatibility requires review before export.";
   $("#manifest-json").textContent = JSON.stringify(payload.publication_manifest, null, 2);
   $("#bundle-json").textContent = JSON.stringify(bundle, null, 2);
-  $("#receipt-json").textContent = "{}";
+  $("#receipt-json").textContent = "No publication receipt generated yet.";
   renderReleaseNarrative(payload.authority_release_narrative);
 
   renderDiagnostics(payload.diagnostics);
@@ -729,10 +775,23 @@ async function exportBundle() {
     registerButton.disabled = false;
     $("#status-bundle").textContent = "bundle exported";
     $("#release-registration").textContent = "Bundle exported. Authority is not registered locally yet.";
+    updateWorkflowState({
+      draftReady: true,
+      impactReviewed: true,
+      bundleExported: true,
+      receiptGenerated: true,
+      authorityRegistered: false,
+    });
   } catch (error) {
     pendingRegistration = null;
     registerButton.disabled = true;
     $("#release-registration").textContent = "Bundle export did not complete. Authority is not registered locally.";
+    $("#receipt-json").textContent = "Publication receipt was not generated for this export.";
+    updateWorkflowState({
+      bundleExported: false,
+      receiptGenerated: false,
+      authorityRegistered: false,
+    });
     renderDiagnostics([
       {
         severity: "warning",
@@ -748,11 +807,45 @@ async function exportBundle() {
 }
 
 function registerAuthorityLocally() {
-  if (!currentArtifacts || !pendingRegistration) return;
+  if (!currentArtifacts) {
+    renderDiagnostics([
+      {
+        severity: "warning",
+        code: "publication_evidence_unavailable",
+        title: "Authority impact has not been reviewed",
+        domain: "publication",
+        text: "Review the authority impact before registering an authority lifecycle event.",
+        recommendation: "Create or restore a draft, review impact, then export the authority bundle.",
+      },
+    ]);
+    showPage("diagnostics");
+    return;
+  }
+  if (!pendingRegistration) {
+    renderDiagnostics([
+      {
+        severity: "warning",
+        code: "publication_evidence_unavailable",
+        title: "Publication receipt has not been generated yet",
+        domain: "publication",
+        text: "The authority bundle must be exported with a receipt before local registration.",
+        recommendation: "Export the bundle again, then register the authority locally.",
+      },
+    ]);
+    showPage("diagnostics");
+    return;
+  }
   const entry = publishCurrentBundleToRegistry(pendingRegistration.receipt, pendingRegistration.notes);
   $("#status-bundle").textContent = "registered locally";
   $("#release-registration").textContent = "Authority registered locally. Registry lifecycle now has a registered authority event.";
   registerButton.disabled = true;
+  updateWorkflowState({
+    draftReady: true,
+    impactReviewed: true,
+    bundleExported: true,
+    receiptGenerated: true,
+    authorityRegistered: true,
+  });
   renderBundleDetail(entry, "receipt");
   showPage("bundles");
 }
@@ -772,6 +865,9 @@ async function buildPublicationReceipt(bundle, publishedAt, readiness, notes) {
   if (!response.ok) {
     const reason = payload.error || "Unable to generate publication receipt.";
     throw new Error(response.status === 404 ? "publication receipt service unavailable" : reason);
+  }
+  if (payload.status && payload.status !== "exported") {
+    throw new Error(`publication receipt response reported ${payload.status}`);
   }
   const receipt = payload.publication_receipt || payload;
   if (!receipt || receipt.schema_version !== "publication_receipt.v1" || !receipt.receipt_hash || !receipt.bundle_hash) {
@@ -864,10 +960,28 @@ registerButton.addEventListener("click", registerAuthorityLocally);
 newDraftButton.addEventListener("click", startNewDraft);
 form.addEventListener("input", () => {
   saveDraftSession();
+  pendingRegistration = null;
+  exportButton.disabled = true;
+  registerButton.disabled = true;
+  updateWorkflowState({
+    impactReviewed: false,
+    bundleExported: false,
+    receiptGenerated: false,
+    authorityRegistered: false,
+  });
   scheduleLivePreview();
 });
 form.addEventListener("change", () => {
   saveDraftSession();
+  pendingRegistration = null;
+  exportButton.disabled = true;
+  registerButton.disabled = true;
+  updateWorkflowState({
+    impactReviewed: false,
+    bundleExported: false,
+    receiptGenerated: false,
+    authorityRegistered: false,
+  });
   scheduleLivePreview();
 });
 $("#bundle-registry").addEventListener("click", handleRegistryAction);
@@ -883,6 +997,7 @@ document.querySelectorAll("[data-page-link]").forEach((link) => {
 });
 
 restoreDraftSession();
+renderWorkflowState();
 renderBundleRegistry();
 showPage(window.location.hash.replace("#", "") || "overview");
 scheduleLivePreview();

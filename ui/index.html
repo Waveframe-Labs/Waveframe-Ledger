@@ -31,6 +31,29 @@
       </aside>
 
       <main class="workspace">
+        <div class="workflow-state-banner" aria-label="Authority workflow state">
+          <div class="workflow-state-step" data-workflow-step="draft">
+            <span>Draft Ready</span>
+            <strong>Pending</strong>
+          </div>
+          <div class="workflow-state-step" data-workflow-step="impact">
+            <span>Impact Reviewed</span>
+            <strong>Pending</strong>
+          </div>
+          <div class="workflow-state-step" data-workflow-step="exported">
+            <span>Bundle Exported</span>
+            <strong>Pending</strong>
+          </div>
+          <div class="workflow-state-step" data-workflow-step="receipt">
+            <span>Receipt Generated</span>
+            <strong>Pending</strong>
+          </div>
+          <div class="workflow-state-step" data-workflow-step="registered">
+            <span>Authority Registered</span>
+            <strong>Pending</strong>
+          </div>
+        </div>
+
         <section id="overview" class="band page overview-band active" data-page="overview">
           <div class="overview-hero">
             <img class="waveframe-logo" src="/assets/wf-logo.png" alt="Waveframe Labs" />
@@ -229,11 +252,20 @@
               <div class="authoring-copy">
                 <h3>Escalation Rules</h3>
                 <p>Define when normal execution needs governance intervention.</p>
-                <ul class="guidance-list" aria-label="Escalation threshold examples">
-                  <li>Financial transfer threshold</li>
-                  <li>Credential issuance threshold</li>
-                  <li>Production deployment threshold</li>
-                </ul>
+                <div class="guidance-cards" aria-label="Escalation threshold examples">
+                  <article>
+                    <strong>Financial transfer threshold</strong>
+                    <span>Example: require escalation when transfer value exceeds an operational limit.</span>
+                  </article>
+                  <article>
+                    <strong>Credential issuance threshold</strong>
+                    <span>Example: require escalation before privileged credential issuance.</span>
+                  </article>
+                  <article>
+                    <strong>Production deployment threshold</strong>
+                    <span>Example: require escalation for high-impact deployment changes.</span>
+                  </article>
+                </div>
               </div>
               <div class="form-grid">
                 <label class="wide">
@@ -466,7 +498,7 @@
                 </article>
                 <article class="wide-panel">
                   <h3>Publication receipt</h3>
-                  <pre id="receipt-json" class="json-view">{}</pre>
+                  <pre id="receipt-json" class="json-view">No publication receipt generated yet.</pre>
                 </article>
               </div>
             </details>
