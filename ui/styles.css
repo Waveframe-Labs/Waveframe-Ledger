@@ -1,17 +1,21 @@
 :root {
   --ink: #151515;
-  --muted: #656867;
-  --paper: #f8f7f3;
+  --muted: #6e7378;
+  --paper: #f2f0ec;
   --panel: #ffffff;
-  --line: #deddd7;
-  --line-strong: #bab9b2;
+  --line: #d8d2cc;
+  --line-strong: #bfb7af;
   --brand: #ff5a00;
   --brand-dark: #c94806;
   --charcoal: #0b0b0b;
+  --rail: #111111;
+  --rail-panel: #171717;
+  --rail-line: #2d2a28;
+  --rail-muted: #a7a4a0;
   --green: #2f5946;
-  --blue: #355f7d;
+  --blue: #3a5d73;
   --red: #8f3d38;
-  --shadow: 0 18px 48px rgba(21, 21, 21, 0.08);
+  --shadow: 0 1px 0 rgba(21, 21, 21, 0.04), 0 10px 28px rgba(21, 21, 21, 0.06);
 }
 
 * {
@@ -40,49 +44,56 @@ select {
 .app-shell {
   min-height: 100vh;
   display: grid;
-  grid-template-columns: 280px minmax(0, 1fr);
+  grid-template-columns: 300px minmax(0, 1fr);
 }
 
 .sidebar {
   position: sticky;
   top: 0;
   height: 100vh;
-  padding: 28px 20px;
-  border-right: 1px solid var(--line);
-  background: #fcfbf8;
+  padding: 24px 20px;
+  border-right: 1px solid #050505;
+  background: var(--rail);
 }
 
 .brand {
   display: flex;
-  gap: 12px;
+  gap: 14px;
   align-items: center;
   margin-bottom: 34px;
+  padding: 16px;
+  border: 1px solid #080808;
+  border-radius: 4px;
+  background: #050505;
 }
 
 .brand-mark {
-  width: 48px;
-  height: 48px;
+  width: 58px;
+  height: 58px;
   display: grid;
   place-items: center;
-  border: 1px solid #202020;
+  border: 1px solid #24201d;
   border-radius: 8px;
-  background: var(--charcoal);
+  background: #000;
   overflow: hidden;
 }
 
 .brand-mark img {
-  width: 30px;
-  height: 30px;
+  width: 38px;
+  height: 38px;
   object-fit: contain;
 }
 
 .brand-name {
-  font-weight: 800;
+  color: #f7f5f2;
+  font-weight: 850;
+  letter-spacing: 0.01em;
 }
 
 .brand-subtitle {
-  color: var(--muted);
+  color: var(--brand);
   font-size: 0.88rem;
+  font-weight: 750;
 }
 
 .nav-list {
@@ -91,22 +102,25 @@ select {
 }
 
 .nav-link {
-  color: var(--muted);
+  color: #f2eee9;
   text-decoration: none;
-  padding: 10px 12px;
-  border-radius: 6px;
-  font-weight: 650;
+  padding: 11px 14px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  font-weight: 780;
 }
 
 .nav-link:hover,
 .nav-link.active {
-  color: var(--ink);
-  background: #fff0e8;
+  color: #ffb18a;
+  border-color: #743018;
+  background: #3b160b;
 }
 
 .workspace {
   min-width: 0;
   padding: 32px;
+  background: var(--paper);
 }
 
 .workflow-state-banner {
@@ -118,7 +132,7 @@ select {
   padding: 10px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: #fcfbf8;
+  background: #faf9f6;
 }
 
 .workflow-state-step {
@@ -128,24 +142,25 @@ select {
   gap: 3px;
   padding: 10px;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: 7px;
   background: var(--panel);
 }
 
 .workflow-state-step span {
-  color: var(--muted);
+  color: #73787e;
   font-size: 0.76rem;
-  font-weight: 800;
+  font-weight: 850;
+  text-transform: uppercase;
 }
 
 .workflow-state-step strong {
   color: var(--muted);
-  font-size: 0.88rem;
+  font-size: 0.95rem;
 }
 
 .workflow-state-step.complete {
-  border-color: rgba(47, 89, 70, 0.42);
-  background: #f2f8f2;
+  border-color: #c9d6cb;
+  background: #f6faf6;
 }
 
 .workflow-state-step.complete strong {
@@ -153,8 +168,8 @@ select {
 }
 
 .workflow-state-step.current {
-  border-color: rgba(255, 90, 0, 0.38);
-  background: #fff0e8;
+  border-color: #ffb48b;
+  background: #fff1e9;
 }
 
 .workflow-state-step.current strong {
@@ -169,9 +184,10 @@ select {
   align-items: center;
   margin: 0 auto 18px;
   padding: 14px 16px;
-  border: 1px solid rgba(47, 89, 70, 0.25);
+  border: 1px solid var(--line);
   border-radius: 8px;
-  background: #f8fbf7;
+  background: var(--panel);
+  box-shadow: var(--shadow);
 }
 
 .operator-guidance strong {
@@ -185,7 +201,7 @@ select {
 .band {
   max-width: 1180px;
   margin: 0 auto 28px;
-  padding: 28px;
+  padding: 28px 0;
   border-top: 1px solid var(--line);
   background: transparent;
 }
@@ -208,18 +224,18 @@ select {
 
 .waveframe-logo {
   display: block;
-  width: 190px;
+  width: 236px;
   max-width: 46vw;
   height: auto;
   margin-bottom: 18px;
-  border-radius: 8px;
-  background: var(--charcoal);
+  border-radius: 4px;
+  background: #050505;
 }
 
 .section-kicker {
-  color: var(--brand-dark);
+  color: #73787e;
   font-size: 0.78rem;
-  font-weight: 800;
+  font-weight: 850;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -234,8 +250,9 @@ h3 {
 h1 {
   max-width: 900px;
   margin-top: 8px;
-  font-size: 2.5rem;
+  font-size: 2.6rem;
   line-height: 1.12;
+  font-weight: 850;
 }
 
 .overview-lede {
@@ -266,11 +283,13 @@ h1 {
 }
 
 h2 {
-  font-size: 1.45rem;
+  font-size: 1.55rem;
+  font-weight: 850;
 }
 
 h3 {
   font-size: 1rem;
+  font-weight: 850;
 }
 
 .section-heading {
@@ -292,11 +311,11 @@ h3 {
   margin: 12px 0 0;
   padding: 5px 9px;
   border: 1px solid var(--line);
-  border-radius: 999px;
+  border-radius: 7px;
   color: var(--muted);
   background: #fff;
   font-size: 0.8rem;
-  font-weight: 750;
+  font-weight: 800;
 }
 
 .action-row {
@@ -378,7 +397,7 @@ h3 {
 }
 
 .workflow-map strong {
-  color: var(--green);
+  color: var(--ink);
 }
 
 .workflow-map span {
@@ -441,8 +460,8 @@ h3 {
   gap: 4px;
   padding: 10px 11px;
   border: 1px solid var(--line);
-  border-radius: 6px;
-  background: #fbfbf8;
+  border-radius: 7px;
+  background: #fbfaf7;
 }
 
 .guidance-cards strong {
@@ -471,7 +490,7 @@ label span,
 legend {
   color: var(--ink);
   font-size: 0.88rem;
-  font-weight: 720;
+  font-weight: 780;
 }
 
 label small,
@@ -487,7 +506,7 @@ select {
   width: 100%;
   min-height: 42px;
   border: 1px solid var(--line-strong);
-  border-radius: 6px;
+  border-radius: 7px;
   padding: 9px 11px;
   color: var(--ink);
   background: #fff;
@@ -497,7 +516,7 @@ input:focus,
 textarea:focus,
 select:focus,
 button:focus {
-  outline: 3px solid rgba(31, 91, 69, 0.18);
+  outline: 3px solid rgba(255, 90, 0, 0.18);
   outline-offset: 1px;
 }
 
@@ -545,9 +564,9 @@ textarea {
   display: grid;
   place-items: center;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: 7px;
   background: #fff0e8;
-  font-weight: 800;
+  font-weight: 850;
 }
 
 .primary-action,
@@ -555,9 +574,9 @@ textarea {
 .tertiary-action {
   min-height: 42px;
   border: 1px solid transparent;
-  border-radius: 6px;
+  border-radius: 8px;
   padding: 0 15px;
-  font-weight: 800;
+  font-weight: 850;
   cursor: pointer;
   white-space: nowrap;
 }
@@ -590,9 +609,9 @@ textarea {
 }
 
 .secondary-action {
-  color: var(--charcoal);
-  background: #fff0e8;
-  border-color: var(--line-strong);
+  color: var(--brand-dark);
+  background: var(--panel);
+  border-color: var(--brand);
 }
 
 .secondary-action:disabled {
@@ -604,9 +623,9 @@ textarea {
 .tertiary-action {
   min-height: 34px;
   padding: 0 10px;
-  color: var(--charcoal);
+  color: var(--brand-dark);
   background: #fff;
-  border-color: var(--line-strong);
+  border-color: #efb28e;
   font-size: 0.8rem;
 }
 
@@ -620,11 +639,11 @@ textarea {
   min-height: 32px;
   padding: 5px 10px;
   border: 1px solid var(--line);
-  border-radius: 999px;
-  color: var(--charcoal);
+  border-radius: 7px;
+  color: var(--brand-dark);
   background: #fff0e8;
   font-size: 0.8rem;
-  font-weight: 800;
+  font-weight: 850;
   white-space: nowrap;
 }
 
@@ -682,8 +701,8 @@ textarea {
   min-height: 108px;
   padding: 14px;
   border: 1px solid var(--line);
-  border-radius: 6px;
-  background: #fbfbf8;
+  border-radius: 7px;
+  background: #fbfaf7;
 }
 
 .release-impact-grid span {
@@ -691,7 +710,8 @@ textarea {
   margin-bottom: 7px;
   color: var(--muted);
   font-size: 0.8rem;
-  font-weight: 800;
+  font-weight: 850;
+  text-transform: uppercase;
 }
 
 .release-impact-grid strong {
@@ -732,8 +752,8 @@ textarea {
 .outcome-item {
   padding: 14px;
   border: 1px solid var(--line);
-  border-radius: 6px;
-  background: #fbfcfa;
+  border-radius: 7px;
+  background: #fbfaf7;
 }
 
 .outcome-item strong {
@@ -815,8 +835,8 @@ textarea {
   overflow: auto;
   margin: 0;
   padding: 14px;
-  border-radius: 6px;
-  background: #f4f5f1;
+  border-radius: 7px;
+  background: #f7f6f2;
   color: #25312a;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 0.78rem;
@@ -838,8 +858,8 @@ textarea {
   min-width: 0;
   padding: 14px;
   border: 1px solid var(--line);
-  border-radius: 6px;
-  background: #fbfbf8;
+  border-radius: 7px;
+  background: #fbfaf7;
 }
 
 .registry-summary,
@@ -887,7 +907,8 @@ textarea {
   margin-bottom: 5px;
   color: var(--muted);
   font-size: 0.8rem;
-  font-weight: 750;
+  font-weight: 850;
+  text-transform: uppercase;
 }
 
 .registry-metric strong,
@@ -928,7 +949,7 @@ textarea {
   justify-content: center;
   padding: 4px 9px;
   border: 1px solid var(--line);
-  border-radius: 999px;
+  border-radius: 7px;
   color: var(--blue);
   background: #eef5f7;
   font-size: 0.76rem;
@@ -978,8 +999,8 @@ textarea {
   gap: 10px;
   padding: 9px 10px;
   border: 1px solid var(--line);
-  border-radius: 6px;
-  background: #fbfbf8;
+  border-radius: 7px;
+  background: #fbfaf7;
 }
 
 .lifecycle-timeline strong {
@@ -1005,8 +1026,8 @@ textarea {
   gap: 7px;
   padding: 12px;
   border: 1px solid var(--line);
-  border-radius: 6px;
-  background: #fbfbf8;
+  border-radius: 7px;
+  background: #fbfaf7;
 }
 
 .authority-relationship strong {
@@ -1055,7 +1076,7 @@ textarea {
   align-items: center;
   padding: 3px 8px;
   border: 1px solid var(--line);
-  border-radius: 999px;
+  border-radius: 7px;
   color: var(--muted);
   background: #fbfbf8;
   font-size: 0.76rem;
@@ -1072,8 +1093,8 @@ textarea {
 .diagnostic-rationale {
   padding: 10px 12px;
   border: 1px solid var(--line);
-  border-radius: 6px;
-  background: #fbfbf8;
+  border-radius: 7px;
+  background: #fbfaf7;
 }
 
 .diagnostic-rationale summary {
@@ -1089,8 +1110,8 @@ textarea {
 .technical-diagnostic {
   margin: 10px 0 0;
   padding: 10px;
-  border-radius: 6px;
-  background: #f4f5f1;
+  border-radius: 7px;
+  background: #f7f6f2;
   color: var(--muted);
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 0.76rem;
@@ -1119,6 +1140,10 @@ textarea {
     position: static;
     height: auto;
     padding: 18px;
+  }
+
+  .brand {
+    margin-bottom: 18px;
   }
 
   .nav-list {
@@ -1173,6 +1198,14 @@ textarea {
 @media (max-width: 560px) {
   .band {
     padding: 20px 0;
+  }
+
+  .brand {
+    align-items: start;
+  }
+
+  .waveframe-logo {
+    max-width: 78vw;
   }
 
   .authority-form,
