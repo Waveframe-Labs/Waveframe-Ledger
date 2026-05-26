@@ -27,6 +27,7 @@ def test_ui_server_composes_artifacts_from_authoring_fields():
     packet = result["governance_review_packet"]
     bundle = result["authority_bundle"]
     registry_projection = result["authority_registry_projection"]
+    release_narrative = result["authority_release_narrative"]
 
     assert authority["schema_version"] == "authority_contract.v1"
     assert authority["protected_resource"] == "Corporate Treasury Transfer System"
@@ -44,6 +45,9 @@ def test_ui_server_composes_artifacts_from_authoring_fields():
         "escalation_threshold": "amount > 250,000",
         "semantic_integrity_posture": "compatible",
     }
+    assert release_narrative["schema_version"] == "authority_release_narrative.v1"
+    assert release_narrative["authority_ref"] == "treasury-policy@2.1.0"
+    assert "Corporate Treasury Transfer System" in release_narrative["headline"]
     assert [diagnostic["code"] for diagnostic in result["diagnostics"]] == ["GQ004", "GQ005"]
     assert {diagnostic["blocks_publication"] for diagnostic in result["diagnostics"]} == {False}
 

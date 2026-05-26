@@ -118,7 +118,7 @@ async function generateArtifacts(options = {}) {
 
 function setBusy(isBusy) {
   generateButton.disabled = isBusy;
-  generateButton.textContent = isBusy ? "Generating..." : "Generate Semantic Artifacts";
+  generateButton.textContent = isBusy ? "Preparing impact..." : "Review Impact";
 }
 
 function scheduleLivePreview() {
@@ -158,8 +158,17 @@ function renderArtifacts(payload) {
   $("#manifest-json").textContent = JSON.stringify(payload.publication_manifest, null, 2);
   $("#bundle-json").textContent = JSON.stringify(bundle, null, 2);
   $("#receipt-json").textContent = "{}";
+  renderReleaseNarrative(payload.authority_release_narrative);
 
   renderDiagnostics(payload.diagnostics);
+}
+
+function renderReleaseNarrative(narrative) {
+  $("#release-headline").textContent = narrative?.headline || "Review impact before publishing.";
+  $("#release-summary").textContent = narrative?.publication_summary || "Create or restore an authority draft to see what publishing changes operationally.";
+  $("#release-operational").textContent = narrative?.operational_change || "Pending impact review.";
+  $("#release-continuity").textContent = narrative?.continuity_summary || "Pending impact review.";
+  $("#release-lifecycle").textContent = narrative?.lifecycle_summary || "Pending impact review.";
 }
 
 function renderList(selector, items) {
@@ -673,7 +682,16 @@ async function exportBundle() {
     renderBundleDetail(entry, "receipt");
     showPage("bundles");
   } catch (error) {
-    renderDiagnostics([{ severity: "error", code: "publication_receipt_error", text: error.message }]);
+    renderDiagnostics([
+      {
+        severity: "error",
+        code: "publication_evidence_unavailable",
+        title: "Publication evidence could not be recorded",
+        domain: "publication",
+        text: "Ledger could not create the publication receipt for this authority export.",
+        recommendation: error.message,
+      },
+    ]);
     showPage("diagnostics");
   }
 }

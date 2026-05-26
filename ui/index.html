@@ -21,10 +21,10 @@
         </div>
         <nav class="nav-list">
           <a href="#overview" class="nav-link active" data-page-link="overview">Overview</a>
-          <a href="#draft" class="nav-link" data-page-link="draft">Draft Authority</a>
-          <a href="#preview" class="nav-link" data-page-link="preview">Semantic Preview</a>
+          <a href="#draft" class="nav-link" data-page-link="draft">Create Authority</a>
+          <a href="#preview" class="nav-link" data-page-link="preview">Operational Impact</a>
           <a href="#diff" class="nav-link" data-page-link="diff">Change Review</a>
-          <a href="#publication" class="nav-link" data-page-link="publication">Publication Review</a>
+          <a href="#publication" class="nav-link" data-page-link="publication">Publish Authority</a>
           <a href="#bundles" class="nav-link" data-page-link="bundles">Authority Registry</a>
           <a href="#diagnostics" class="nav-link" data-page-link="diagnostics">Diagnostics</a>
         </nav>
@@ -38,8 +38,8 @@
             <h1>Create a publishable operational authority.</h1>
             <p class="overview-lede">Ledger turns governance intent into deterministic semantic artifacts: an authority contract, impact preview, review context, and authority bundle ready for publication workflows.</p>
             <div class="overview-actions" aria-label="Recommended actions">
-              <button class="primary-action" type="button" data-page-link="draft">Continue Draft</button>
-              <button class="secondary-action" type="button" data-page-link="publication">Review Publication</button>
+              <button class="primary-action" type="button" data-page-link="draft">Create Authority</button>
+              <button class="secondary-action" type="button" data-page-link="publication">Publish Authority</button>
               <button class="secondary-action" type="button" data-page-link="bundles">Open Registry</button>
             </div>
           </div>
@@ -76,16 +76,16 @@
             </div>
             <ol class="workflow-map">
               <li>
-                <strong>Draft Authority</strong>
+                <strong>Create Authority</strong>
                 <span>Describe the protected system, governed action, approvals, escalation, validity, and continuity guarantees.</span>
               </li>
               <li>
-                <strong>Generate Semantics</strong>
-                <span>Ledger derives governance meaning, operational consequences, lifecycle implications, and example governed outcomes.</span>
+                <strong>Review Impact</strong>
+                <span>Inspect governance meaning, operational consequences, lifecycle implications, and example governed outcomes.</span>
               </li>
               <li>
-                <strong>Review Publication</strong>
-                <span>Inspect hashes, lineage, schema compatibility, publication manifest, and bundle composition before export.</span>
+                <strong>Publish Authority</strong>
+                <span>Confirm readiness posture, record publication notes, and export the authority bundle.</span>
               </li>
               <li>
                 <strong>Track Lifecycle</strong>
@@ -145,13 +145,13 @@
           <div class="section-heading">
             <div>
               <div class="section-kicker">Step 1</div>
-              <h2>Draft Authority</h2>
+              <h2>Create Authority</h2>
               <p class="section-intent">Describe the operational authority you want Ledger to publish. The form asks governance questions; Ledger turns the answers into deterministic artifacts.</p>
               <p id="draft-session-status" class="session-status">draft_authority_session.v1 saved locally</p>
             </div>
             <div class="action-row">
               <button id="new-draft-button" class="secondary-action" type="button">New Draft</button>
-              <button id="generate-button" class="primary-action" type="button">Generate Semantic Artifacts</button>
+              <button id="generate-button" class="primary-action" type="button">Review Impact</button>
             </div>
           </div>
 
@@ -283,9 +283,9 @@
           <div class="section-heading">
             <div>
               <div class="section-kicker">Step 2</div>
-              <h2>Semantic Preview</h2>
+              <h2>Operational Impact</h2>
             </div>
-            <span class="artifact-pill">governance_impact_preview.v1</span>
+            <span class="artifact-pill">Ledger-derived</span>
           </div>
           <div class="artifact-layout">
             <article class="artifact-panel">
@@ -321,11 +321,23 @@
             <div>
               <div class="section-kicker">Change review</div>
               <h2>Change Review</h2>
+              <p class="section-intent">Compare authority revisions by operational consequence: thresholds, continuity posture, replay expectations, lifecycle changes, and supersession context.</p>
             </div>
-            <span class="artifact-pill muted">authority_diff_impact.v1 optional</span>
+            <span class="artifact-pill muted">No prior authority selected</span>
           </div>
-          <div class="empty-state" id="diff-empty">
-            This first UI pass renders the current authority. Version-to-version diff rendering is reserved for the next workflow pass.
+          <div class="change-review-grid">
+            <article class="artifact-panel">
+              <h3>What changed operationally?</h3>
+              <p class="quiet">Select or import a prior authority to review threshold changes, role changes, continuity changes, and lifecycle impact.</p>
+            </article>
+            <article class="artifact-panel">
+              <h3>Lifecycle continuity</h3>
+              <p class="quiet">Future revisions will show supersession path, resumed execution impact, and replay continuity obligations here.</p>
+            </article>
+            <article class="artifact-panel wide-panel">
+              <h3>Governance narrative</h3>
+              <p class="quiet">A change narrative will summarize why the revision matters before exposing the underlying diff artifact.</p>
+            </article>
           </div>
         </section>
 
@@ -333,11 +345,31 @@
           <div class="section-heading">
             <div>
               <div class="section-kicker">Step 3</div>
-              <h2>Publication Review</h2>
+              <h2>Publish Authority</h2>
               <p class="section-intent">Confirm publication posture, add append-only context, and export the bundle with a deterministic publication receipt.</p>
             </div>
-            <button id="export-button" class="secondary-action" type="button" disabled>Export authority_bundle.v1</button>
+            <button id="export-button" class="secondary-action" type="button" disabled>Publish Authority Bundle</button>
           </div>
+
+          <article class="release-narrative">
+            <div class="section-kicker">Publication meaning</div>
+            <h3 id="release-headline">Review impact before publishing.</h3>
+            <p id="release-summary" class="quiet">Create or restore an authority draft to see what publishing changes operationally.</p>
+            <div class="release-impact-grid">
+              <div>
+                <span>Operational change</span>
+                <strong id="release-operational">Pending impact review.</strong>
+              </div>
+              <div>
+                <span>Continuity posture</span>
+                <strong id="release-continuity">Pending impact review.</strong>
+              </div>
+              <div>
+                <span>Lifecycle effect</span>
+                <strong id="release-lifecycle">Pending impact review.</strong>
+              </div>
+            </div>
+          </article>
 
           <div class="publication-hardening">
             <article class="artifact-panel readiness-panel">
@@ -402,30 +434,35 @@
               <h3>Publication consequences</h3>
               <ul id="publication-consequences" class="semantic-list"></ul>
             </article>
-            <article class="artifact-panel">
-              <h3>Immutable inputs</h3>
-              <dl id="immutable-inputs" class="hash-list"></dl>
-            </article>
-            <article class="artifact-panel">
-              <h3>Lineage</h3>
-              <dl id="lineage-list" class="hash-list"></dl>
-            </article>
-            <article class="artifact-panel">
-              <h3>Schema compatibility</h3>
-              <p id="schema-compatibility" class="quiet">Pending generation.</p>
-            </article>
-            <article class="artifact-panel wide-panel">
-              <h3>Publication manifest</h3>
-              <pre id="manifest-json" class="json-view">{}</pre>
-            </article>
-            <article class="artifact-panel wide-panel">
-              <h3>Authority bundle composition</h3>
-              <pre id="bundle-json" class="json-view">{}</pre>
-            </article>
-            <article class="artifact-panel wide-panel">
-              <h3>Publication receipt</h3>
-              <pre id="receipt-json" class="json-view">{}</pre>
-            </article>
+            <details class="artifact-panel wide-panel forensic-panel">
+              <summary>Technical details</summary>
+              <div class="forensic-grid">
+                <article>
+                  <h3>Immutable inputs</h3>
+                  <dl id="immutable-inputs" class="hash-list"></dl>
+                </article>
+                <article>
+                  <h3>Lineage</h3>
+                  <dl id="lineage-list" class="hash-list"></dl>
+                </article>
+                <article>
+                  <h3>Schema compatibility</h3>
+                  <p id="schema-compatibility" class="quiet">Pending generation.</p>
+                </article>
+                <article class="wide-panel">
+                  <h3>Publication manifest</h3>
+                  <pre id="manifest-json" class="json-view">{}</pre>
+                </article>
+                <article class="wide-panel">
+                  <h3>Authority bundle composition</h3>
+                  <pre id="bundle-json" class="json-view">{}</pre>
+                </article>
+                <article class="wide-panel">
+                  <h3>Publication receipt</h3>
+                  <pre id="receipt-json" class="json-view">{}</pre>
+                </article>
+              </div>
+            </details>
           </div>
         </section>
 

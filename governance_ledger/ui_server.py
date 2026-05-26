@@ -143,6 +143,7 @@ def compose_authority_publication(draft: dict[str, Any]) -> dict[str, Any]:
         "publication_manifest": manifest,
         "authority_bundle": bundle,
         "authority_registry_projection": build_authority_registry_projection(authority, bundle),
+        "authority_release_narrative": build_authority_release_narrative(authority, preview, bundle),
         "diagnostics": diagnostics,
     }
 
@@ -328,6 +329,33 @@ def build_authority_registry_projection(authority: dict[str, Any], bundle: dict[
     }
 
 
+def build_authority_release_narrative(
+    authority: dict[str, Any],
+    preview: dict[str, Any],
+    bundle: dict[str, Any],
+) -> dict[str, Any]:
+    """Build deterministic operator-facing publication narrative."""
+    enforcement = _first_string(preview.get("enforcement_behavior"))
+    lifecycle = _first_string(preview.get("lifecycle_implications"))
+    continuity = _first_string(bundle.get("continuity_implications"))
+    consequence = _first_string(bundle.get("operational_implications"))
+    authority_ref = bundle["authority_ref"]
+    resource = authority["protected_resource"]
+    action = (authority.get("governed_actions") or ["governed execution"])[0]
+    return {
+        "schema_version": "authority_release_narrative.v1",
+        "authority_ref": authority_ref,
+        "headline": f"{authority_ref} governs {action} for {resource}.",
+        "operational_change": enforcement or f"{action} is governed by {authority_ref}.",
+        "publication_summary": (
+            f"Publishing this authority creates a replayable governance record for {resource}. "
+            f"{consequence or 'Execution evidence can bind to this authority version.'}"
+        ),
+        "continuity_summary": continuity or "Continuity posture should be reviewed before publication.",
+        "lifecycle_summary": lifecycle or "Lifecycle implications should be reviewed before publication.",
+    }
+
+
 def _ui_diagnostic(
     code: str,
     title: str,
@@ -362,6 +390,15 @@ def _ui_diagnostic(
             "does_not_score_policy",
         ],
     }
+
+
+def _first_string(value: Any) -> str | None:
+    if not isinstance(value, list):
+        return None
+    for item in value:
+        if isinstance(item, str) and item:
+            return item
+    return None
 
 
 def _continuity_posture(authority: dict[str, Any]) -> str:

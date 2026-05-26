@@ -87,10 +87,10 @@ The user should feel they are creating, reviewing, and publishing authority, not
 The initial UI navigation should be intentionally narrow:
 
 - Overview
-- Draft Authority
-- Semantic Preview
+- Create Authority
+- Operational Impact
 - Change Review
-- Publication Review
+- Publish Authority
 - Authority Registry
 - Diagnostics
 
@@ -201,7 +201,7 @@ Must not:
 - show cloud sync state
 - imply authority has been deployed
 
-### Draft Authority
+### Create Authority
 
 Purpose: create the structured authority artifact.
 
@@ -231,7 +231,7 @@ Must not:
 - ask for runtime infrastructure settings
 - derive human meaning in UI-only logic
 
-### Semantic Preview
+### Operational Impact
 
 Purpose: render deterministic authority meaning.
 
@@ -276,7 +276,7 @@ Must not:
 - decide whether changes are acceptable
 - mutate either authority version
 
-### Publication Review
+### Publish Authority
 
 Purpose: review and export the publishable governance object.
 
@@ -327,6 +327,8 @@ Must not:
 - alter replay
 - mutate evidence
 - change execution outcomes
+
+Raw manifests, hashes, bundle composition, schema details, and receipts should be hidden behind forensic detail panels by default. The primary view should lead with governance meaning, operational impact, lifecycle implications, continuity posture, and execution consequences.
 
 ### Authority Registry
 
