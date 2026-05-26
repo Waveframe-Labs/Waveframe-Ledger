@@ -32,6 +32,7 @@ body {
 
 button,
 input,
+textarea,
 select {
   font: inherit;
 }
@@ -236,6 +237,7 @@ h3 {
 .overview-grid,
 .artifact-layout,
 .publication-grid,
+.publication-hardening,
 .output-grid,
 .boundary-grid {
   display: grid;
@@ -246,6 +248,7 @@ h3 {
 
 .artifact-layout,
 .publication-grid,
+.publication-hardening,
 .output-grid,
 .boundary-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -397,6 +400,7 @@ label small,
 }
 
 input,
+textarea,
 select {
   width: 100%;
   min-height: 42px;
@@ -408,10 +412,15 @@ select {
 }
 
 input:focus,
+textarea:focus,
 select:focus,
 button:focus {
   outline: 3px solid rgba(31, 91, 69, 0.18);
   outline-offset: 1px;
+}
+
+textarea {
+  resize: vertical;
 }
 
 .wide,
@@ -548,6 +557,21 @@ button:focus {
 
 .publication-explain {
   margin-top: 10px;
+}
+
+.publication-hardening {
+  margin-bottom: 14px;
+}
+
+.readiness-panel,
+.notes-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.readiness-list {
+  display: grid;
+  gap: 10px;
 }
 
 .semantic-list {
@@ -829,6 +853,23 @@ button:focus {
   font-size: 0.9rem;
 }
 
+.diagnostic-rationale {
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fbfbf8;
+}
+
+.diagnostic-rationale summary {
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.diagnostic-rationale p {
+  margin: 8px 0;
+  color: var(--muted);
+}
+
 .diagnostic-row.error {
   border-left: 4px solid var(--red);
 }
@@ -867,6 +908,7 @@ button:focus {
   .overview-grid,
   .artifact-layout,
   .publication-grid,
+  .publication-hardening,
   .output-grid,
   .boundary-grid,
   .workflow-map,

@@ -24,6 +24,14 @@ def build_governance_quality_diagnostics(authority_contract: dict[str, Any]) -> 
                 text="High-value or threshold-sensitive authority has no explicit escalation threshold.",
                 domain="escalation",
                 recommendation="Define the operational threshold where governance review is required.",
+                rationale="Escalation paths make exceptional or high-impact operations visible before completion.",
+                operational_examples=[
+                    "A large treasury transfer enters review instead of following normal approval only.",
+                    "Credential issuance above a risk threshold requires governance intervention.",
+                ],
+                replay_implications=[
+                    "Replay evidence can show whether the operation crossed an explicit escalation boundary."
+                ],
                 severity="warning",
             )
         )
@@ -37,6 +45,13 @@ def build_governance_quality_diagnostics(authority_contract: dict[str, Any]) -> 
                 text="Long-running or resumed workflows do not require continuity revalidation against current authority posture.",
                 domain="continuity",
                 recommendation="Require resumed workflows to revalidate continuity before execution completes.",
+                rationale="Continuity revalidation prevents delayed workflows from completing under outdated authority posture.",
+                operational_examples=[
+                    "A paused transfer resumes after authority revocation and must revalidate before completion."
+                ],
+                replay_implications=[
+                    "Replay can bind resumed execution to the authority version active at resume time."
+                ],
                 severity="warning",
             )
         )
@@ -50,6 +65,13 @@ def build_governance_quality_diagnostics(authority_contract: dict[str, Any]) -> 
                 text="Authority does not describe enough replay continuity expectations for future evidence binding.",
                 domain="replay",
                 recommendation="Include authority_hash and decision_trace in replay requirements.",
+                rationale="Replay requirements make future evidence comparable to the authority that governed execution.",
+                operational_examples=[
+                    "An execution review can verify which authority hash and decision trace governed completion."
+                ],
+                replay_implications=[
+                    "Missing replay anchors can make later continuity or evidence review ambiguous."
+                ],
                 severity="warning",
             )
         )
@@ -64,6 +86,13 @@ def build_governance_quality_diagnostics(authority_contract: dict[str, Any]) -> 
                 text="Single-role approval model may concentrate execution authority.",
                 domain="approval",
                 recommendation="Consider independent approval count or distinct approval roles for high-impact actions.",
+                rationale="Independent approval structure reduces concentration of operational authority.",
+                operational_examples=[
+                    "A high-value transfer requires separate treasury and risk review before execution."
+                ],
+                replay_implications=[
+                    "Replay evidence can show whether independent authority evidence existed before completion."
+                ],
                 severity="info",
             )
         )
@@ -76,6 +105,13 @@ def build_governance_quality_diagnostics(authority_contract: dict[str, Any]) -> 
                 text="Authority does not define supersession expectations for future lifecycle changes.",
                 domain="lifecycle",
                 recommendation="Describe how successor authority versions supersede this authority.",
+                rationale="Supersession expectations keep authority lineage clear as policies change.",
+                operational_examples=[
+                    "A new treasury policy version can explicitly supersede the prior authority."
+                ],
+                replay_implications=[
+                    "Replay can distinguish executions governed before and after supersession."
+                ],
                 severity="info",
             )
         )
@@ -90,6 +126,9 @@ def _diagnostic(
     text: str,
     domain: str,
     recommendation: str,
+    rationale: str,
+    operational_examples: list[str],
+    replay_implications: list[str],
     severity: str,
 ) -> dict[str, Any]:
     return {
@@ -101,6 +140,9 @@ def _diagnostic(
         "severity": severity,
         "domain": domain,
         "recommendation": recommendation,
+        "rationale": rationale,
+        "operational_examples": operational_examples,
+        "replay_implications": replay_implications,
         "blocks_publication": False,
         "non_goals": [
             "does_not_reject_publication",

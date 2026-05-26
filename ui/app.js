@@ -157,6 +157,7 @@ function renderArtifacts(payload) {
     : "Schema compatibility requires review before export.";
   $("#manifest-json").textContent = JSON.stringify(payload.publication_manifest, null, 2);
   $("#bundle-json").textContent = JSON.stringify(bundle, null, 2);
+  $("#receipt-json").textContent = "{}";
 
   renderDiagnostics(payload.diagnostics);
 }
@@ -240,8 +241,37 @@ function renderDiagnostics(items) {
       recommendation.textContent = item.recommendation;
       row.appendChild(recommendation);
     }
+    if (item.rationale || item.operational_examples?.length || item.replay_implications?.length) {
+      const details = document.createElement("details");
+      details.className = "diagnostic-rationale";
+      const summary = document.createElement("summary");
+      summary.textContent = "Why this diagnostic exists";
+      details.appendChild(summary);
+      if (item.rationale) {
+        const rationale = document.createElement("p");
+        rationale.textContent = item.rationale;
+        details.appendChild(rationale);
+      }
+      appendDetailList(details, "Operational examples", item.operational_examples);
+      appendDetailList(details, "Replay implications", item.replay_implications);
+      row.appendChild(details);
+    }
     node.appendChild(row);
   }
+}
+
+function appendDetailList(node, label, items) {
+  if (!items || items.length === 0) return;
+  const title = document.createElement("strong");
+  title.textContent = label;
+  const list = document.createElement("ul");
+  list.className = "semantic-list";
+  for (const item of items) {
+    const li = document.createElement("li");
+    li.textContent = item;
+    list.appendChild(li);
+  }
+  node.append(title, list);
 }
 
 function diagnosticMetric(label, value) {
@@ -282,7 +312,7 @@ function saveBundleRegistry(registry) {
   renderBundleRegistry();
 }
 
-function publishCurrentBundleToRegistry() {
+function publishCurrentBundleToRegistry(receipt, publicationNotes) {
   if (!currentArtifacts) return null;
   const registry = loadBundleRegistry();
   const bundle = currentArtifacts.authority_bundle;
@@ -291,6 +321,8 @@ function publishCurrentBundleToRegistry() {
   const now = new Date().toISOString();
   const draftSession = loadDraftSession();
   const existing = registry.authorities.find((entry) => entry.authority_ref === bundle.authority_ref);
+  const existingNotes = Array.isArray(existing?.publication_notes) ? existing.publication_notes : [];
+  const appendedNotes = [...existingNotes, ...publicationNotes];
   const lifecycle = existing?.lifecycle_timeline?.length
     ? existing.lifecycle_timeline
     : [
@@ -313,6 +345,8 @@ function publishCurrentBundleToRegistry() {
     contract_hash: bundle.contract_hash,
     immutable_inputs: bundle.immutable_inputs,
     lineage: bundle.lineage,
+    publication_receipt: receipt,
+    publication_notes: appendedNotes,
     bundle,
     artifacts: {
       authority_contract: currentArtifacts.authority_contract,
@@ -321,10 +355,17 @@ function publishCurrentBundleToRegistry() {
       governance_review_packet: currentArtifacts.governance_review_packet,
       publication_manifest: currentArtifacts.publication_manifest,
       authority_bundle: bundle,
+      publication_receipt: receipt,
       authority_registry_projection: projection,
       diagnostics: currentArtifacts.diagnostics || [],
     },
-    lifecycle_timeline: appendLifecycleOnce(lifecycle, "published", now, bundle.contract_hash, "authority_bundle.v1 exported to the local registry."),
+    lifecycle_timeline: appendLifecycleOnce(
+      lifecycle,
+      "published",
+      receipt?.published_at || now,
+      receipt?.bundle_hash || bundle.contract_hash,
+      "authority_bundle.v1 exported to the local registry with publication_receipt.v1.",
+    ),
   };
 
   registry.authorities = [entry, ...registry.authorities.filter((item) => item.authority_ref !== entry.authority_ref)];
@@ -469,6 +510,7 @@ function authorityRegistryCard(entry) {
     ["open-preview", "Open semantic preview"],
     ["open-diff", "Open diff"],
     ["export", "Export bundle"],
+    ["view-receipt", "View receipt"],
     ["supersede", "Supersede"],
     ["revoke", "Revoke"],
     ["view-lineage", "View lineage"],
@@ -508,7 +550,13 @@ function renderBundleDetail(entry, mode = "summary") {
   }
 
   const title = document.createElement("h3");
-  title.textContent = mode === "lineage" ? "Lineage" : mode === "diff" ? "Authority diff" : "Authority bundle";
+  title.textContent = mode === "lineage"
+    ? "Lineage"
+    : mode === "diff"
+      ? "Authority diff"
+      : mode === "receipt"
+        ? "Publication receipt"
+        : "Authority bundle";
   const text = document.createElement("p");
   text.className = "quiet";
   text.textContent = `${entry.authority_ref} | ${formatLabel(entry.status)}`;
@@ -516,6 +564,10 @@ function renderBundleDetail(entry, mode = "summary") {
   body.className = "json-view";
   if (mode === "lineage") {
     body.textContent = JSON.stringify({ lineage: entry.lineage, immutable_inputs: entry.immutable_inputs }, null, 2);
+  } else if (mode === "receipt") {
+    body.textContent = entry.publication_receipt
+      ? JSON.stringify(entry.publication_receipt, null, 2)
+      : "No publication_receipt.v1 artifact is attached to this registry entry.";
   } else if (mode === "diff") {
     body.textContent = entry.artifacts.authority_diff_impact
       ? JSON.stringify(entry.artifacts.authority_diff_impact, null, 2)
@@ -558,6 +610,8 @@ function handleRegistryAction(event) {
     showPage("bundles");
   } else if (action === "export") {
     downloadBundle(entry.bundle);
+  } else if (action === "view-receipt") {
+    renderBundleDetail(entry, "receipt");
   } else if (action === "supersede") {
     const successor = currentArtifacts?.authority_bundle?.authority_ref;
     const supersededBy = successor && successor !== entry.authority_ref ? successor : "pending successor";
@@ -604,14 +658,71 @@ function buildOutcomeExplorer(preview, bundle) {
   return outcomes;
 }
 
-function exportBundle() {
+async function exportBundle() {
   if (!currentArtifacts) return;
-  const bundle = currentArtifacts.authority_bundle;
-  downloadBundle(bundle);
-  const entry = publishCurrentBundleToRegistry();
-  $("#status-bundle").textContent = "exported to local registry";
-  renderBundleDetail(entry);
-  showPage("bundles");
+  try {
+    const bundle = currentArtifacts.authority_bundle;
+    const publishedAt = new Date().toISOString();
+    const readiness = readReadinessConfirmations();
+    const notes = readPublicationNotes(publishedAt);
+    const receipt = await buildPublicationReceipt(bundle, publishedAt, readiness, notes);
+    $("#receipt-json").textContent = JSON.stringify(receipt, null, 2);
+    downloadBundle(bundle);
+    const entry = publishCurrentBundleToRegistry(receipt, notes);
+    $("#status-bundle").textContent = "exported to local registry";
+    renderBundleDetail(entry, "receipt");
+    showPage("bundles");
+  } catch (error) {
+    renderDiagnostics([{ severity: "error", code: "publication_receipt_error", text: error.message }]);
+    showPage("diagnostics");
+  }
+}
+
+async function buildPublicationReceipt(bundle, publishedAt, readiness, notes) {
+  const response = await fetch("/api/publication-receipt", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      authority_bundle: bundle,
+      published_at: publishedAt,
+      readiness_confirmations: readiness,
+      publication_notes: notes,
+    }),
+  });
+  const receipt = await response.json();
+  if (!response.ok) {
+    throw new Error(receipt.error || "Unable to generate publication receipt.");
+  }
+  return receipt;
+}
+
+function readReadinessConfirmations() {
+  return {
+    semantic_diagnostics_reviewed: Boolean(document.querySelector('[name="semantic_diagnostics_reviewed"]')?.checked),
+    lineage_validated: Boolean(document.querySelector('[name="lineage_validated"]')?.checked),
+    continuity_posture_reviewed: Boolean(document.querySelector('[name="continuity_posture_reviewed"]')?.checked),
+    replay_implications_reviewed: Boolean(document.querySelector('[name="replay_implications_reviewed"]')?.checked),
+    lifecycle_implications_acknowledged: Boolean(document.querySelector('[name="lifecycle_implications_acknowledged"]')?.checked),
+  };
+}
+
+function readPublicationNotes(createdAt) {
+  return [
+    publicationNote("reason_for_supersession", "reason_for_supersession", createdAt),
+    publicationNote("operational_change_summary", "operational_change_summary", createdAt),
+    publicationNote("governance_revision_context", "governance_revision_context", createdAt),
+  ].filter(Boolean);
+}
+
+function publicationNote(fieldName, noteType, createdAt) {
+  const field = document.querySelector(`[name="${fieldName}"]`);
+  const text = field?.value?.trim();
+  if (!text) return null;
+  return {
+    note_type: noteType,
+    text,
+    created_at: createdAt,
+  };
 }
 
 function downloadBundle(bundle) {

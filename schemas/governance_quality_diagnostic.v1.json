@@ -13,6 +13,9 @@
     "severity",
     "domain",
     "recommendation",
+    "rationale",
+    "operational_examples",
+    "replay_implications",
     "blocks_publication",
     "non_goals"
   ],
@@ -45,6 +48,24 @@
     "recommendation": {
       "type": "string",
       "minLength": 1
+    },
+    "rationale": {
+      "type": "string",
+      "minLength": 1
+    },
+    "operational_examples": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "replay_implications": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
     },
     "blocks_publication": {
       "const": false

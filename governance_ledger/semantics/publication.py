@@ -13,6 +13,7 @@ from governance_ledger.schema_versions import (
     GOVERNANCE_IMPACT_PREVIEW_V1,
     GOVERNANCE_REVIEW_PACKET_V1,
     PUBLICATION_MANIFEST_V1,
+    PUBLICATION_RECEIPT_V1,
 )
 
 NON_GOALS = [
@@ -93,6 +94,59 @@ def format_authority_bundle(bundle: dict[str, Any]) -> str:
     )
 
 
+def build_publication_receipt(
+    *,
+    authority_bundle: dict[str, Any],
+    published_at: str,
+    readiness_confirmations: dict[str, bool] | None = None,
+    publication_notes: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Return publication_receipt.v1 evidence for an exported authority bundle."""
+    bundle = copy.deepcopy(authority_bundle)
+    confirmations = copy.deepcopy(readiness_confirmations) if readiness_confirmations is not None else {}
+    notes = copy.deepcopy(publication_notes) if publication_notes is not None else []
+    manifest = bundle.get("publication_manifest") if isinstance(bundle.get("publication_manifest"), dict) else {}
+    semantic_artifacts = bundle.get("semantic_artifacts") if isinstance(bundle.get("semantic_artifacts"), list) else []
+    immutable_inputs = bundle.get("immutable_inputs") if isinstance(bundle.get("immutable_inputs"), dict) else {}
+    schema_compatibility = bundle.get("schema_compatibility") if isinstance(bundle.get("schema_compatibility"), dict) else {}
+
+    receipt = {
+        "schema_version": PUBLICATION_RECEIPT_V1,
+        "receipt_id": _receipt_id(bundle, published_at),
+        "publication_id": bundle.get("publication_id"),
+        "authority_ref": bundle.get("authority_ref"),
+        "published_at": published_at,
+        "published_by": (bundle.get("provenance") or {}).get("published_by") or manifest.get("published_by"),
+        "bundle_hash": _artifact_hash(bundle),
+        "contract_hash": bundle.get("contract_hash"),
+        "manifest_hash": immutable_inputs.get("manifest_hash") or _artifact_hash(manifest),
+        "semantic_artifact_hashes": _semantic_artifact_hashes(semantic_artifacts, immutable_inputs),
+        "review_packet_hashes": list(immutable_inputs.get("review_packet_hashes") or []),
+        "lineage_continuity": _lineage_continuity(bundle),
+        "compatibility_posture": _compatibility_posture(schema_compatibility),
+        "readiness_confirmations": _readiness_confirmations(confirmations),
+        "publication_notes": _publication_notes(notes),
+        "semantic_compatibility_warnings": _semantic_compatibility_warnings(bundle),
+        "immutable_inputs": {
+            "authority_hash": immutable_inputs.get("authority_hash"),
+            "manifest_hash": immutable_inputs.get("manifest_hash"),
+            "preview_hash": immutable_inputs.get("preview_hash"),
+            "diff_hash": immutable_inputs.get("diff_hash"),
+            "bundle_hash": _artifact_hash(bundle),
+        },
+        "non_goals": [
+            "does_not_deploy_authority",
+            "does_not_approve_authority",
+            "does_not_reject_publication",
+            "does_not_call_guard",
+            "does_not_call_cloud",
+            "does_not_evaluate_admissibility",
+        ],
+    }
+    receipt["receipt_hash"] = _artifact_hash(receipt)
+    return receipt
+
+
 def _authority_ref(authority: dict[str, Any]) -> str:
     contract_id = authority.get("contract_id")
     contract_version = authority.get("contract_version")
@@ -101,6 +155,13 @@ def _authority_ref(authority: dict[str, Any]) -> str:
     if not isinstance(contract_version, str) or not contract_version:
         raise ValueError("Authority contract missing required field: contract_version")
     return f"{contract_id}@{contract_version}"
+
+
+def _receipt_id(bundle: dict[str, Any], published_at: str) -> str:
+    digest = hashlib.sha256(
+        f"{bundle.get('publication_id')}:{bundle.get('authority_ref')}:{published_at}".encode("utf-8")
+    ).hexdigest()
+    return f"receipt_{digest[:12]}"
 
 
 def _contract_hash(authority: dict[str, Any]) -> str:
@@ -280,6 +341,94 @@ def _manifest_contract_entry(manifest: dict[str, Any]) -> dict[str, Any]:
     if isinstance(contracts, list) and contracts and isinstance(contracts[0], dict):
         return contracts[0]
     return {}
+
+
+def _semantic_artifact_hashes(
+    semantic_artifacts: list[Any],
+    immutable_inputs: dict[str, Any],
+) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for artifact in semantic_artifacts:
+        if not isinstance(artifact, dict):
+            continue
+        artifact_type = artifact.get("artifact_type")
+        artifact_hash = artifact.get("artifact_hash")
+        if isinstance(artifact_type, str) and artifact_type and isinstance(artifact_hash, str):
+            result[artifact_type] = artifact_hash
+    if "governance_impact_preview.v1" not in result and immutable_inputs.get("preview_hash"):
+        result["governance_impact_preview.v1"] = immutable_inputs["preview_hash"]
+    if immutable_inputs.get("diff_hash"):
+        result.setdefault("authority_diff_impact.v1", immutable_inputs["diff_hash"])
+    return result
+
+
+def _lineage_continuity(bundle: dict[str, Any]) -> dict[str, Any]:
+    lineage = bundle.get("lineage") if isinstance(bundle.get("lineage"), dict) else {}
+    return {
+        "source_hash_present": bool(lineage.get("source_hash")),
+        "compilation_report_hash_present": bool(lineage.get("compilation_report_hash")),
+        "lineage_complete": bool(lineage.get("source_hash") and lineage.get("compilation_report_hash")),
+    }
+
+
+def _compatibility_posture(schema_compatibility: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "compatible": bool(schema_compatibility.get("compatible")),
+        "compatibility_mode": schema_compatibility.get("compatibility_mode"),
+        "artifacts": copy.deepcopy(schema_compatibility.get("artifacts") or {}),
+        "expected": copy.deepcopy(schema_compatibility.get("expected") or {}),
+    }
+
+
+def _readiness_confirmations(confirmations: dict[str, bool]) -> dict[str, bool]:
+    keys = [
+        "semantic_diagnostics_reviewed",
+        "lineage_validated",
+        "continuity_posture_reviewed",
+        "replay_implications_reviewed",
+        "lifecycle_implications_acknowledged",
+    ]
+    return {key: bool(confirmations.get(key)) for key in keys}
+
+
+def _publication_notes(notes: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    result = []
+    for note in notes:
+        if not isinstance(note, dict):
+            continue
+        note_type = note.get("note_type")
+        text = note.get("text")
+        created_at = note.get("created_at")
+        if not isinstance(note_type, str) or not isinstance(text, str) or not text.strip():
+            continue
+        result.append(
+            {
+                "note_type": note_type,
+                "text": text.strip(),
+                "created_at": created_at if isinstance(created_at, str) and created_at else None,
+            }
+        )
+    return result
+
+
+def _semantic_compatibility_warnings(bundle: dict[str, Any]) -> list[str]:
+    diff = bundle.get("authority_diff_impact")
+    if not isinstance(diff, dict):
+        return []
+    warnings = []
+    for change in diff.get("changed_governance_rules", []):
+        if not isinstance(change, dict):
+            continue
+        change_type = change.get("change_type")
+        escalation_impact = " ".join(_strings(change.get("escalation_impact"))).lower()
+        continuity_impact = " ".join(_strings(change.get("continuity_implications"))).lower()
+        if change_type == "ESCALATION_THRESHOLD_CHANGED" and "expands" in escalation_impact:
+            warnings.append("This authority lowers escalation thresholds relative to prior lineage.")
+        if change_type == "ESCALATION_THRESHOLD_CHANGED" and "narrows" in escalation_impact:
+            warnings.append("This authority raises escalation thresholds relative to prior lineage.")
+        if change_type == "CONTINUITY_REQUIREMENT_CHANGED" or "continuity" in continuity_impact:
+            warnings.append("This authority changes continuity semantics for resumed execution.")
+    return _unique(warnings)
 
 
 def _artifact_hash(artifact: Any) -> str:

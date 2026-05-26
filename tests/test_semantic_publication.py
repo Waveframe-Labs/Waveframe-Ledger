@@ -5,11 +5,11 @@ import sys
 from pathlib import Path
 
 from governance_ledger.cli import main as governance_cli
-from governance_ledger.schema_versions import AUTHORITY_BUNDLE_V1
+from governance_ledger.schema_versions import AUTHORITY_BUNDLE_V1, PUBLICATION_RECEIPT_V1
 from governance_ledger.semantics.diff import build_authority_diff_impact
 from governance_ledger.semantics.packets import build_governance_review_packet
 from governance_ledger.semantics.preview import build_governance_impact_preview
-from governance_ledger.semantics.publication import build_authority_bundle
+from governance_ledger.semantics.publication import build_authority_bundle, build_publication_receipt
 
 
 def test_authority_bundle_composes_publishable_governance_object():
@@ -141,6 +141,66 @@ def test_authority_bundle_hashes_change_when_manifest_changes():
     )
 
     assert first["immutable_inputs"]["manifest_hash"] != second["immutable_inputs"]["manifest_hash"]
+
+
+def test_publication_receipt_binds_bundle_hashes_and_readiness():
+    old_authority = _authority_contract(threshold=250000, version="0.1.0")
+    authority = _authority_contract(threshold=100000, version="0.2.0")
+    preview = build_governance_impact_preview(authority)
+    diff = build_authority_diff_impact(old_authority, authority)
+    bundle = build_authority_bundle(
+        authority_contract=authority,
+        publication_manifest=_publication_manifest(authority),
+        governance_impact_preview=preview,
+        authority_diff_impact=diff,
+    )
+
+    receipt = build_publication_receipt(
+        authority_bundle=bundle,
+        published_at="2026-05-25T18:00:00Z",
+        readiness_confirmations={
+            "semantic_diagnostics_reviewed": True,
+            "lineage_validated": True,
+        },
+        publication_notes=[
+            {
+                "note_type": "operational_change_summary",
+                "text": "Escalation threshold lowered for treasury transfers.",
+                "created_at": "2026-05-25T17:59:00Z",
+            }
+        ],
+    )
+
+    assert receipt["schema_version"] == PUBLICATION_RECEIPT_V1
+    assert receipt["authority_ref"] == "finance-policy@0.2.0"
+    assert receipt["bundle_hash"].startswith("sha256:")
+    assert receipt["manifest_hash"] == bundle["immutable_inputs"]["manifest_hash"]
+    assert receipt["semantic_artifact_hashes"]["governance_impact_preview.v1"] == bundle["immutable_inputs"]["preview_hash"]
+    assert receipt["semantic_artifact_hashes"]["authority_diff_impact.v1"] == bundle["immutable_inputs"]["diff_hash"]
+    assert receipt["lineage_continuity"]["lineage_complete"] is True
+    assert receipt["compatibility_posture"]["compatible"] is True
+    assert receipt["readiness_confirmations"]["semantic_diagnostics_reviewed"] is True
+    assert receipt["readiness_confirmations"]["continuity_posture_reviewed"] is False
+    assert receipt["publication_notes"][0]["note_type"] == "operational_change_summary"
+    assert any(
+        "lowers escalation thresholds" in warning
+        for warning in receipt["semantic_compatibility_warnings"]
+    )
+    assert receipt["receipt_hash"].startswith("sha256:")
+
+
+def test_publication_receipt_is_deterministic_for_identical_inputs():
+    authority = _authority_contract()
+    bundle = build_authority_bundle(
+        authority_contract=authority,
+        publication_manifest=_publication_manifest(authority),
+        governance_impact_preview=build_governance_impact_preview(authority),
+    )
+
+    first = build_publication_receipt(authority_bundle=bundle, published_at="2026-05-25T18:00:00Z")
+    second = build_publication_receipt(authority_bundle=bundle, published_at="2026-05-25T18:00:00Z")
+
+    assert first == second
 
 
 def test_authority_bundle_does_not_import_guard_or_cloud(monkeypatch):

@@ -332,6 +332,7 @@ Canonical schemas live in [schemas/](schemas/), including:
 - [authority_diff_impact.v1.json](schemas/authority_diff_impact.v1.json): authority diff impacts.
 - [governance_review_packet.v1.json](schemas/governance_review_packet.v1.json): governance review packets.
 - [authority_bundle.v1.json](schemas/authority_bundle.v1.json): authority bundles.
+- [publication_receipt.v1.json](schemas/publication_receipt.v1.json): publication receipts.
 - [authority_bundle_registry.v1.json](schemas/authority_bundle_registry.v1.json): local published bundle registries.
 - [draft_authority_session.v1.json](schemas/draft_authority_session.v1.json): local draft authority sessions.
 - [replay_authority_request.v1.json](schemas/replay_authority_request.v1.json): replay authority requests.

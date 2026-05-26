@@ -334,8 +334,54 @@
             <div>
               <div class="section-kicker">Step 3</div>
               <h2>Publication Review</h2>
+              <p class="section-intent">Confirm publication posture, add append-only context, and export the bundle with a deterministic publication receipt.</p>
             </div>
             <button id="export-button" class="secondary-action" type="button" disabled>Export authority_bundle.v1</button>
+          </div>
+
+          <div class="publication-hardening">
+            <article class="artifact-panel readiness-panel">
+              <h3>Publication readiness</h3>
+              <p class="quiet">These confirmations record review posture. They do not approve, reject, or execute authority.</p>
+              <div class="readiness-list">
+                <label class="check-row">
+                  <input name="semantic_diagnostics_reviewed" type="checkbox" />
+                  <span>Semantic diagnostics reviewed</span>
+                </label>
+                <label class="check-row">
+                  <input name="lineage_validated" type="checkbox" />
+                  <span>Lineage validated</span>
+                </label>
+                <label class="check-row">
+                  <input name="continuity_posture_reviewed" type="checkbox" />
+                  <span>Continuity posture reviewed</span>
+                </label>
+                <label class="check-row">
+                  <input name="replay_implications_reviewed" type="checkbox" />
+                  <span>Replay implications reviewed</span>
+                </label>
+                <label class="check-row">
+                  <input name="lifecycle_implications_acknowledged" type="checkbox" />
+                  <span>Lifecycle implications acknowledged</span>
+                </label>
+              </div>
+            </article>
+            <article class="artifact-panel notes-panel">
+              <h3>Publication notes</h3>
+              <p class="quiet">Notes are appended to the local publication receipt when exported.</p>
+              <label>
+                <span>Reason for supersession</span>
+                <textarea name="reason_for_supersession" rows="2"></textarea>
+              </label>
+              <label>
+                <span>Operational change summary</span>
+                <textarea name="operational_change_summary" rows="2"></textarea>
+              </label>
+              <label>
+                <span>Governance revision context</span>
+                <textarea name="governance_revision_context" rows="2"></textarea>
+              </label>
+            </article>
           </div>
 
           <div class="publication-grid">
@@ -375,6 +421,10 @@
             <article class="artifact-panel wide-panel">
               <h3>Authority bundle composition</h3>
               <pre id="bundle-json" class="json-view">{}</pre>
+            </article>
+            <article class="artifact-panel wide-panel">
+              <h3>Publication receipt</h3>
+              <pre id="receipt-json" class="json-view">{}</pre>
             </article>
           </div>
         </section>

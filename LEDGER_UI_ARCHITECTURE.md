@@ -292,6 +292,8 @@ Consumes:
 - lineage metadata
 - provenance metadata
 - schema compatibility metadata
+- publication readiness confirmations
+- append-only publication notes
 
 Responsibilities:
 
@@ -303,6 +305,9 @@ Responsibilities:
 - show lineage
 - show provenance
 - show schema compatibility
+- record advisory readiness posture
+- capture append-only notes for supersession, operational change, and governance revision context
+- generate `publication_receipt.v1`
 - show publication manifest
 - export `authority_bundle.v1`
 
@@ -314,6 +319,7 @@ Export authority_bundle.v1
 
 Must not:
 
+- treat readiness confirmations as approval gates
 - deploy authority
 - approve on behalf of a human
 - call Cloud

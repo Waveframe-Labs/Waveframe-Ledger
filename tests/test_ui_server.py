@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from governance_ledger.semantics.publication import build_publication_receipt
 from governance_ledger.ui_server import compose_authority_publication
 
 
@@ -61,6 +62,39 @@ def test_ui_server_emits_guidance_diagnostic_for_default_mutation_target():
     assert {diagnostic["code"] for diagnostic in diagnostics} == {"GQ004", "GQ005", "default_mutation_target"}
     assert _diagnostic(diagnostics, "default_mutation_target")["title"] == "Derived Mutation Target"
     assert {diagnostic["blocks_publication"] for diagnostic in diagnostics} == {False}
+
+
+def test_ui_server_receipt_builder_supports_publication_notes():
+    result = compose_authority_publication(
+        {
+            "protected_system": "Corporate Treasury Transfer System",
+            "governed_action": "transfer funds",
+            "approver_role": "treasury-governance",
+        }
+    )
+
+    receipt = build_publication_receipt(
+        authority_bundle=result["authority_bundle"],
+        published_at="2026-05-25T18:00:00Z",
+        readiness_confirmations={
+            "semantic_diagnostics_reviewed": True,
+            "lineage_validated": True,
+            "continuity_posture_reviewed": True,
+            "replay_implications_reviewed": True,
+            "lifecycle_implications_acknowledged": True,
+        },
+        publication_notes=[
+            {
+                "note_type": "governance_revision_context",
+                "text": "Initial local publication receipt.",
+                "created_at": "2026-05-25T17:59:00Z",
+            }
+        ],
+    )
+
+    assert receipt["schema_version"] == "publication_receipt.v1"
+    assert receipt["publication_notes"][0]["text"] == "Initial local publication receipt."
+    assert receipt["readiness_confirmations"]["lineage_validated"] is True
 
 
 def _diagnostic(diagnostics: list[dict], code: str) -> dict:

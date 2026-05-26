@@ -14,7 +14,7 @@ from urllib.parse import urlparse
 from governance_ledger.semantics.diagnostics import build_governance_quality_diagnostics
 from governance_ledger.semantics.packets import build_governance_review_packet
 from governance_ledger.semantics.preview import build_governance_impact_preview
-from governance_ledger.semantics.publication import build_authority_bundle
+from governance_ledger.semantics.publication import build_authority_bundle, build_publication_receipt
 
 ROOT = Path(__file__).resolve().parent.parent
 UI_ROOT = ROOT / "ui"
@@ -41,6 +41,33 @@ class LedgerUIHandler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         parsed = urlparse(self.path)
+        if parsed.path == "/api/publication-receipt":
+            try:
+                payload = self._read_json_body()
+                bundle = payload.get("authority_bundle") if isinstance(payload.get("authority_bundle"), dict) else {}
+                published_at = payload.get("published_at")
+                if not isinstance(published_at, str) or not published_at:
+                    raise ValueError("Publication receipt requires published_at.")
+                receipt = build_publication_receipt(
+                    authority_bundle=bundle,
+                    published_at=published_at,
+                    readiness_confirmations=(
+                        payload.get("readiness_confirmations")
+                        if isinstance(payload.get("readiness_confirmations"), dict)
+                        else {}
+                    ),
+                    publication_notes=(
+                        payload.get("publication_notes")
+                        if isinstance(payload.get("publication_notes"), list)
+                        else []
+                    ),
+                )
+                self._write_json(receipt)
+            except ValueError as exc:
+                self._write_json({"error": str(exc)}, status=400)
+            except Exception as exc:  # pragma: no cover - defensive HTTP boundary
+                self._write_json({"error": f"Unable to build publication receipt: {exc}"}, status=500)
+            return
         if parsed.path != "/api/compose":
             self._write_json({"error": "not found"}, status=404)
             return
@@ -319,6 +346,13 @@ def _ui_diagnostic(
         "domain": domain,
         "text": text,
         "recommendation": recommendation,
+        "rationale": "This diagnostic exists to make publication posture explicit before export.",
+        "operational_examples": [
+            "A reviewer can confirm generated artifact structure before relying on the exported bundle."
+        ],
+        "replay_implications": [
+            "Receipts and registry entries should retain enough context for later evidence review."
+        ],
         "blocks_publication": False,
         "non_goals": [
             "does_not_reject_publication",
