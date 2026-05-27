@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://waveframe.ai/schemas/registry_health_projection.v1.json",
+  "title": "registry_health_projection.v1",
+  "type": "object",
+  "required": ["schema_version", "registry_posture", "authority_posture", "lineage_posture"],
+  "properties": {
+    "schema_version": { "const": "registry_health_projection.v1" },
+    "registry_posture": {
+      "enum": [
+        "healthy",
+        "warnings_present",
+        "replay_posture_incomplete",
+        "continuity_drift_detected",
+        "supersession_pending",
+        "review_stale"
+      ]
+    },
+    "authority_posture": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["authority_ref", "authority_version", "posture", "signals"],
+        "properties": {
+          "authority_ref": { "type": "string", "minLength": 1 },
+          "authority_version": { "type": "string", "minLength": 1 },
+          "posture": { "type": "string", "minLength": 1 },
+          "signals": { "type": "array", "items": { "type": "string" } }
+        },
+        "additionalProperties": false
+      }
+    },
+    "lineage_posture": { "type": "object" }
+  },
+  "additionalProperties": false
+}

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from governance_ledger.local_registry import (
     MemoryRegistryAdapter,
+    build_active_authority_projection,
     build_authority_drift_indicators,
     build_authority_lifecycle_event,
     build_authority_lineage_projection,
@@ -9,6 +10,8 @@ from governance_ledger.local_registry import (
     build_authority_registry_entry,
     build_authority_workspace_projection,
     build_diagnostic_rollup,
+    build_governance_activity_projection,
+    build_registry_health_projection,
 )
 from governance_ledger.local_registry.models import append_lifecycle_event
 
@@ -305,6 +308,89 @@ def test_authority_operational_summary_renders_governance_object_view():
     ]
     assert summary["replay_readiness"]["receipt_present"] is True
     assert summary["relationship_graph"]["nodes"][0]["authority_ref"] == "transfer-policy@3.4.5"
+
+
+def test_governance_activity_projection_emits_lifecycle_and_drift_activity():
+    previous = _registry_entry(
+        "transfer-policy@3.4.5",
+        approval_count=1,
+        status="superseded",
+        continuity_posture="resume revalidation",
+        superseded_by="transfer-policy@3.4.6",
+    )
+    current = _registry_entry(
+        "transfer-policy@3.4.6",
+        approval_count=2,
+        status="registered",
+        continuity_posture="resume revalidation and revocation invalidation",
+        latest_receipt_hash="sha256:receipt",
+    )
+
+    projection = build_governance_activity_projection(entries=[previous, current])
+
+    assert projection["schema_version"] == "governance_activity_projection.v1"
+    assert any(item["activity_type"] == "authority_registered" for item in projection["activity"])
+    assert any(item["activity_type"] == "continuity_posture_changed" for item in projection["activity"])
+    continuity = next(item for item in projection["activity"] if item["activity_type"] == "continuity_posture_changed")
+    assert continuity["severity"] == "warning"
+    assert continuity["continuity_impact"] == "review_required"
+
+
+def test_registry_health_projection_reports_replay_and_continuity_posture():
+    previous = _registry_entry(
+        "transfer-policy@3.4.5",
+        approval_count=1,
+        status="superseded",
+        continuity_posture="resume revalidation",
+        superseded_by="transfer-policy@3.4.6",
+    )
+    current = _registry_entry(
+        "transfer-policy@3.4.6",
+        approval_count=2,
+        status="registered",
+        continuity_posture="resume revalidation and revocation invalidation",
+        latest_receipt_hash="sha256:receipt",
+    )
+
+    projection = build_registry_health_projection(entries=[previous, current])
+
+    assert projection["schema_version"] == "registry_health_projection.v1"
+    assert projection["registry_posture"] == "continuity_drift_detected"
+    assert projection["lineage_posture"]["posture"] == "continuity_drift_detected"
+    assert {item["posture"] for item in projection["authority_posture"]} == {
+        "replay_posture_incomplete",
+        "healthy",
+    }
+
+
+def test_active_authority_projection_resolves_current_registered_version():
+    older = _registry_entry(
+        "transfer-policy@3.4.5",
+        approval_count=1,
+        status="superseded",
+        superseded_by="transfer-policy@3.4.6",
+    )
+    current = _registry_entry(
+        "transfer-policy@3.4.6",
+        approval_count=2,
+        status="registered",
+        latest_receipt_hash="sha256:receipt",
+    )
+
+    projection = build_active_authority_projection(entries=[older, current])
+
+    assert projection == {
+        "schema_version": "active_authority_projection.v1",
+        "active_authorities": [
+            {
+                "authority_family": "transfer-policy",
+                "active_authority_ref": "transfer-policy@3.4.6",
+                "active_authority_version": "3.4.6",
+                "status": "registered",
+                "reason": "latest registered authority without supersession",
+            }
+        ],
+    }
 
 
 def _diagnostic(code: str, domain: str, severity: str) -> dict:

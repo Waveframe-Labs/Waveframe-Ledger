@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://waveframe.ai/schemas/governance_activity_projection.v1.json",
+  "title": "governance_activity_projection.v1",
+  "type": "object",
+  "required": ["schema_version", "activity"],
+  "properties": {
+    "schema_version": { "const": "governance_activity_projection.v1" },
+    "activity": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "schema_version",
+          "activity_type",
+          "authority_ref",
+          "authority_version",
+          "timestamp",
+          "severity",
+          "summary",
+          "continuity_impact",
+          "caused_by_event_id"
+        ],
+        "properties": {
+          "schema_version": { "const": "governance_activity_event.v1" },
+          "activity_type": { "type": "string", "minLength": 1 },
+          "authority_ref": { "type": "string", "minLength": 1 },
+          "authority_version": { "type": "string", "minLength": 1 },
+          "timestamp": { "type": ["string", "null"] },
+          "severity": { "enum": ["info", "warning", "error"] },
+          "summary": { "type": "string", "minLength": 1 },
+          "continuity_impact": { "type": "string", "minLength": 1 },
+          "caused_by_event_id": { "type": ["string", "null"] },
+          "event_id": { "type": ["string", "null"] },
+          "drift_type": { "type": "string" }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}
