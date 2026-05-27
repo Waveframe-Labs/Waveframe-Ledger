@@ -1706,6 +1706,37 @@ textarea {
   color: var(--muted);
 }
 
+.freshness-status {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.34fr) minmax(0, 1fr);
+  gap: 6px 12px;
+  margin: 0;
+}
+
+.freshness-status div {
+  display: contents;
+}
+
+.freshness-status dt {
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.freshness-status dd {
+  margin: 0;
+  color: var(--ink);
+  font-weight: 760;
+  overflow-wrap: anywhere;
+}
+
+.freshness-status p {
+  grid-column: 1 / -1;
+  margin: 4px 0 0;
+  color: var(--muted);
+}
+
 .registry-detail-metric {
   min-width: 0;
   padding: 12px;

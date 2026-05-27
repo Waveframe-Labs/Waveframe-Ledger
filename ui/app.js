@@ -1682,9 +1682,7 @@ function renderRegistryDetailSummary(detail, entry) {
     const row = document.createElement("li");
     const strong = document.createElement("strong");
     strong.textContent = item.label;
-    const span = document.createElement("span");
-    span.textContent = freshnessTimelineText(item);
-    row.append(strong, span);
+    row.append(strong, projectionStatusDetail(item));
     freshnessTimeline.appendChild(row);
   }
 
@@ -1853,18 +1851,37 @@ function projectionFreshnessCard(item) {
   const label = document.createElement("span");
   label.textContent = item.label;
   const value = document.createElement("strong");
-  value.textContent = freshnessLabel(item);
+  value.textContent = projectionStatusLabel(item);
   const generated = document.createElement("small");
-  generated.textContent = freshnessCompactText(item);
+  generated.textContent = `Last generated: ${lastGeneratedLabel(item)}`;
   card.append(label, value, generated);
   return card;
 }
 
-function freshnessCompactText(item) {
-  if (item.freshness_posture === "invalidated") return "Draft changed after review";
-  if (item.severity === "continuity_risk") return "Updated after lifecycle change";
-  if (item.severity === "replay_risk") return "Receipt evidence missing";
-  return item.generated_at ? `Generated ${relativeTime(item.generated_at)}` : "Current workspace state";
+function projectionStatusLabel(item) {
+  if (item.freshness_posture === "invalidated") return "Invalidated";
+  if (item.freshness_posture === "stale") return "Stale";
+  if (item.freshness_posture === "fresh") return "Valid";
+  return freshnessLabel(item);
+}
+
+function lastGeneratedLabel(item) {
+  return item.generated_at ? relativeTime(item.generated_at) : "current workspace state";
+}
+
+function projectionStatusDetail(item) {
+  const detail = document.createElement("dl");
+  detail.className = "freshness-status";
+  renderDefinitionValuesInto(detail, {
+    "Projection status": projectionStatusLabel(item),
+    "Last generated": lastGeneratedLabel(item),
+  });
+  if (item.freshness_posture === "invalidated" || item.severity === "replay_risk" || item.severity === "continuity_risk") {
+    const note = document.createElement("p");
+    note.textContent = freshnessTimelineText(item);
+    detail.appendChild(note);
+  }
+  return detail;
 }
 
 function freshnessTimelineText(item) {
@@ -1877,7 +1894,7 @@ function freshnessTimelineText(item) {
   if (item.severity === "replay_risk") {
     return "Replay posture is incomplete until receipt evidence is present.";
   }
-  return `Fresh - ${item.generated_at ? `Generated ${relativeTime(item.generated_at)}` : "Current registry state"}.`;
+  return "Projection is valid for the current registry state.";
 }
 
 function replayReadinessLabel(replay) {
