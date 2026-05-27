@@ -12,6 +12,7 @@ from governance_ledger.local_registry import (
     build_diagnostic_rollup,
     build_governance_activity_projection,
     build_governance_continuity_projection,
+    build_governance_reconciliation_projection,
     build_governance_timeline_projection,
     build_projection_invalidation_plan,
     build_registry_health_projection,
@@ -466,6 +467,91 @@ def test_projection_invalidation_plan_operationalizes_documented_rules():
     assert "governance_continuity_projection.v1" in plan["invalidated_projections"]
     assert "publication_receipt.v1" in plan["historically_persisted_artifacts"]
     assert plan["recompute"] is True
+
+
+def test_governance_reconciliation_projection_detects_freshness_and_active_ambiguity():
+    first_active = _registry_entry(
+        "transfer-policy@3.4.5",
+        approval_count=1,
+        status="registered",
+        latest_receipt_hash="sha256:receipt-a",
+    )
+    second_active = _registry_entry(
+        "transfer-policy@3.4.6",
+        approval_count=1,
+        status="registered",
+        latest_receipt_hash="sha256:receipt-b",
+    )
+
+    projection = build_governance_reconciliation_projection(
+        entries=[first_active, second_active],
+        projection_freshness=[
+            {
+                "projection": "authority_operational_summary.v1",
+                "generated_at": "2026-05-26T17:00:00Z",
+                "source_event_ids": ["stale-event"],
+            }
+        ],
+    )
+
+    assert projection["schema_version"] == "governance_reconciliation_projection.v1"
+    assert projection["freshness_posture"] == "stale"
+    assert projection["reconciliation_posture"] == "issues_detected"
+    assert any(item["reconciliation_issue_type"] == "projection_divergence" for item in projection["issues"])
+    ambiguity = next(item for item in projection["issues"] if item["reconciliation_issue_type"] == "multiple_active_authorities")
+    assert ambiguity["severity"] == "authority_conflict"
+
+
+def test_governance_reconciliation_projection_detects_replay_and_lineage_gaps():
+    previous = _registry_entry(
+        "transfer-policy@3.4.4",
+        approval_count=1,
+        status="superseded",
+        latest_receipt_hash="sha256:old-receipt",
+        superseded_by="transfer-policy@3.4.6",
+    )
+    current = _registry_entry(
+        "transfer-policy@3.4.6",
+        approval_count=2,
+        status="registered",
+        latest_receipt_hash="sha256:actual-receipt",
+    )
+
+    projection = build_governance_reconciliation_projection(
+        entries=[previous, current],
+        expected_receipt_hashes={"transfer-policy@3.4.6": "sha256:expected-receipt"},
+    )
+
+    assert any(
+        item["reconciliation_issue_type"] == "lineage_gap" and item["missing_authority_version"] == "3.4.5"
+        for item in projection["issues"]
+    )
+    replay = next(item for item in projection["issues"] if item["reconciliation_issue_type"] == "replay_posture_inconsistent")
+    assert replay["expected_receipt_hash"] == "sha256:expected-receipt"
+    assert replay["actual_receipt_hash"] == "sha256:actual-receipt"
+    assert replay["severity"] == "replay_risk"
+
+
+def test_governance_reconciliation_projection_marks_invalidated_projection():
+    entry = _registry_entry(
+        "transfer-policy@3.4.6",
+        approval_count=1,
+        status="registered",
+        latest_receipt_hash="sha256:receipt",
+    )
+
+    projection = build_governance_reconciliation_projection(
+        entries=[entry],
+        invalidated_projections=["governance_continuity_projection.v1"],
+    )
+
+    assert projection["freshness_posture"] == "invalidated"
+    assert projection["reconciliation_posture"] == "invalidated"
+    assert any(
+        item["projection"] == "governance_continuity_projection.v1"
+        and item["reconciliation_issue_type"] == "projection_divergence"
+        for item in projection["issues"]
+    )
 
 
 def test_active_authority_projection_resolves_current_registered_version():

@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://waveframe.ai/schemas/governance_reconciliation_projection.v1.json",
+  "title": "governance_reconciliation_projection.v1",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "generated_at",
+    "source_event_ids",
+    "freshness_posture",
+    "reconciliation_posture",
+    "projection_freshness",
+    "issues"
+  ],
+  "properties": {
+    "schema_version": { "const": "governance_reconciliation_projection.v1" },
+    "generated_at": { "type": ["string", "null"] },
+    "source_event_ids": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "freshness_posture": { "enum": ["fresh", "stale", "invalidated"] },
+    "reconciliation_posture": { "enum": ["reconciled", "issues_detected", "invalidated"] },
+    "projection_freshness": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["projection", "generated_at", "source_event_ids", "freshness_posture"],
+        "properties": {
+          "projection": { "type": "string", "minLength": 1 },
+          "generated_at": { "type": ["string", "null"] },
+          "source_event_ids": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1 }
+          },
+          "freshness_posture": { "enum": ["fresh", "stale", "invalidated"] }
+        },
+        "additionalProperties": false
+      }
+    },
+    "issues": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["schema_version", "reconciliation_issue_type", "severity", "summary"],
+        "properties": {
+          "schema_version": { "const": "governance_reconciliation_issue.v1" },
+          "reconciliation_issue_type": { "type": "string", "minLength": 1 },
+          "severity": {
+            "enum": [
+              "info",
+              "warning",
+              "critical",
+              "continuity_risk",
+              "replay_risk",
+              "authority_conflict"
+            ]
+          },
+          "summary": { "type": "string", "minLength": 1 },
+          "authority_ref": { "type": "string" },
+          "projection": { "type": "string" },
+          "reason": { "type": "string" },
+          "expected_receipt_hash": { "type": ["string", "null"] },
+          "actual_receipt_hash": { "type": ["string", "null"] },
+          "missing_authority_version": { "type": "string" }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}
