@@ -760,6 +760,26 @@ h3 {
   line-height: 1.35;
 }
 
+.semantic-helper-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 10px;
+}
+
+.semantic-helper-chips span {
+  display: inline-flex;
+  min-height: 26px;
+  align-items: center;
+  padding: 3px 8px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  color: var(--green);
+  background: #fbfaf7;
+  font-size: 0.76rem;
+  font-weight: 850;
+}
+
 .form-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

@@ -287,28 +287,22 @@
 
             <details class="authoring-section governance-module">
               <summary class="authoring-copy">
-                <h3>Escalation Policies</h3>
-                <p>Define when normal execution needs governance intervention.</p>
-                <div class="guidance-cards" aria-label="Escalation threshold examples">
-                  <article>
-                    <strong>Financial transfer threshold</strong>
-                    <span>Example: require escalation when transfer value exceeds an operational limit.</span>
-                  </article>
-                  <article>
-                    <strong>Credential issuance threshold</strong>
-                    <span>Example: require escalation before privileged credential issuance.</span>
-                  </article>
-                  <article>
-                    <strong>Production deployment threshold</strong>
-                    <span>Example: require escalation for high-impact deployment changes.</span>
-                  </article>
-                </div>
+                <h3>Escalation Semantics</h3>
+                <p>Describe governance intervention conditions in operational language.</p>
               </summary>
               <div class="form-grid">
                 <label class="wide">
-                  <span>At what operational threshold should this action require escalation review?</span>
-                  <input name="escalation_threshold" type="number" min="1" value="250000" />
-                  <small>Thresholds turn operational risk into explicit review obligations.</small>
+                  <span>Describe escalation expectations and governance intervention conditions.</span>
+                  <textarea name="escalation_semantics" rows="6">Transfers above $250,000 require treasury governance review.</textarea>
+                  <small>Include review triggers, approval obligations, deployment controls, credential escalation requirements, or operational conditions requiring governance intervention.</small>
+                  <div class="semantic-helper-chips" aria-label="Escalation semantic helpers">
+                    <span>financial review</span>
+                    <span>deployment review</span>
+                    <span>privileged access</span>
+                    <span>multi-party approval</span>
+                    <span>continuity escalation</span>
+                    <span>replay-sensitive execution</span>
+                  </div>
                 </label>
               </div>
             </details>

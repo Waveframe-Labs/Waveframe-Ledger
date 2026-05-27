@@ -47,6 +47,7 @@ def test_semantic_extraction_extracts_candidate_authority_anchors():
     assert candidate["approver_role"] == "treasury-governance"
     assert candidate["approval_count"] == 1
     assert candidate["escalation_threshold"] == 250000
+    assert candidate["escalation_semantics"] == "Executions above $250,000 require treasury-governance review."
     assert candidate["validity_days"] == 30
     assert candidate["continuity_revalidation"] is True
     assert candidate["revocation_invalidates_resume"] is True

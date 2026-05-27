@@ -47,7 +47,7 @@ function readDraft() {
     governance_category: data.get("governance_category"),
     approver_role: data.get("approver_role"),
     approval_count: data.get("approval_count"),
-    escalation_threshold: data.get("escalation_threshold"),
+    escalation_semantics: data.get("escalation_semantics"),
     validity_days: data.get("validity_days"),
     mutation_targets: data.get("mutation_targets"),
     continuity_revalidation: data.get("continuity_revalidation") === "on",

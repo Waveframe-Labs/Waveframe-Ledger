@@ -70,6 +70,7 @@ def extract_governance_semantics(
         "approver_role": role,
         "approval_count": approval_count,
         "escalation_threshold": threshold,
+        "escalation_semantics": _extract_escalation_semantics(text, threshold, role),
         "validity_days": validity_days,
         "mutation_targets": _mutation_target(governed_action) if governed_action else "",
         "continuity_revalidation": continuity_revalidation,
@@ -201,6 +202,18 @@ def _extract_threshold(text: str) -> int | None:
 def _extract_validity_days(text: str) -> int | None:
     match = re.search(r"(?:valid|expires?|validity)\s+(?:for|after|within)?\s*(?P<days>\d+)\s+days?", text, re.IGNORECASE)
     return int(match.group("days")) if match else None
+
+
+def _extract_escalation_semantics(text: str, threshold: int | None, role: str) -> str:
+    if threshold and role:
+        return f"Executions above ${threshold:,} require {role} review."
+    if threshold:
+        return f"Executions above ${threshold:,} require escalation review."
+    sentences = [part.strip() for part in re.split(r"[.;]", text) if part.strip()]
+    for sentence in sentences:
+        if _contains_any(sentence.lower(), ["escalat", "review", "approval", "threshold", "above", "over", "large"]):
+            return sentence
+    return ""
 
 
 def _extract_domain(text: str) -> str:

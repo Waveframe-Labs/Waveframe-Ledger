@@ -121,6 +121,17 @@ def test_using_extracted_draft_requires_impact_review_before_export():
     assert "exportButton.disabled = true" in body
 
 
+def test_escalation_authoring_is_text_driven_not_single_threshold_field():
+    html = (ROOT / "ui" / "index.html").read_text(encoding="utf-8")
+    source = APP_JS.read_text(encoding="utf-8")
+
+    assert "Escalation Semantics" in html
+    assert 'name="escalation_semantics"' in html
+    assert 'name="escalation_threshold"' not in html
+    assert "Financial transfer threshold" not in html
+    assert "data.get(\"escalation_semantics\")" in source
+
+
 def _function_body(source: str, function_name: str) -> str:
     marker = f"function {function_name}"
     start = source.index(marker)

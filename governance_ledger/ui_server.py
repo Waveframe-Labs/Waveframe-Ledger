@@ -208,7 +208,10 @@ def build_authority_contract_from_draft(draft: dict[str, Any]) -> dict[str, Any]
     contract_id = _slug(draft.get("contract_id") or protected_system)
     contract_version = str(draft.get("contract_version") or "0.1.0")
     approval_count = _positive_int(draft.get("approval_count"), default=1)
-    threshold = _positive_number(draft.get("escalation_threshold"), default=250000)
+    threshold = _positive_number(
+        draft.get("escalation_threshold") or _threshold_from_text(str(draft.get("escalation_semantics") or "")),
+        default=250000,
+    )
     validity_days = _positive_int(draft.get("validity_days"), default=30)
     continuity_revalidation = bool(draft.get("continuity_revalidation", True))
     revocation_invalidates_resume = bool(draft.get("revocation_invalidates_resume", True))
@@ -566,6 +569,15 @@ def _slug(value: Any) -> str:
 
 def _mutation_target(action: str) -> str:
     return action.lower().replace(" ", "_")
+
+
+def _threshold_from_text(text: str) -> int | None:
+    import re
+
+    match = re.search(r"(?:above|over|exceed(?:s|ing)?|greater than)\s+\$?(?P<amount>\d[\d,]*)", text, re.IGNORECASE)
+    if not match:
+        match = re.search(r"\$?(?P<amount>\d[\d,]*)\s+(?:threshold|limit)", text, re.IGNORECASE)
+    return int(match.group("amount").replace(",", "")) if match else None
 
 
 def _artifact_hash(payload: Any) -> str:
