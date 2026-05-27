@@ -200,6 +200,7 @@ function renderWorkflowState() {
   syncPublicationActions();
   renderAuthorityContext();
   renderOperationsOverview();
+  renderPublicationProjection(authorityWorkspaceProjection());
 }
 
 function syncPublicationActions() {
