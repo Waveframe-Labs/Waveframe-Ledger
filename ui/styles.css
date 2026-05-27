@@ -614,6 +614,60 @@ h3 {
   overflow: hidden;
 }
 
+.policy-ingestion-panel {
+  display: grid;
+  gap: 14px;
+  margin-bottom: 16px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--brand);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+
+.policy-ingestion-copy {
+  display: grid;
+  gap: 6px;
+}
+
+.policy-ingestion-copy p {
+  max-width: 820px;
+  color: var(--muted);
+}
+
+.policy-text-input {
+  display: grid;
+  gap: 8px;
+}
+
+.policy-text-input textarea {
+  min-height: 150px;
+  resize: vertical;
+}
+
+.extraction-review {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.extraction-review article {
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #fbfaf7;
+}
+
+.extraction-review h4 {
+  margin-bottom: 10px;
+}
+
+.extraction-review > p {
+  grid-column: 1 / -1;
+}
+
 .authoring-section {
   display: grid;
   grid-template-columns: minmax(220px, 0.36fr) minmax(0, 1fr);
@@ -2005,6 +2059,7 @@ textarea {
   .coherence-metrics,
   .registry-ops-grid,
   .registry-controls,
+  .extraction-review,
   .authority-meta,
   .registry-detail-grid,
   .registry-scope-strip,

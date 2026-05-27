@@ -16,6 +16,7 @@ from governance_ledger.local_registry.projection import (
 )
 from governance_ledger.local_registry.projections.operational import build_authority_operational_summary
 from governance_ledger.semantics.diagnostics import build_governance_quality_diagnostics
+from governance_ledger.semantics.extraction import extract_governance_semantics
 from governance_ledger.semantics.packets import build_governance_review_packet
 from governance_ledger.semantics.preview import build_governance_impact_preview
 from governance_ledger.semantics.publication import build_authority_bundle, build_publication_receipt
@@ -45,6 +46,18 @@ class LedgerUIHandler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         parsed = urlparse(self.path)
+        if parsed.path == "/api/extract":
+            try:
+                payload = self._read_json_body()
+                source_text = payload.get("source_text")
+                if not isinstance(source_text, str) or not source_text.strip():
+                    raise ValueError("Policy text is required for semantic extraction.")
+                self._write_json(extract_governance_semantics(source_text))
+            except ValueError as exc:
+                self._write_json({"error": str(exc)}, status=400)
+            except Exception as exc:  # pragma: no cover - defensive HTTP boundary
+                self._write_json({"error": f"Unable to extract governance semantics: {exc}"}, status=500)
+            return
         if parsed.path == "/api/publication-receipt":
             try:
                 payload = self._read_json_body()

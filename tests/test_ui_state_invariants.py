@@ -92,6 +92,35 @@ def test_editing_draft_invalidates_review_export_receipt_and_registration_state(
         assert "authorityRegistered: false" in block
 
 
+def test_policy_extraction_does_not_advance_publication_workflow():
+    source = APP_JS.read_text(encoding="utf-8")
+    body = _function_body(source, "extractPolicySemantics")
+
+    assert 'fetch("/api/extract"' in body
+    assert "impactReviewed: false" in body
+    assert "bundleExported: false" in body
+    assert "receiptGenerated: false" in body
+    assert "authorityRegistered: false" in body
+    assert "exportButton.disabled = true" in body
+    assert "registerButton.disabled = true" in body
+    assert "pendingRegistration = null" in body
+    assert "generateArtifacts" not in body
+
+
+def test_using_extracted_draft_requires_impact_review_before_export():
+    source = APP_JS.read_text(encoding="utf-8")
+    body = _function_body(source, "useExtractedDraft")
+
+    assert "applyDraftToForm" in body
+    assert "markDraftInvalidated()" in body
+    assert "impactReviewed: false" in body
+    assert "bundleExported: false" in body
+    assert "receiptGenerated: false" in body
+    assert "authorityRegistered: false" in body
+    assert "Review Impact is required before export." in body
+    assert "exportButton.disabled = true" in body
+
+
 def _function_body(source: str, function_name: str) -> str:
     marker = f"function {function_name}"
     start = source.index(marker)

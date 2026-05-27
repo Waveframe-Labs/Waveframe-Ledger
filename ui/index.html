@@ -181,10 +181,44 @@
             </div>
           </div>
 
+          <section class="policy-ingestion-panel" aria-label="Policy ingestion">
+            <div class="policy-ingestion-copy">
+              <h3>Policy Text</h3>
+              <p>Paste governance language first. Ledger extracts candidate meaning for operator review; publication still requires explicit confirmation.</p>
+            </div>
+            <label class="policy-text-input">
+              <span>Paste governance policy text</span>
+              <textarea id="policy-source-text" rows="7">Corporate Treasury Transfer System transfers above $250,000 require approval by treasury governance. Approval is valid for 30 days. Resumed workflows must revalidate if authority posture changes, and revoked authorities invalidate resumed execution. Approval evidence and decision trace are required for replay.</textarea>
+            </label>
+            <div class="action-row">
+              <button id="extract-policy-button" class="secondary-action" type="button">Extract Governance Meaning</button>
+              <button id="use-extraction-button" class="primary-action" type="button" disabled>Use Extracted Draft</button>
+            </div>
+            <div id="extraction-review" class="extraction-review" aria-live="polite">
+              <article>
+                <h4>Extracted authority candidate</h4>
+                <dl id="extracted-authority" class="compact-dl"></dl>
+              </article>
+              <article>
+                <h4>Extracted obligations</h4>
+                <ul id="extracted-rules" class="operations-list"></ul>
+              </article>
+              <article>
+                <h4>Ambiguities</h4>
+                <ul id="extracted-ambiguities" class="operations-list"></ul>
+              </article>
+              <article>
+                <h4>Missing information</h4>
+                <ul id="extracted-missing" class="operations-list"></ul>
+              </article>
+              <p id="extraction-status" class="quiet">Extraction has not run yet. Operator confirmation is required before an authority draft changes.</p>
+            </div>
+          </section>
+
           <form id="authority-form" class="authority-form">
-            <details class="authoring-section governance-module" open>
+            <details class="authoring-section governance-module">
               <summary class="authoring-copy">
-                <h3>Governance Intent</h3>
+                <h3>Advanced Manual Authoring</h3>
                 <p>Define the operational system and action this authority controls.</p>
               </summary>
               <div class="form-grid">

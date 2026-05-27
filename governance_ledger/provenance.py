@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-import hashlib
 from datetime import datetime, timezone
 
-from governance_ledger.extract import _normalize_text
+from governance_ledger.semantics.extraction import build_governance_source
 
 DEFAULT_REVIEW_STATUS = "pending"
 
@@ -31,18 +30,13 @@ def build_review_provenance(
 
 
 def source_governance_identity(text: str, *, version: str = "1") -> dict[str, str]:
-    canonical_text = _normalize_text(text)
-    digest = hashlib.sha256(canonical_text.encode("utf-8")).hexdigest()
-    return {
-        "schema_version": "governance_source.v1",
-        "source_version": version,
-        "canonical_text": canonical_text,
-        "source_hash": f"sha256:{digest}",
-    }
+    source = build_governance_source(text)
+    source["source_version"] = version
+    return source
 
 
 def _stable_review_id(text: str) -> str:
-    digest = hashlib.sha256(_normalize_text(text).encode("utf-8")).hexdigest()
+    digest = build_governance_source(text)["source_hash"].removeprefix("sha256:")
     return f"review-{digest[:12]}"
 
 

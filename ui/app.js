@@ -4,9 +4,13 @@ const publicationReviewButton = document.querySelector("#publication-review-butt
 const exportButton = document.querySelector("#export-button");
 const registerButton = document.querySelector("#register-button");
 const newDraftButton = document.querySelector("#new-draft-button");
+const extractPolicyButton = document.querySelector("#extract-policy-button");
+const useExtractionButton = document.querySelector("#use-extraction-button");
+const policySourceText = document.querySelector("#policy-source-text");
 const draftSessionStatus = document.querySelector("#draft-session-status");
 let currentArtifacts = null;
 let pendingRegistration = null;
+let currentExtraction = null;
 let livePreviewTimer = null;
 let reviewBusy = false;
 let workflowTimestamps = {
@@ -131,6 +135,114 @@ function startNewDraft() {
   });
   draftSessionStatus.textContent = "new draft_authority_session.v1 started locally";
   saveDraftSession();
+}
+
+async function extractPolicySemantics() {
+  const sourceText = policySourceText?.value || "";
+  extractPolicyButton.disabled = true;
+  extractPolicyButton.textContent = "Extracting Meaning...";
+  try {
+    const response = await fetch("/api/extract", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ source_text: sourceText }),
+    });
+    const extraction = await response.json();
+    if (!response.ok) {
+      throw new Error(extraction.error || "Unable to extract governance meaning.");
+    }
+    currentExtraction = extraction;
+    renderSemanticExtraction(extraction);
+    useExtractionButton.disabled = false;
+    pendingRegistration = null;
+    exportButton.disabled = true;
+    registerButton.disabled = true;
+    workflowTimestamps.reviewed = null;
+    workflowTimestamps.exported = null;
+    workflowTimestamps.registered = null;
+    updateWorkflowState({
+      draftReady: workflowState.draftReady,
+      impactReviewed: false,
+      bundleExported: false,
+      receiptGenerated: false,
+      authorityRegistered: false,
+    });
+  } catch (error) {
+    renderDiagnostics([{ severity: "error", code: "policy_extraction_error", text: error.message }]);
+  } finally {
+    extractPolicyButton.disabled = false;
+    extractPolicyButton.textContent = "Extract Governance Meaning";
+  }
+}
+
+function renderSemanticExtraction(extraction) {
+  const candidate = extraction?.candidate_authority || {};
+  renderDefinitionValues("#extracted-authority", {
+    Resource: candidate.protected_system || "missing",
+    Action: candidate.governed_action || "missing",
+    "Approval role": candidate.approver_role || "missing",
+    "Approval count": candidate.approval_count ?? "missing",
+    "Escalation threshold": candidate.escalation_threshold ? `$${Number(candidate.escalation_threshold).toLocaleString()}` : "missing",
+    Continuity: candidate.continuity_revalidation || candidate.revocation_invalidates_resume ? "continuity semantics detected" : "missing",
+  });
+  renderExtractionList("#extracted-rules", extraction.candidate_rules, "No deterministic obligations extracted.");
+  renderExtractionList("#extracted-ambiguities", extraction.ambiguities, "No ambiguity detected by deterministic patterns.");
+  renderExtractionList("#extracted-missing", extraction.missing_information, "No missing anchor fields detected.");
+  $("#extraction-status").textContent = `${extraction.schema_version} requires operator confirmation. Source hash ${shortHash(extraction.source_hash)}.`;
+}
+
+function renderExtractionList(selector, items, emptyText) {
+  const node = $(selector);
+  if (!node) return;
+  node.innerHTML = "";
+  const list = items?.length ? items : [{ summary: emptyText }];
+  for (const item of list) {
+    const li = document.createElement("li");
+    const strong = document.createElement("strong");
+    strong.textContent = item.rule_type ? formatLabel(item.rule_type) : item.ambiguity_type ? formatLabel(item.ambiguity_type) : item.field ? formatLabel(item.field) : "Extraction status";
+    const span = document.createElement("span");
+    span.textContent = item.summary;
+    li.append(strong, span);
+    node.appendChild(li);
+  }
+}
+
+function useExtractedDraft() {
+  if (!currentExtraction?.candidate_authority) return;
+  applyDraftToForm(currentExtraction.candidate_authority);
+  currentArtifacts = null;
+  pendingRegistration = null;
+  saveDraftSession();
+  markDraftInvalidated();
+  workflowTimestamps.reviewed = null;
+  workflowTimestamps.exported = null;
+  workflowTimestamps.registered = null;
+  exportButton.disabled = true;
+  registerButton.disabled = true;
+  updateWorkflowState({
+    draftReady: true,
+    impactReviewed: false,
+    bundleExported: false,
+    receiptGenerated: false,
+    authorityRegistered: false,
+  });
+  $("#extraction-status").textContent = "Extracted candidate copied into the draft. Review Impact is required before export.";
+  renderOperatorGuidance(
+    "Review extracted meaning next.",
+    "Ledger populated the draft from policy text, but publication state has not advanced.",
+  );
+}
+
+function applyDraftToForm(candidate) {
+  for (const [key, value] of Object.entries(candidate || {})) {
+    const field = form.elements[key];
+    if (!field || value === null || value === undefined || value === "") continue;
+    if (field.type === "checkbox") {
+      field.checked = Boolean(value);
+    } else {
+      field.value = value;
+    }
+  }
 }
 
 async function generateArtifacts(options = {}) {
@@ -2447,6 +2559,8 @@ publicationReviewButton.addEventListener("click", () => generateArtifacts({ revi
 exportButton.addEventListener("click", exportBundle);
 registerButton.addEventListener("click", registerAuthorityLocally);
 newDraftButton.addEventListener("click", startNewDraft);
+extractPolicyButton.addEventListener("click", extractPolicySemantics);
+useExtractionButton.addEventListener("click", useExtractedDraft);
 form.addEventListener("input", () => {
   saveDraftSession();
   pendingRegistration = null;
