@@ -86,8 +86,10 @@ def _drift_summary(item: dict[str, Any]) -> str:
 
 
 def _event_severity(event_type: str | None) -> str:
+    if event_type == "revoked":
+        return "critical"
     if event_type in {"revoked", "superseded"}:
-        return "warning"
+        return "continuity_risk"
     return "info"
 
 

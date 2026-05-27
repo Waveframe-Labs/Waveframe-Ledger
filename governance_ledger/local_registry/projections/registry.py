@@ -12,6 +12,15 @@ DRIFT_FIELDS = {
     "approval_requirement": "approval_requirement_changed",
 }
 
+GOVERNANCE_DRIFT_SEVERITIES = {
+    "info",
+    "warning",
+    "critical",
+    "continuity_risk",
+    "replay_risk",
+    "authority_conflict",
+}
+
 
 def build_authority_drift_indicators(
     previous_entry: dict[str, Any] | None,
@@ -55,6 +64,10 @@ def _field_value(entry: dict[str, Any], field: str) -> Any:
 
 
 def _drift_severity(drift_type: str) -> str:
-    if drift_type in {"continuity_posture_changed", "approval_requirement_changed"}:
+    if drift_type == "continuity_posture_changed":
+        return "continuity_risk"
+    if drift_type == "lifecycle_posture_changed":
+        return "authority_conflict"
+    if drift_type in {"approval_requirement_changed", "escalation_threshold_changed"}:
         return "warning"
     return "info"

@@ -1,19 +1,20 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://waveframe.ai/schemas/governance_activity_projection.v1.json",
-  "title": "governance_activity_projection.v1",
+  "$id": "https://waveframe.ai/schemas/governance_timeline_projection.v1.json",
+  "title": "governance_timeline_projection.v1",
   "type": "object",
-  "required": ["schema_version", "activity"],
+  "required": ["schema_version", "events"],
   "properties": {
-    "schema_version": { "const": "governance_activity_projection.v1" },
-    "activity": {
+    "schema_version": { "const": "governance_timeline_projection.v1" },
+    "events": {
       "type": "array",
       "items": {
         "type": "object",
         "required": [
           "schema_version",
-          "activity_type",
+          "timeline_event_type",
           "authority_ref",
+          "authority_instance_ref",
           "authority_version",
           "timestamp",
           "severity",
@@ -22,9 +23,10 @@
           "caused_by_event_id"
         ],
         "properties": {
-          "schema_version": { "const": "governance_activity_event.v1" },
-          "activity_type": { "type": "string", "minLength": 1 },
+          "schema_version": { "const": "governance_timeline_event.v1" },
+          "timeline_event_type": { "type": "string", "minLength": 1 },
           "authority_ref": { "type": "string", "minLength": 1 },
+          "authority_instance_ref": { "type": "string", "minLength": 1 },
           "authority_version": { "type": "string", "minLength": 1 },
           "timestamp": { "type": ["string", "null"] },
           "severity": {
@@ -40,8 +42,12 @@
           "summary": { "type": "string", "minLength": 1 },
           "continuity_impact": { "type": "string", "minLength": 1 },
           "caused_by_event_id": { "type": ["string", "null"] },
-          "event_id": { "type": ["string", "null"] },
-          "drift_type": { "type": "string" }
+          "event_id": { "type": "string" },
+          "superseded_by": { "type": "string" },
+          "activation_state": { "enum": ["activated", "deactivated"] },
+          "drift_type": { "type": "string" },
+          "drift": { "type": "object" },
+          "diagnostic_rollup": { "type": "object" }
         },
         "additionalProperties": false
       }

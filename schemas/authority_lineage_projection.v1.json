@@ -75,7 +75,16 @@
           "authority_ref": { "type": "string", "minLength": 1 },
           "previous_authority_ref": { "type": "string", "minLength": 1 },
           "drift_type": { "type": "string", "minLength": 1 },
-          "severity": { "enum": ["info", "warning", "error"] },
+          "severity": {
+            "enum": [
+              "info",
+              "warning",
+              "critical",
+              "continuity_risk",
+              "replay_risk",
+              "authority_conflict"
+            ]
+          },
           "field": { "type": "string", "minLength": 1 },
           "from": {},
           "to": {}

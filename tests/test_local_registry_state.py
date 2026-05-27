@@ -11,6 +11,7 @@ from governance_ledger.local_registry import (
     build_authority_workspace_projection,
     build_diagnostic_rollup,
     build_governance_activity_projection,
+    build_governance_timeline_projection,
     build_registry_health_projection,
 )
 from governance_ledger.local_registry.models import append_lifecycle_event
@@ -238,8 +239,13 @@ def test_drift_detection_compares_previous_registry_state():
         (item["drift_type"], item["severity"], item["from"], item["to"])
         for item in drift
     } == {
-        ("continuity_posture_changed", "warning", "resume revalidation", "resume revalidation and revocation invalidation"),
-        ("escalation_threshold_changed", "info", "amount > 250,000", "amount > 100,000"),
+        (
+            "continuity_posture_changed",
+            "continuity_risk",
+            "resume revalidation",
+            "resume revalidation and revocation invalidation",
+        ),
+        ("escalation_threshold_changed", "warning", "amount > 250,000", "amount > 100,000"),
         ("approval_requirement_changed", "warning", 1, 2),
     }
 
@@ -332,8 +338,41 @@ def test_governance_activity_projection_emits_lifecycle_and_drift_activity():
     assert any(item["activity_type"] == "authority_registered" for item in projection["activity"])
     assert any(item["activity_type"] == "continuity_posture_changed" for item in projection["activity"])
     continuity = next(item for item in projection["activity"] if item["activity_type"] == "continuity_posture_changed")
-    assert continuity["severity"] == "warning"
+    assert continuity["severity"] == "continuity_risk"
     assert continuity["continuity_impact"] == "review_required"
+
+
+def test_governance_timeline_projection_unifies_events_drift_and_replay_posture():
+    previous = _registry_entry(
+        "transfer-policy@3.4.5",
+        approval_count=1,
+        status="superseded",
+        continuity_posture="resume revalidation",
+        superseded_by="transfer-policy@3.4.6",
+    )
+    current = _registry_entry(
+        "transfer-policy@3.4.6",
+        approval_count=2,
+        status="registered",
+        continuity_posture="resume revalidation and revocation invalidation",
+        latest_receipt_hash="sha256:receipt",
+    )
+
+    projection = build_governance_timeline_projection(entries=[previous, current])
+
+    assert projection["schema_version"] == "governance_timeline_projection.v1"
+    assert any(item["timeline_event_type"] == "authority_registered" for item in projection["events"])
+    superseded = next(item for item in projection["events"] if item["timeline_event_type"] == "authority_superseded")
+    assert superseded["superseded_by"] == "transfer-policy@3.4.6"
+    assert superseded["continuity_impact"] == "revalidation_required"
+    continuity = next(item for item in projection["events"] if item["timeline_event_type"] == "continuity_posture_changed")
+    assert continuity["severity"] == "continuity_risk"
+    assert continuity["drift_type"] == "continuity_posture_changed"
+    assert any(
+        item["timeline_event_type"] == "replay_posture_incomplete" and item["severity"] == "replay_risk"
+        for item in projection["events"]
+    )
+    assert any(item["timeline_event_type"] == "replay_posture_aligned" for item in projection["events"])
 
 
 def test_registry_health_projection_reports_replay_and_continuity_posture():

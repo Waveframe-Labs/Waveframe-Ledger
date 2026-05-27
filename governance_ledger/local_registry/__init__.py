@@ -13,6 +13,7 @@ from governance_ledger.local_registry.projections import (
     build_authority_operational_summary,
     build_authority_workspace_projection,
     build_governance_activity_projection,
+    build_governance_timeline_projection,
     build_registry_health_projection,
 )
 
@@ -27,5 +28,6 @@ __all__ = [
     "build_authority_workspace_projection",
     "build_diagnostic_rollup",
     "build_governance_activity_projection",
+    "build_governance_timeline_projection",
     "build_registry_health_projection",
 ]
