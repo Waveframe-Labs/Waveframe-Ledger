@@ -11,6 +11,9 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
+from governance_ledger.local_registry.projection import (
+    build_authority_workspace_projection as build_local_authority_workspace_projection,
+)
 from governance_ledger.semantics.diagnostics import build_governance_quality_diagnostics
 from governance_ledger.semantics.packets import build_governance_review_packet
 from governance_ledger.semantics.preview import build_governance_impact_preview
@@ -355,27 +358,17 @@ def build_authority_workspace_projection(
     release_narrative: dict[str, Any],
 ) -> dict[str, Any]:
     """Build the canonical UI projection for local authority workspace state."""
-    warning_count = sum(1 for item in diagnostics if item.get("severity") == "warning")
-    return {
-        "schema_version": "authority_workspace_projection.v1",
-        "authority_ref": bundle["authority_ref"],
-        "lifecycle_posture": "draft",
-        "review_state": "impact_pending",
-        "export_state": "not_exported",
-        "registration_state": "not_registered",
-        "operational_change": release_narrative["operational_change"],
-        "continuity_posture": release_narrative["continuity_summary"],
-        "lifecycle_effect": release_narrative["lifecycle_summary"],
-        "publication_meaning": release_narrative["headline"],
-        "publication_summary": release_narrative["publication_summary"],
-        "registry_posture": "Authority is not registered locally.",
-        "replay_posture": "Export will create publication receipt evidence that future replay can bind against.",
-        "diagnostics_summary": {
-            "findings": len(diagnostics),
-            "warnings": warning_count,
-            "info": len(diagnostics) - warning_count,
-        },
-        "timeline": [
+    projection = build_local_authority_workspace_projection(
+        authority=authority,
+        preview=preview,
+        bundle=bundle,
+        diagnostics=diagnostics,
+        publication_meaning=release_narrative["headline"],
+        publication_summary=release_narrative["publication_summary"],
+        operational_change=release_narrative["operational_change"],
+        continuity_posture=release_narrative["continuity_summary"],
+        lifecycle_effect=release_narrative["lifecycle_summary"],
+        timeline=[
             {
                 "event": "drafted",
                 "detail": f"{bundle['authority_ref']} authority draft compiled from local authoring fields.",
@@ -385,12 +378,10 @@ def build_authority_workspace_projection(
                 "detail": "Ledger generated deterministic preview, review packet, bundle, diagnostics, and workspace projection.",
             },
         ],
-        "semantic_sources": {
-            "preview": preview["schema_version"],
-            "bundle": bundle["schema_version"],
-            "release_narrative": release_narrative["schema_version"],
-        },
-    }
+    )
+    projection["diagnostics_summary"] = _legacy_diagnostics_summary(projection["diagnostic_rollup"])
+    projection["semantic_sources"]["release_narrative"] = release_narrative["schema_version"]
+    return projection
 
 
 def build_authority_release_narrative(
@@ -417,6 +408,14 @@ def build_authority_release_narrative(
         ),
         "continuity_summary": continuity or "Continuity posture should be reviewed before publication.",
         "lifecycle_summary": lifecycle or "Lifecycle implications should be reviewed before publication.",
+    }
+
+
+def _legacy_diagnostics_summary(rollup: dict[str, Any]) -> dict[str, int]:
+    return {
+        "findings": rollup["finding_count"],
+        "warnings": rollup["warning_count"],
+        "info": rollup["info_count"],
     }
 
 
