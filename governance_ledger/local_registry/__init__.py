@@ -6,7 +6,11 @@ from governance_ledger.local_registry.models import (
     build_authority_registry_entry,
     build_diagnostic_rollup,
 )
-from governance_ledger.local_registry.replay import replay_governance_chronology
+from governance_ledger.local_registry.replay import (
+    diff_governance_chronology_replay,
+    diff_governance_replay_states,
+    replay_governance_chronology,
+)
 from governance_ledger.local_registry.projections import (
     build_active_authority_projection,
     build_authority_drift_indicators,
@@ -37,5 +41,7 @@ __all__ = [
     "build_governance_timeline_projection",
     "build_projection_invalidation_plan",
     "build_registry_health_projection",
+    "diff_governance_chronology_replay",
+    "diff_governance_replay_states",
     "replay_governance_chronology",
 ]

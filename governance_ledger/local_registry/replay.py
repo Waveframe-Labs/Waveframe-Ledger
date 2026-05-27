@@ -6,6 +6,7 @@ from copy import deepcopy
 from typing import Any
 
 GOVERNANCE_REPLAY_STATE_V1 = "governance_replay_state.v1"
+GOVERNANCE_REPLAY_DIFF_V1 = "governance_replay_diff.v1"
 
 
 def replay_governance_chronology(
@@ -52,6 +53,61 @@ def replay_governance_chronology(
     return state
 
 
+def diff_governance_replay_states(
+    from_state: dict[str, Any],
+    to_state: dict[str, Any],
+) -> dict[str, Any]:
+    """Compare two governance_replay_state.v1 objects."""
+    return {
+        "schema_version": GOVERNANCE_REPLAY_DIFF_V1,
+        "from_cutoff": from_state.get("replay_cutoff"),
+        "to_cutoff": to_state.get("replay_cutoff"),
+        "active_authority_changes": _diff_lists(
+            from_state.get("active_authorities") or [],
+            to_state.get("active_authorities") or [],
+            _authority_ref,
+        ),
+        "continuity_changes": _diff_lists(
+            from_state.get("continuity_state") or [],
+            to_state.get("continuity_state") or [],
+            _authority_ref,
+        ),
+        "replay_posture_changes": _diff_lists(
+            from_state.get("replay_posture") or [],
+            to_state.get("replay_posture") or [],
+            _authority_ref,
+        ),
+        "projection_freshness_changes": _diff_lists(
+            from_state.get("projection_freshness") or [],
+            to_state.get("projection_freshness") or [],
+            lambda item: f"{item['authority_ref']}::{item['projection_name']}",
+        ),
+        "governance_health_changes": _diff_single(
+            "governance_health",
+            from_state.get("governance_health") or {},
+            to_state.get("governance_health") or {},
+        ),
+        "operational_summary_changes": _diff_lists(
+            from_state.get("operational_summaries") or [],
+            to_state.get("operational_summaries") or [],
+            _authority_ref,
+        ),
+    }
+
+
+def diff_governance_chronology_replay(
+    events: list[dict[str, Any]],
+    *,
+    from_cutoff: str | None,
+    to_cutoff: str | None,
+) -> dict[str, Any]:
+    """Replay chronology at two cutoffs and compare the resulting governance states."""
+    return diff_governance_replay_states(
+        replay_governance_chronology(events, replay_cutoff=from_cutoff),
+        replay_governance_chronology(events, replay_cutoff=to_cutoff),
+    )
+
+
 def _empty_state(replay_cutoff: str | None, included: list[dict[str, Any]]) -> dict[str, Any]:
     return {
         "schema_version": GOVERNANCE_REPLAY_STATE_V1,
@@ -66,6 +122,40 @@ def _empty_state(replay_cutoff: str | None, included: list[dict[str, Any]]) -> d
         "governance_health": {"posture": "healthy", "signals": []},
         "operational_summaries": [],
     }
+
+
+def _diff_lists(
+    previous: list[dict[str, Any]],
+    current: list[dict[str, Any]],
+    key_fn: Any,
+) -> list[dict[str, Any]]:
+    previous_by_key = {key_fn(item): item for item in previous}
+    current_by_key = {key_fn(item): item for item in current}
+    changes = []
+    for key in sorted(set(previous_by_key) | set(current_by_key)):
+        before = previous_by_key.get(key)
+        after = current_by_key.get(key)
+        if before == after:
+            continue
+        changes.append(
+            {
+                "change_type": "added" if before is None else "removed" if after is None else "changed",
+                "ref": key,
+                "from": before,
+                "to": after,
+            }
+        )
+    return changes
+
+
+def _diff_single(ref: str, previous: dict[str, Any], current: dict[str, Any]) -> list[dict[str, Any]]:
+    if previous == current:
+        return []
+    return [{"change_type": "changed", "ref": ref, "from": previous, "to": current}]
+
+
+def _authority_ref(item: dict[str, Any]) -> str:
+    return item["authority_ref"]
 
 
 def _normalize_event(event: dict[str, Any]) -> dict[str, Any]:
