@@ -11,7 +11,9 @@ from governance_ledger.local_registry import (
     build_authority_workspace_projection,
     build_diagnostic_rollup,
     build_governance_activity_projection,
+    build_governance_continuity_projection,
     build_governance_timeline_projection,
+    build_projection_invalidation_plan,
     build_registry_health_projection,
 )
 from governance_ledger.local_registry.models import append_lifecycle_event
@@ -400,6 +402,70 @@ def test_registry_health_projection_reports_replay_and_continuity_posture():
         "replay_posture_incomplete",
         "healthy",
     }
+
+
+def test_governance_continuity_projection_detects_fragmentation_and_replay_degradation():
+    first_active = _registry_entry(
+        "transfer-policy@3.4.5",
+        approval_count=1,
+        status="registered",
+        latest_receipt_hash="sha256:receipt-a",
+    )
+    second_active = _registry_entry(
+        "transfer-policy@3.4.6",
+        approval_count=1,
+        status="registered",
+    )
+
+    projection = build_governance_continuity_projection(entries=[first_active, second_active])
+    family = projection["authority_families"][0]
+
+    assert projection["schema_version"] == "governance_continuity_projection.v1"
+    assert family["continuity_posture"] == "fragmented"
+    assert family["fragmentation"]["fragmentation_type"] == "multiple_active_authorities"
+    assert family["replay_compatibility"] == "degraded"
+    assert any(
+        item["continuity_observation_type"] == "replay_continuity_degraded" and item["severity"] == "replay_risk"
+        for item in family["continuity_observations"]
+    )
+
+
+def test_governance_continuity_projection_emits_churn_and_matrix():
+    entries = [
+        _registry_entry(
+            f"transfer-policy@3.4.{index}",
+            approval_count=index,
+            status="superseded" if index < 5 else "registered",
+            latest_receipt_hash=f"sha256:receipt-{index}",
+            superseded_by=f"transfer-policy@3.4.{index + 1}" if index < 5 else None,
+        )
+        for index in range(1, 6)
+    ]
+
+    projection = build_governance_continuity_projection(entries=entries)
+    family = projection["authority_families"][0]
+
+    assert family["active_authority"] == "transfer-policy@3.4.5"
+    assert family["replay_compatibility"] == "complete"
+    assert all(item["continuity_preserved"] for item in family["replay_continuity_matrix"])
+    assert any(
+        item["continuity_observation_type"] == "governance_churn"
+        and item["summary"] == "Approval requirements changed 4 times across this authority lineage."
+        for item in family["continuity_observations"]
+    )
+
+
+def test_projection_invalidation_plan_operationalizes_documented_rules():
+    plan = build_projection_invalidation_plan(
+        change_type="draft_updated",
+        authority_ref="transfer-policy@3.5.6",
+    )
+
+    assert plan["schema_version"] == "projection_invalidation_plan.v1"
+    assert "authority_workspace_projection.v1" in plan["invalidated_projections"]
+    assert "governance_continuity_projection.v1" in plan["invalidated_projections"]
+    assert "publication_receipt.v1" in plan["historically_persisted_artifacts"]
+    assert plan["recompute"] is True
 
 
 def test_active_authority_projection_resolves_current_registered_version():

@@ -55,8 +55,10 @@ The following projections are canonical UI-facing governance views:
 - `authority_lineage_projection.v1`: version chain, supersession graph, continuity state, replay posture, and lineage drift.
 - `governance_activity_projection.v1`: compact operational event feed for registry surfaces.
 - `governance_timeline_projection.v1`: unified governance chronology across lifecycle, drift, replay, diagnostics, activation, deactivation, and supersession.
+- `governance_continuity_projection.v1`: continuity posture across active authority, replay compatibility, lineage fragmentation, governance churn, and deterministic continuity observations.
 - `registry_health_projection.v1`: registry-level posture over replay readiness, continuity drift, and authority health.
 - `active_authority_projection.v1`: current active authority semantics per authority family.
+- `projection_invalidation_plan.v1`: deterministic recompute plan for projections affected by a registry or draft state change.
 
 ## Append-Only Facts
 

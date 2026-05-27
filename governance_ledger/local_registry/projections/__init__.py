@@ -2,8 +2,10 @@
 
 from governance_ledger.local_registry.projections.active import build_active_authority_projection
 from governance_ledger.local_registry.projections.activity import build_governance_activity_projection
+from governance_ledger.local_registry.projections.continuity import build_governance_continuity_projection
 from governance_ledger.local_registry.projections.diagnostics import build_diagnostic_rollup_projection
 from governance_ledger.local_registry.projections.health import build_registry_health_projection
+from governance_ledger.local_registry.projections.invalidation import build_projection_invalidation_plan
 from governance_ledger.local_registry.projections.lineage import build_authority_lineage_projection
 from governance_ledger.local_registry.projections.operational import build_authority_operational_summary
 from governance_ledger.local_registry.projections.registry import build_authority_drift_indicators
@@ -18,7 +20,9 @@ __all__ = [
     "build_authority_workspace_projection",
     "build_diagnostic_rollup_projection",
     "build_governance_activity_projection",
+    "build_governance_continuity_projection",
     "build_governance_timeline_projection",
+    "build_projection_invalidation_plan",
     "build_registry_health_projection",
     "build_timeline_projection",
 ]
