@@ -1261,12 +1261,36 @@ textarea {
 
 .authority-card {
   display: grid;
-  gap: 16px;
+  gap: 14px;
   padding: 18px;
   border: 1px solid var(--line);
+  border-left: 4px solid transparent;
   border-radius: 8px;
   background: var(--panel);
   box-shadow: var(--shadow);
+}
+
+.authority-card.active-authority {
+  border-left-color: var(--green);
+  background: linear-gradient(90deg, #f4faf6 0, var(--panel) 42%);
+}
+
+.authority-card.is-superseded,
+.authority-card.is-revoked {
+  background: #fbfaf7;
+}
+
+.authority-card.is-superseded h3,
+.authority-card.is-revoked h3 {
+  color: #48514b;
+}
+
+.authority-card.has-continuity-risk {
+  border-left-color: var(--brand);
+}
+
+.authority-card.has-replay-risk {
+  border-left-color: #d28a2e;
 }
 
 .authority-card-header {
@@ -1344,9 +1368,14 @@ textarea {
   background: #fff1ef;
 }
 
+.status-badge.registered {
+  color: var(--green);
+  background: #eef7f0;
+}
+
 .authority-meta {
   display: grid;
-  grid-template-columns: minmax(120px, 0.24fr) minmax(0, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 7px 12px;
   margin: 0;
 }
@@ -1360,24 +1389,53 @@ textarea {
 .authority-meta dd {
   margin: 0;
   overflow-wrap: anywhere;
+  font-weight: 760;
 }
 
 .lifecycle-timeline {
   display: grid;
-  gap: 8px;
+  gap: 0;
   margin: 0;
-  padding: 0;
+  padding: 4px 0 0 14px;
   list-style: none;
+  border-left: 1px solid var(--line);
 }
 
 .lifecycle-timeline li {
+  position: relative;
   display: grid;
-  grid-template-columns: 120px minmax(0, 1fr);
+  grid-template-columns: minmax(110px, 0.22fr) minmax(180px, 0.32fr) minmax(0, 1fr);
   gap: 10px;
-  padding: 9px 10px;
-  border: 1px solid var(--line);
-  border-radius: 7px;
-  background: #fbfaf7;
+  min-height: 38px;
+  padding: 7px 10px 8px 16px;
+  border-bottom: 1px solid #ece6de;
+  background: transparent;
+}
+
+.lifecycle-timeline li::before,
+.registry-detail-timeline li::before {
+  position: absolute;
+  content: "";
+  width: 9px;
+  height: 9px;
+  border: 2px solid var(--green);
+  border-radius: 999px;
+  background: var(--panel);
+}
+
+.lifecycle-timeline li::before {
+  left: -20px;
+  top: 14px;
+}
+
+.lifecycle-timeline li.critical::before,
+.registry-detail-timeline li.critical::before {
+  border-color: var(--red);
+}
+
+.lifecycle-timeline li.continuity_risk::before,
+.registry-detail-timeline li.continuity_risk::before {
+  border-color: var(--brand);
 }
 
 .lifecycle-timeline strong {
@@ -1385,6 +1443,7 @@ textarea {
   color: var(--green);
 }
 
+.lifecycle-timeline time,
 .lifecycle-timeline span {
   overflow-wrap: anywhere;
   color: var(--muted);
@@ -1443,6 +1502,31 @@ textarea {
   gap: 10px;
 }
 
+.registry-detail-blocks {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.registry-detail-block {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.registry-detail-block h3 {
+  margin-bottom: 12px;
+  color: var(--ink);
+}
+
+.registry-detail-block:nth-child(6),
+.registry-detail-block:nth-child(7),
+.registry-detail-block:nth-child(8) {
+  grid-column: 1 / -1;
+}
+
 .projection-freshness-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -1451,7 +1535,7 @@ textarea {
 
 .projection-freshness-card {
   min-width: 0;
-  padding: 12px;
+  padding: 10px 12px;
   border: 1px solid var(--line);
   border-radius: 7px;
   background: #fbfaf7;
@@ -1478,7 +1562,7 @@ textarea {
 
 .freshness-timeline {
   display: grid;
-  gap: 8px;
+  gap: 6px;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -1486,12 +1570,13 @@ textarea {
 
 .freshness-timeline li {
   display: grid;
-  grid-template-columns: 180px minmax(0, 1fr);
+  grid-template-columns: minmax(160px, 0.32fr) minmax(0, 1fr);
   gap: 10px;
-  padding: 10px 12px;
+  padding: 8px 0;
   border: 1px solid var(--line);
+  border-width: 0 0 1px;
   border-radius: 7px;
-  background: #fbfaf7;
+  background: transparent;
 }
 
 .freshness-timeline strong {
@@ -1524,22 +1609,34 @@ textarea {
   overflow-wrap: anywhere;
 }
 
+.registry-detail-metric small {
+  display: block;
+  margin-top: 5px;
+  color: var(--muted);
+}
+
 .registry-detail-timeline {
   display: grid;
-  gap: 10px;
+  gap: 0;
   margin: 0;
-  padding: 0;
+  padding: 0 0 0 16px;
   list-style: none;
+  border-left: 1px solid var(--line);
 }
 
 .registry-detail-timeline li {
+  position: relative;
   display: grid;
   grid-template-columns: 150px minmax(0, 1fr) minmax(180px, 0.35fr);
   gap: 12px;
-  padding: 12px;
-  border: 1px solid var(--line);
-  border-radius: 7px;
-  background: #fbfaf7;
+  padding: 10px 0 10px 16px;
+  border-bottom: 1px solid #ece6de;
+  background: transparent;
+}
+
+.registry-detail-timeline li::before {
+  left: -21px;
+  top: 15px;
 }
 
 .registry-detail-timeline strong {
@@ -1562,21 +1659,33 @@ textarea {
 }
 
 .relationship-graph {
-  display: grid;
-  gap: 10px;
+  display: flex;
+  gap: 8px;
   margin: 0;
   padding: 0;
   list-style: none;
+  flex-wrap: wrap;
 }
 
 .relationship-graph li {
-  display: grid;
-  grid-template-columns: minmax(180px, 0.35fr) minmax(0, 1fr);
-  gap: 12px;
-  padding: 12px;
+  position: relative;
+  display: inline-grid;
+  gap: 4px;
+  min-width: 130px;
+  padding: 10px 12px;
   border: 1px solid var(--line);
   border-radius: 7px;
   background: #fbfaf7;
+}
+
+.relationship-graph li:not(:last-child)::after {
+  content: "->";
+  position: absolute;
+  right: -14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--muted);
+  font-weight: 850;
 }
 
 .relationship-graph strong {
@@ -1587,6 +1696,26 @@ textarea {
 .relationship-graph span {
   color: var(--muted);
   overflow-wrap: anywhere;
+}
+
+.technical-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 12px 0;
+}
+
+.technical-details {
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfaf7;
+}
+
+.technical-details summary {
+  cursor: pointer;
+  color: var(--green);
+  font-weight: 850;
 }
 
 .bundle-row,
@@ -1720,11 +1849,13 @@ textarea {
   .coherence-metrics,
   .registry-ops-grid,
   .registry-controls,
+  .authority-meta,
   .registry-detail-grid,
+  .registry-detail-blocks,
   .projection-freshness-grid,
   .freshness-timeline li,
   .registry-detail-timeline li,
-  .relationship-graph li,
+  .technical-summary,
   .diagnostics-summary,
   .form-grid,
   .outcome-grid,
@@ -1746,6 +1877,18 @@ textarea {
 
   .registry-detail-summary {
     flex-direction: column;
+  }
+
+  .lifecycle-timeline li {
+    grid-template-columns: 1fr;
+  }
+
+  .relationship-graph {
+    display: grid;
+  }
+
+  .relationship-graph li:not(:last-child)::after {
+    content: none;
   }
 
   .compact-hero {
