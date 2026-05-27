@@ -269,19 +269,22 @@ function scheduleLivePreview() {
 
 function renderArtifacts(payload, options = {}) {
   const reviewed = options.reviewed === true;
+  const preserveWorkflow = options.preserveWorkflow === true;
   const preview = payload.governance_impact_preview;
   const bundle = payload.authority_bundle;
   const workspaceProjection = authorityWorkspaceProjection(payload);
   $("#status-authority-ref").textContent = bundle.authority_ref;
   $("#status-semantic").textContent = reviewed ? "ready" : "changes need review";
   $("#status-bundle").textContent = reviewed ? "ready to export" : "review impact before export";
-  updateWorkflowState({
-    draftReady: true,
-    impactReviewed: reviewed,
-    bundleExported: false,
-    receiptGenerated: false,
-    authorityRegistered: false,
-  });
+  if (!preserveWorkflow) {
+    updateWorkflowState({
+      draftReady: true,
+      impactReviewed: reviewed,
+      bundleExported: false,
+      receiptGenerated: false,
+      authorityRegistered: false,
+    });
+  }
 
   $("#preview-summary").textContent = preview.governance_summary;
   renderList("#preview-enforcement", preview.enforcement_behavior);
@@ -1480,8 +1483,11 @@ function handleRegistryAction(event) {
     renderBundleDetail(entry, "bundle");
   } else if (action === "open-preview") {
     currentArtifacts = entry.artifacts;
-    renderArtifacts(currentArtifacts, { reviewed: true });
-    exportButton.disabled = false;
+    renderArtifacts(currentArtifacts, {
+      reviewed: ["reviewed", "exported", "registered", "superseded", "revoked"].includes(entry.status),
+      preserveWorkflow: true,
+    });
+    syncPublicationActions();
     showPage("preview");
   } else if (action === "open-diff") {
     renderBundleDetail(entry, "diff");
