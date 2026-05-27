@@ -521,9 +521,39 @@
             <div>
               <div class="section-kicker">Local registry</div>
               <h2>Authority Registry</h2>
-              <p class="section-intent">Inspect local authority lifecycle state for exported authority_bundle.v1 artifacts. The registry records publication posture; it does not publish to Cloud.</p>
+              <p class="section-intent">Operate the local authority registry: lifecycle posture, replay readiness, drift indicators, continuity posture, and recent governance events.</p>
             </div>
           </div>
+          <section class="registry-operations" aria-labelledby="registry-operations-title">
+            <div class="overview-section-heading">
+              <div>
+                <div class="section-kicker">Registry overview</div>
+                <h3 id="registry-operations-title">Governance Operations Center</h3>
+              </div>
+            </div>
+            <div class="registry-ops-grid">
+              <article class="registry-ops-panel">
+                <h3>Authority inventory</h3>
+                <dl id="registry-inventory" class="compact-dl"></dl>
+              </article>
+              <article class="registry-ops-panel">
+                <h3>Lifecycle posture</h3>
+                <ul id="registry-lifecycle-posture" class="operations-list"></ul>
+              </article>
+              <article class="registry-ops-panel">
+                <h3>Replay readiness</h3>
+                <ul id="registry-replay-readiness" class="operations-list"></ul>
+              </article>
+              <article class="registry-ops-panel">
+                <h3>Drift indicators</h3>
+                <ul id="registry-drift-indicators" class="operations-list"></ul>
+              </article>
+            </div>
+            <article class="registry-ops-panel registry-events-panel">
+              <h3>Recent governance events</h3>
+              <ol id="registry-recent-events" class="activity-feed"></ol>
+            </article>
+          </section>
           <div class="registry-controls" aria-label="Authority registry filters">
             <label>
               <span>Search authorities</span>
@@ -549,6 +579,12 @@
             </label>
           </div>
           <div id="bundle-registry-summary" class="registry-summary" aria-label="Authority registry summary"></div>
+          <div class="overview-section-heading registry-inventory-heading">
+            <div>
+              <div class="section-kicker">Authority inventory</div>
+              <h3>Registered Authorities</h3>
+            </div>
+          </div>
           <div id="bundle-registry" class="bundle-registry">
             <div class="empty-state">
               <strong>No registered authorities yet.</strong>

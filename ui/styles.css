@@ -1102,6 +1102,39 @@ textarea {
   gap: 12px;
 }
 
+.registry-operations {
+  display: grid;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.registry-ops-grid {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.8fr) repeat(3, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.registry-ops-panel {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+
+.registry-ops-panel h3 {
+  margin-bottom: 10px;
+}
+
+.registry-events-panel {
+  min-height: 120px;
+}
+
+.registry-inventory-heading {
+  margin: 12px 0 10px;
+}
+
 .registry-controls {
   grid-template-columns: minmax(240px, 1fr) minmax(180px, 0.34fr) minmax(220px, 0.44fr);
   margin-bottom: 14px;
@@ -1274,6 +1307,88 @@ textarea {
   margin-top: 16px;
 }
 
+.registry-detail-shell {
+  display: grid;
+  gap: 14px;
+}
+
+.registry-detail-summary {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.registry-detail-summary p {
+  margin: 5px 0 0;
+  color: var(--muted);
+}
+
+.registry-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.registry-detail-metric {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #fbfaf7;
+}
+
+.registry-detail-metric span {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.registry-detail-metric strong {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.registry-detail-timeline {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.registry-detail-timeline li {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr) minmax(180px, 0.35fr);
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #fbfaf7;
+}
+
+.registry-detail-timeline strong {
+  color: var(--green);
+}
+
+.registry-detail-timeline span,
+.registry-detail-timeline code {
+  overflow-wrap: anywhere;
+}
+
+.registry-detail-timeline span {
+  color: var(--muted);
+}
+
+.registry-detail-timeline code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.76rem;
+  color: #36433b;
+}
+
 .bundle-row,
 .diagnostic-row {
   padding: 16px;
@@ -1401,7 +1516,10 @@ textarea {
   .boundary-grid,
   .workflow-map,
   .registry-summary,
+  .registry-ops-grid,
   .registry-controls,
+  .registry-detail-grid,
+  .registry-detail-timeline li,
   .diagnostics-summary,
   .form-grid,
   .outcome-grid,
@@ -1419,6 +1537,10 @@ textarea {
   .compact-dl,
   .lineage-chain li {
     grid-template-columns: 1fr;
+  }
+
+  .registry-detail-summary {
+    flex-direction: column;
   }
 
   .compact-hero {

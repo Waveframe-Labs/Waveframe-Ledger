@@ -720,6 +720,7 @@ function renderBundleRegistry() {
   const filtered = filterRegistryEntries(registry.authorities);
   summary.innerHTML = "";
   list.innerHTML = "";
+  renderRegistryOperationsOverview(registry);
 
   const registeredCount = registry.authorities.filter((entry) => entry.status === "registered").length;
   const revokedCount = registry.authorities.filter((entry) => entry.status === "revoked").length;
@@ -760,6 +761,76 @@ function renderBundleRegistry() {
   for (const entry of filtered) {
     list.appendChild(authorityRegistryCard(entry));
   }
+  renderBundleDetail(filtered[0] || null);
+}
+
+function renderRegistryOperationsOverview(registry) {
+  const entries = registry.authorities || [];
+  const eventItems = registryEvents(entries);
+  renderDefinitionValues("#registry-inventory", {
+    Authorities: entries.length,
+    Registered: entries.filter((entry) => entry.status === "registered").length,
+    Superseded: entries.filter((entry) => entry.status === "superseded").length,
+    Revoked: entries.filter((entry) => entry.status === "revoked").length,
+    "Replay ready": entries.filter((entry) => entry.latest_receipt_hash || entry.publication_receipt?.receipt_hash).length,
+    "Warnings": entries.reduce((total, entry) => total + (entry.diagnostic_summary?.warning_count || 0), 0),
+  });
+  renderTextList("#registry-lifecycle-posture", registryLifecyclePosture(entries), ["No lifecycle posture", "Register an authority to begin local lifecycle tracking."]);
+  renderTextList("#registry-replay-readiness", registryReplayReadiness(entries), ["No replay posture", "Export and register an authority to create receipt-backed replay readiness."]);
+  renderTextList("#registry-drift-indicators", registryDriftIndicators(entries), ["No drift indicators", "No supersession, revocation, or stale review posture currently requires attention."]);
+  renderActivityItems("#registry-recent-events", eventItems.slice(0, 6), ["No governance events", "Lifecycle events will appear after export, registration, supersession, or revocation."]);
+}
+
+function registryEvents(entries) {
+  const events = [];
+  for (const entry of entries) {
+    for (const event of registryLifecycleEvents(entry)) {
+      events.push({
+        title: `${formatLabel(lifecycleEventType(event))}: ${entry.authority_ref}`,
+        text: `${formatDateTime(event.timestamp)} | ${lifecycleEventDetail(event)}`,
+        timestamp: event.timestamp,
+      });
+    }
+  }
+  return events.sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
+}
+
+function registryLifecyclePosture(entries) {
+  const posture = [];
+  const registered = entries.filter((entry) => entry.status === "registered").length;
+  const superseded = entries.filter((entry) => entry.status === "superseded").length;
+  const revoked = entries.filter((entry) => entry.status === "revoked").length;
+  if (registered) posture.push(["Active authorities", `${registered} authority record${registered === 1 ? "" : "s"} registered locally.`]);
+  if (superseded) posture.push(["Supersession chains", `${superseded} authority record${superseded === 1 ? "" : "s"} superseded and require lineage review.`]);
+  if (revoked) posture.push(["Revocation posture", `${revoked} authority record${revoked === 1 ? "" : "s"} revoked locally.`]);
+  if (!posture.length && entries.length) posture.push(["Registry populated", "Authorities exist, but no active lifecycle exception requires attention."]);
+  return posture.slice(0, 4);
+}
+
+function registryReplayReadiness(entries) {
+  return entries.slice(0, 4).map((entry) => {
+    const ready = entry.latest_receipt_hash || entry.publication_receipt?.receipt_hash;
+    return [
+      entry.authority_ref,
+      ready
+        ? `Replay can bind to receipt ${entry.latest_receipt_hash || entry.publication_receipt.receipt_hash}.`
+        : "Receipt evidence is missing; replay readiness is incomplete.",
+    ];
+  });
+}
+
+function registryDriftIndicators(entries) {
+  const indicators = [];
+  for (const entry of entries) {
+    if (entry.status === "superseded") {
+      indicators.push([entry.authority_ref, `Superseded by ${entry.superseded_by || "pending successor"}; review resumed execution continuity.`]);
+    } else if (entry.status === "revoked") {
+      indicators.push([entry.authority_ref, "Revoked authority should invalidate resumed execution posture where continuity requires current authority."]);
+    } else if ((entry.diagnostic_summary?.warning_count || 0) > 0) {
+      indicators.push([entry.authority_ref, `${entry.diagnostic_summary.warning_count} diagnostic warning${entry.diagnostic_summary.warning_count === 1 ? "" : "s"} require governance awareness.`]);
+    }
+  }
+  return indicators.slice(0, 4);
 }
 
 function renderOperationsOverview() {
@@ -1059,6 +1130,11 @@ function renderBundleDetail(entry, mode = "summary") {
     return;
   }
 
+  if (mode === "summary") {
+    renderRegistryDetailSummary(detail, entry);
+    return;
+  }
+
   const title = document.createElement("h3");
   title.textContent = mode === "lineage"
     ? "Lineage"
@@ -1108,6 +1184,81 @@ function renderBundleDetail(entry, mode = "summary") {
   detail.append(title, text, body);
 }
 
+function renderRegistryDetailSummary(detail, entry) {
+  const shell = document.createElement("div");
+  shell.className = "registry-detail-shell";
+  const header = document.createElement("div");
+  header.className = "registry-detail-summary";
+  const titleBlock = document.createElement("div");
+  const title = document.createElement("h3");
+  title.textContent = entry.authority_ref;
+  const subtitle = document.createElement("p");
+  subtitle.textContent = `${entryProtectedResource(entry)} | ${entry.governed_action}`;
+  titleBlock.append(title, subtitle);
+  const status = document.createElement("span");
+  status.className = `status-badge ${entry.status}`;
+  status.textContent = formatLabel(entry.status);
+  header.append(titleBlock, status);
+
+  const metrics = document.createElement("div");
+  metrics.className = "registry-detail-grid";
+  metrics.append(
+    registryDetailMetric("Lifecycle", formatLabel(entry.status)),
+    registryDetailMetric("Replay", entry.replay_readiness || (entry.latest_receipt_hash ? "receipt available" : "receipt pending")),
+    registryDetailMetric("Continuity", entry.continuity_posture),
+    registryDetailMetric("Diagnostics", diagnosticRollupSummary(entry.diagnostic_summary)),
+  );
+
+  const timelineTitle = document.createElement("h3");
+  timelineTitle.textContent = "Lifecycle timeline";
+  const timeline = document.createElement("ol");
+  timeline.className = "registry-detail-timeline";
+  for (const event of registryLifecycleEvents(entry)) {
+    const item = document.createElement("li");
+    const eventName = document.createElement("strong");
+    eventName.textContent = formatLabel(lifecycleEventType(event));
+    const eventDetail = document.createElement("span");
+    eventDetail.textContent = `${formatDateTime(event.timestamp)} | ${lifecycleEventDetail(event)}`;
+    const evidence = document.createElement("code");
+    evidence.textContent = lifecycleEvidencePosture(event);
+    item.append(eventName, eventDetail, evidence);
+    timeline.appendChild(item);
+  }
+  if (!timeline.children.length) {
+    const item = document.createElement("li");
+    const eventName = document.createElement("strong");
+    eventName.textContent = "No lifecycle events";
+    const eventDetail = document.createElement("span");
+    eventDetail.textContent = "Register this authority to create append-only lifecycle history.";
+    const evidence = document.createElement("code");
+    evidence.textContent = "no evidence";
+    item.append(eventName, eventDetail, evidence);
+    timeline.appendChild(item);
+  }
+
+  shell.append(header, metrics, timelineTitle, timeline);
+  detail.appendChild(shell);
+}
+
+function registryDetailMetric(label, value) {
+  const node = document.createElement("div");
+  node.className = "registry-detail-metric";
+  const labelNode = document.createElement("span");
+  labelNode.textContent = label;
+  const valueNode = document.createElement("strong");
+  valueNode.textContent = value || "none";
+  node.append(labelNode, valueNode);
+  return node;
+}
+
+function lifecycleEvidencePosture(event) {
+  const hashes = event.artifact_hashes || {};
+  if (hashes.receipt_hash) return `receipt ${hashes.receipt_hash}`;
+  if (hashes.bundle_hash) return `bundle ${hashes.bundle_hash}`;
+  if (event.hash) return `hash ${event.hash}`;
+  return "evidence pending";
+}
+
 function registryEntrySummary(entry) {
   return {
     schema_version: entry.schema_version,
@@ -1149,7 +1300,7 @@ function handleRegistryAction(event) {
   if (!entry) return;
   const action = button.dataset.registryAction;
   if (action === "view-bundle") {
-    renderBundleDetail(entry);
+    renderBundleDetail(entry, "bundle");
   } else if (action === "open-preview") {
     currentArtifacts = entry.artifacts;
     renderArtifacts(currentArtifacts, { reviewed: true });
