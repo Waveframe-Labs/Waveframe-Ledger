@@ -1108,6 +1108,85 @@ textarea {
   margin-bottom: 16px;
 }
 
+.coherence-banner {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) minmax(420px, 1.2fr);
+  gap: 14px;
+  align-items: stretch;
+  margin: 18px 0;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--green);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+
+.coherence-banner.continuity_risk,
+.coherence-banner.replay_risk,
+.coherence-banner.stale {
+  border-left-color: var(--brand);
+}
+
+.coherence-banner.authority_conflict,
+.coherence-banner.invalidated {
+  border-left-color: var(--red);
+}
+
+.coherence-lead {
+  display: grid;
+  gap: 6px;
+  align-content: center;
+}
+
+.coherence-lead strong {
+  color: var(--green);
+  font-size: 1.05rem;
+}
+
+.coherence-lead span,
+.coherence-invalidation {
+  color: var(--muted);
+}
+
+.coherence-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.coherence-metric {
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #fbfaf7;
+}
+
+.coherence-metric span,
+.projection-freshness-card span {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.coherence-metric strong,
+.projection-freshness-card strong {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.coherence-invalidation {
+  grid-column: 1 / -1;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  color: var(--brand-dark);
+  font-weight: 760;
+}
+
 .registry-ops-grid {
   display: grid;
   grid-template-columns: minmax(220px, 0.8fr) repeat(3, minmax(220px, 1fr));
@@ -1204,6 +1283,40 @@ textarea {
 .authority-card p {
   margin: 5px 0 0;
   color: var(--muted);
+}
+
+.authority-coherence-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.coherence-chip {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  padding: 4px 9px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #eef5f7;
+  color: var(--green);
+  font-size: 0.76rem;
+  font-weight: 850;
+}
+
+.coherence-chip.warning,
+.coherence-chip.stale,
+.coherence-chip.continuity_risk,
+.coherence-chip.replay_risk {
+  color: var(--brand-dark);
+  background: #fff0e8;
+}
+
+.coherence-chip.invalidated,
+.coherence-chip.authority_conflict,
+.coherence-chip.critical {
+  color: var(--red);
+  background: #fff1ef;
 }
 
 .status-badge {
@@ -1328,6 +1441,65 @@ textarea {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
+}
+
+.projection-freshness-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.projection-freshness-card {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #fbfaf7;
+}
+
+.projection-freshness-card.invalidated,
+.projection-freshness-card.authority_conflict {
+  border-color: #e7b7aa;
+  background: #fff1ef;
+}
+
+.projection-freshness-card.stale,
+.projection-freshness-card.continuity_risk,
+.projection-freshness-card.replay_risk {
+  border-color: #f0c2a5;
+  background: #fff7f1;
+}
+
+.projection-freshness-card small {
+  display: block;
+  margin-top: 5px;
+  color: var(--muted);
+}
+
+.freshness-timeline {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.freshness-timeline li {
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr);
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #fbfaf7;
+}
+
+.freshness-timeline strong {
+  color: var(--green);
+}
+
+.freshness-timeline span {
+  color: var(--muted);
 }
 
 .registry-detail-metric {
@@ -1544,9 +1716,13 @@ textarea {
   .boundary-grid,
   .workflow-map,
   .registry-summary,
+  .coherence-banner,
+  .coherence-metrics,
   .registry-ops-grid,
   .registry-controls,
   .registry-detail-grid,
+  .projection-freshness-grid,
+  .freshness-timeline li,
   .registry-detail-timeline li,
   .relationship-graph li,
   .diagnostics-summary,

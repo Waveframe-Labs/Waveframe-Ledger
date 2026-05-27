@@ -22,6 +22,12 @@ let workflowState = {
   receiptGenerated: false,
   authorityRegistered: false,
 };
+let workflowInvalidation = {
+  active: false,
+  reason: null,
+  updated_at: null,
+  invalidated_projections: [],
+};
 const DRAFT_SESSION_KEY = "governance-ledger:draft-authority-session:v1";
 const BUNDLE_REGISTRY_KEY = "governance-ledger:authority-bundle-registry:v1";
 
@@ -115,6 +121,7 @@ function startNewDraft() {
   $("#release-registration").textContent = "Bundle not exported.";
   renderPublicationProjection(null);
   $("#receipt-json").textContent = "No publication receipt generated yet.";
+  clearWorkflowInvalidation();
   updateWorkflowState({
     draftReady: true,
     impactReviewed: false,
@@ -148,6 +155,7 @@ async function generateArtifacts(options = {}) {
     pendingRegistration = null;
     if (isReview) {
       workflowTimestamps.reviewed = new Date().toISOString();
+      clearWorkflowInvalidation();
     }
     renderArtifacts(payload, { reviewed: isReview });
     exportButton.disabled = !isReview;
@@ -712,6 +720,168 @@ function buildDiagnosticRollup(authorityRef, diagnostics) {
   };
 }
 
+function clearWorkflowInvalidation() {
+  workflowInvalidation = {
+    active: false,
+    reason: null,
+    updated_at: null,
+    invalidated_projections: [],
+  };
+}
+
+function markDraftInvalidated() {
+  workflowInvalidation = {
+    active: true,
+    reason: "draft_changed",
+    updated_at: new Date().toISOString(),
+    invalidated_projections: [
+      "authority_workspace_projection.v1",
+      "authority_operational_summary.v1",
+      "governance_continuity_projection.v1",
+      "governance_timeline_projection.v1",
+      "replay_posture",
+    ],
+  };
+}
+
+function registryCoherenceProjection(registry = loadBundleRegistry()) {
+  const entries = registry.authorities || [];
+  const activeByFamily = new Map();
+  for (const entry of entries) {
+    if (entry.status !== "registered" || entry.superseded_by) continue;
+    const family = authorityFamily(entry.authority_ref);
+    activeByFamily.set(family, [...(activeByFamily.get(family) || []), entry]);
+  }
+  const authorityConflicts = [...activeByFamily.values()].filter((items) => items.length > 1).length;
+  const replayRisks = entries.filter((entry) => !entry.latest_receipt_hash && !entry.publication_receipt?.receipt_hash).length;
+  const continuityRisks = entries.filter((entry) => authorityCoherenceProjection(entry, registry).severity === "continuity_risk").length;
+  const staleProjections = entries.reduce(
+    (total, entry) => total + projectionFreshnessForEntry(entry, registry).filter((item) => item.freshness_posture === "stale" || item.freshness_posture === "invalidated").length,
+    workflowInvalidation.active ? workflowInvalidation.invalidated_projections.length : 0,
+  );
+  const posture = authorityConflicts
+    ? "authority_conflict"
+    : continuityRisks
+      ? "continuity_risk"
+      : replayRisks
+        ? "replay_risk"
+        : staleProjections
+          ? "stale"
+          : "healthy";
+  return {
+    schema_version: "governance_coherence_surface.v1",
+    posture,
+    title: coherenceTitle(posture),
+    summary: coherenceSummary({ posture, continuityRisks, replayRisks, authorityConflicts, staleProjections }),
+    counts: {
+      continuity_risk: continuityRisks,
+      replay_degradation: replayRisks,
+      authority_conflict: authorityConflicts,
+      stale_projections: staleProjections,
+    },
+    draft_invalidation: workflowInvalidation,
+  };
+}
+
+function authorityCoherenceProjection(entry, registry = loadBundleRegistry()) {
+  const familyEntries = (registry.authorities || []).filter((item) => authorityFamily(item.authority_ref) === authorityFamily(entry.authority_ref));
+  const active = familyEntries.filter((item) => item.status === "registered" && !item.superseded_by);
+  const freshness = projectionFreshnessForEntry(entry, registry);
+  const hasInvalidated = freshness.some((item) => item.freshness_posture === "invalidated");
+  const hasStale = freshness.some((item) => item.freshness_posture === "stale");
+  const replayMissing = !entry.latest_receipt_hash && !entry.publication_receipt?.receipt_hash;
+  const continuityRisk = ["superseded", "revoked"].includes(entry.status) || String(entry.continuity_posture || "").includes("revocation");
+  const severity = active.length > 1
+    ? "authority_conflict"
+    : continuityRisk
+      ? "continuity_risk"
+      : replayMissing
+        ? "replay_risk"
+        : hasInvalidated
+          ? "invalidated"
+          : hasStale
+            ? "stale"
+            : "healthy";
+  return {
+    schema_version: "authority_coherence_surface.v1",
+    authority_ref: entry.authority_ref,
+    severity,
+    label: coherenceTitle(severity),
+    freshness,
+  };
+}
+
+function projectionFreshnessForEntry(entry, registry = loadBundleRegistry()) {
+  const generatedAt = entry.updated_at || entry.published_at || registry.updated_at || null;
+  const sourceEventIds = registryLifecycleEvents(entry).map((event) => event.event_id || `${lifecycleEventType(event)}:${event.timestamp}`);
+  const invalidated = workflowInvalidation.active && currentArtifacts?.authority_bundle?.authority_ref === entry.authority_ref
+    ? new Set(workflowInvalidation.invalidated_projections)
+    : new Set();
+  const receiptPresent = Boolean(entry.latest_receipt_hash || entry.publication_receipt?.receipt_hash);
+  return [
+    projectionFreshnessItem("Operational Summary", "authority_operational_summary.v1", generatedAt, sourceEventIds, invalidated),
+    projectionFreshnessItem("Timeline Projection", "governance_timeline_projection.v1", generatedAt, sourceEventIds, invalidated),
+    projectionFreshnessItem(
+      "Replay Posture",
+      "replay_posture",
+      generatedAt,
+      sourceEventIds,
+      invalidated,
+      receiptPresent ? "fresh" : "invalidated",
+      receiptPresent ? "info" : "replay_risk",
+      receiptPresent ? "Receipt-backed replay posture is available." : "Replay posture invalidated because receipt evidence is missing.",
+    ),
+    projectionFreshnessItem(
+      "Continuity Projection",
+      "governance_continuity_projection.v1",
+      generatedAt,
+      sourceEventIds,
+      invalidated,
+      "fresh",
+      ["superseded", "revoked"].includes(entry.status) ? "continuity_risk" : "info",
+      ["superseded", "revoked"].includes(entry.status)
+        ? "Continuity projection refreshed after lifecycle posture changed."
+        : "Continuity projection reflects current local lifecycle state.",
+    ),
+  ];
+}
+
+function projectionFreshnessItem(label, projection, generatedAt, sourceEventIds, invalidated, posture = "fresh", severity = "info", summary = null) {
+  const freshness = invalidated.has(projection) ? "invalidated" : posture;
+  return {
+    projection,
+    label,
+    generated_at: generatedAt,
+    source_event_ids: sourceEventIds,
+    freshness_posture: freshness,
+    severity: freshness === "invalidated" ? "authority_conflict" : severity,
+    summary: summary || `${label} generated ${generatedAt ? relativeTime(generatedAt) : "from current workspace state"}.`,
+  };
+}
+
+function authorityFamily(authorityRef) {
+  return String(authorityRef || "").split("@", 1)[0] || "authority";
+}
+
+function coherenceTitle(posture) {
+  return {
+    healthy: "Registry Healthy",
+    stale: "Projection Stale",
+    invalidated: "Projection Invalidated",
+    continuity_risk: "Continuity Risk",
+    replay_risk: "Replay Risk",
+    authority_conflict: "Authority Conflict",
+  }[posture] || formatLabel(posture);
+}
+
+function coherenceSummary({ posture, continuityRisks, replayRisks, authorityConflicts, staleProjections }) {
+  if (posture === "healthy") return "Registry coherence is stable across lifecycle, replay, continuity, and projection freshness.";
+  if (authorityConflicts) return `${authorityConflicts} authority conflict${authorityConflicts === 1 ? "" : "s"} require lifecycle reconciliation.`;
+  if (continuityRisks) return `${continuityRisks} continuity risk${continuityRisks === 1 ? "" : "s"} present in local authority lineage.`;
+  if (replayRisks) return `${replayRisks} replay posture${replayRisks === 1 ? "" : "s"} missing receipt-backed continuity.`;
+  return `${staleProjections} projection${staleProjections === 1 ? "" : "s"} stale or invalidated relative to current workflow state.`;
+}
+
 function registryLifecycleEvents(entry) {
   return entry?.lifecycle_events || entry?.lifecycle_timeline || [];
 }
@@ -856,6 +1026,7 @@ function renderBundleRegistry() {
 function renderRegistryOperationsOverview(registry) {
   const entries = registry.authorities || [];
   const eventItems = registryEvents(entries);
+  renderCoherenceBanner("#registry-coherence-banner", registryCoherenceProjection(registry));
   renderDefinitionValues("#registry-inventory", {
     Authorities: entries.length,
     Registered: entries.filter((entry) => entry.status === "registered").length,
@@ -929,6 +1100,7 @@ function renderOperationsOverview() {
   const diagnostics = currentArtifacts?.diagnostics || [];
   const pendingActions = pendingGovernanceActions(registry, diagnostics);
   const alerts = lifecycleAlerts(registry, diagnostics);
+  renderCoherenceBanner("#overview-coherence-banner", registryCoherenceProjection(registry));
 
   setText("#overview-authority-state", registryEntry ? formatLabel(registryEntry.status) : workflowState.impactReviewed ? "Reviewed Draft" : "Draft");
   setText("#overview-replay-readiness", workflowState.receiptGenerated || registryEntry?.publication_receipt ? "receipt available" : "receipt pending");
@@ -939,6 +1111,46 @@ function renderOperationsOverview() {
   renderRegistryHealth(registry);
   renderActivityFeed(registry);
   renderRelationshipFeed(registry);
+}
+
+function renderCoherenceBanner(selector, coherence) {
+  const node = $(selector);
+  if (!node) return;
+  node.innerHTML = "";
+  node.className = `coherence-banner ${coherence.posture}`;
+  const lead = document.createElement("div");
+  lead.className = "coherence-lead";
+  const title = document.createElement("strong");
+  title.textContent = coherence.title;
+  const summary = document.createElement("span");
+  summary.textContent = coherence.summary;
+  lead.append(title, summary);
+  const metrics = document.createElement("div");
+  metrics.className = "coherence-metrics";
+  metrics.append(
+    coherenceMetric("Replay Continuity", coherence.counts.replay_degradation ? "Degraded" : "Stable", coherence.counts.replay_degradation ? "replay_risk" : "healthy"),
+    coherenceMetric("Continuity Risk", coherence.counts.continuity_risk, coherence.counts.continuity_risk ? "continuity_risk" : "healthy"),
+    coherenceMetric("Authority Conflicts", coherence.counts.authority_conflict, coherence.counts.authority_conflict ? "authority_conflict" : "healthy"),
+    coherenceMetric("Stale Projections", coherence.counts.stale_projections, coherence.counts.stale_projections ? "stale" : "healthy"),
+  );
+  node.append(lead, metrics);
+  if (coherence.draft_invalidation?.active) {
+    const invalidation = document.createElement("div");
+    invalidation.className = "coherence-invalidation";
+    invalidation.textContent = "Operational summary invalidated by draft changes. Impact review required before export.";
+    node.appendChild(invalidation);
+  }
+}
+
+function coherenceMetric(label, value, posture) {
+  const item = document.createElement("div");
+  item.className = `coherence-metric ${posture}`;
+  const labelNode = document.createElement("span");
+  labelNode.textContent = label;
+  const valueNode = document.createElement("strong");
+  valueNode.textContent = String(value);
+  item.append(labelNode, valueNode);
+  return item;
 }
 
 function setText(selector, text) {
@@ -1116,6 +1328,7 @@ function registryMetric(label, value) {
 }
 
 function authorityRegistryCard(entry) {
+  const coherence = authorityCoherenceProjection(entry);
   const article = document.createElement("article");
   article.className = "authority-card";
 
@@ -1131,6 +1344,13 @@ function authorityRegistryCard(entry) {
   status.className = `status-badge ${entry.status}`;
   status.textContent = formatLabel(entry.status);
   header.append(titleBlock, status);
+
+  const coherenceRow = document.createElement("div");
+  coherenceRow.className = "authority-coherence-row";
+  coherenceRow.append(
+    coherenceChip(coherence.label, coherence.severity),
+    ...coherence.freshness.slice(0, 3).map((item) => coherenceChip(`${item.label}: ${freshnessLabel(item)}`, item.freshness_posture === "fresh" ? item.severity : item.freshness_posture)),
+  );
 
   const meta = document.createElement("dl");
   meta.className = "authority-meta";
@@ -1184,7 +1404,7 @@ function authorityRegistryCard(entry) {
     actions.appendChild(button);
   }
 
-  article.append(header, meta, relationship, timeline, actions);
+  article.append(header, coherenceRow, meta, relationship, timeline, actions);
   return article;
 }
 
@@ -1196,6 +1416,21 @@ function relationshipSummary(entry) {
     return `This authority has been superseded by ${entry.superseded_by || "a successor authority"}. Review continuity before relying on resumed work.`;
   }
   return "This authority is the active local lifecycle record for its authority reference.";
+}
+
+function coherenceChip(text, posture) {
+  const chip = document.createElement("span");
+  chip.className = `coherence-chip ${posture || "healthy"}`;
+  chip.textContent = text;
+  return chip;
+}
+
+function freshnessLabel(item) {
+  if (item.freshness_posture === "invalidated") return "Invalidated";
+  if (item.freshness_posture === "stale") return "Stale";
+  if (item.severity === "continuity_risk") return "Warning";
+  if (item.severity === "replay_risk") return "Replay Risk";
+  return "Fresh";
 }
 
 function appendMeta(list, label, value) {
@@ -1275,6 +1510,7 @@ function renderBundleDetail(entry, mode = "summary") {
 
 function renderRegistryDetailSummary(detail, entry) {
   const summary = registryOperationalSummary(entry);
+  const coherence = authorityCoherenceProjection(entry);
   const shell = document.createElement("div");
   shell.className = "registry-detail-shell";
   const header = document.createElement("div");
@@ -1296,8 +1532,30 @@ function renderRegistryDetailSummary(detail, entry) {
     registryDetailMetric("Lifecycle", formatLabel(entry.status)),
     registryDetailMetric("Replay", replayReadinessLabel(summary.replay_readiness)),
     registryDetailMetric("Continuity", entry.continuity_posture || "review recommended"),
-    registryDetailMetric("Diagnostics", diagnosticRollupSummary(entry.diagnostic_summary)),
+    registryDetailMetric("Coherence", coherence.label),
   );
+
+  const freshnessTitle = document.createElement("h3");
+  freshnessTitle.textContent = "Projection freshness";
+  const freshness = document.createElement("div");
+  freshness.className = "projection-freshness-grid";
+  for (const item of coherence.freshness) {
+    freshness.appendChild(projectionFreshnessCard(item));
+  }
+
+  const freshnessTimelineTitle = document.createElement("h3");
+  freshnessTimelineTitle.textContent = "Freshness timeline";
+  const freshnessTimeline = document.createElement("ol");
+  freshnessTimeline.className = "freshness-timeline";
+  for (const item of coherence.freshness) {
+    const row = document.createElement("li");
+    const strong = document.createElement("strong");
+    strong.textContent = item.label;
+    const span = document.createElement("span");
+    span.textContent = freshnessTimelineText(item);
+    row.append(strong, span);
+    freshnessTimeline.appendChild(row);
+  }
 
   const meaningTitle = document.createElement("h3");
   meaningTitle.textContent = "Governance meaning";
@@ -1368,8 +1626,51 @@ function renderRegistryDetailSummary(detail, entry) {
   graphTitle.textContent = "Relationship graph";
   const graph = renderRelationshipGraph(summary.relationship_graph);
 
-  shell.append(header, metrics, meaningTitle, meaning, replayTitle, replay, driftTitle, drift, timelineTitle, timeline, graphTitle, graph);
+  shell.append(
+    header,
+    metrics,
+    freshnessTitle,
+    freshness,
+    freshnessTimelineTitle,
+    freshnessTimeline,
+    meaningTitle,
+    meaning,
+    replayTitle,
+    replay,
+    driftTitle,
+    drift,
+    timelineTitle,
+    timeline,
+    graphTitle,
+    graph,
+  );
   detail.appendChild(shell);
+}
+
+function projectionFreshnessCard(item) {
+  const card = document.createElement("article");
+  card.className = `projection-freshness-card ${item.freshness_posture} ${item.severity}`;
+  const label = document.createElement("span");
+  label.textContent = item.label;
+  const value = document.createElement("strong");
+  value.textContent = freshnessLabel(item);
+  const generated = document.createElement("small");
+  generated.textContent = item.generated_at ? `generated ${relativeTime(item.generated_at)}` : "generated from current workspace";
+  card.append(label, value, generated);
+  return card;
+}
+
+function freshnessTimelineText(item) {
+  if (item.freshness_posture === "invalidated") {
+    return `${item.label} invalidated after draft modification.`;
+  }
+  if (item.severity === "continuity_risk") {
+    return `${item.label} refreshed after lifecycle posture changed.`;
+  }
+  if (item.severity === "replay_risk") {
+    return "Replay posture invalidated until receipt evidence is present.";
+  }
+  return `${item.label} generated ${item.generated_at ? relativeTime(item.generated_at) : "from current registry state"}.`;
 }
 
 function replayReadinessLabel(replay) {
@@ -1889,6 +2190,7 @@ newDraftButton.addEventListener("click", startNewDraft);
 form.addEventListener("input", () => {
   saveDraftSession();
   pendingRegistration = null;
+  markDraftInvalidated();
   workflowTimestamps.reviewed = null;
   workflowTimestamps.exported = null;
   workflowTimestamps.registered = null;
@@ -1905,6 +2207,7 @@ form.addEventListener("input", () => {
 form.addEventListener("change", () => {
   saveDraftSession();
   pendingRegistration = null;
+  markDraftInvalidated();
   workflowTimestamps.reviewed = null;
   workflowTimestamps.exported = null;
   workflowTimestamps.registered = null;
