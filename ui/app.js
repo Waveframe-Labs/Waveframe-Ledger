@@ -808,6 +808,65 @@ function authorityCoherenceProjection(entry, registry = loadBundleRegistry()) {
     severity,
     label: coherenceTitle(severity),
     freshness,
+    causality: continuityCausality(entry, registry, severity),
+  };
+}
+
+function continuityCausality(entry, registry = loadBundleRegistry(), severity = null) {
+  const events = registryLifecycleEvents(entry);
+  const eventTypes = events.map(lifecycleEventType);
+  const familyEntries = (registry.authorities || []).filter((item) => authorityFamily(item.authority_ref) === authorityFamily(entry.authority_ref));
+  const activeSuccessors = familyEntries.filter((item) => item.status === "registered" && !item.superseded_by && item.authority_ref !== entry.authority_ref);
+  const draftChanged = workflowInvalidation.active && currentArtifacts?.authority_bundle?.authority_ref === entry.authority_ref;
+  const isRevoked = entry.status === "revoked" || eventTypes.includes("revoked");
+  const isSuperseded = entry.status === "superseded" || eventTypes.includes("superseded") || Boolean(entry.superseded_by);
+  const hasActiveSuccessor = activeSuccessors.length > 0;
+  const posture = severity || authorityCoherenceProjection(entry, registry).severity;
+  let reason = "Registry lineage, replay evidence, and lifecycle posture are coherent for this authority.";
+  if (posture === "authority_conflict") {
+    reason = `Multiple active ${authorityFamily(entry.authority_ref)} authorities are registered locally.`;
+  } else if (isRevoked && isSuperseded && !hasActiveSuccessor) {
+    reason = `${entry.authority_ref} was superseded and later revoked, but no currently active registered successor authority exists.`;
+  } else if (isRevoked) {
+    reason = `${entry.authority_ref} is revoked in the local registry lineage.`;
+  } else if (isSuperseded) {
+    reason = `${entry.authority_ref} was superseded by ${entry.superseded_by || "a successor authority"}.`;
+  } else if (posture === "continuity_risk") {
+    reason = `${entry.authority_ref} includes continuity semantics that require resumed execution to revalidate when authority posture changes.`;
+  } else if (posture === "replay_risk") {
+    reason = `${entry.authority_ref} does not have receipt-backed replay evidence attached.`;
+  } else if (draftChanged) {
+    reason = "The current draft changed after impact review, so the workspace view is no longer fresh.";
+  }
+  const contributingEvents = events
+    .filter((event) => ["drafted", "reviewed", "exported", "registered", "superseded", "revoked"].includes(lifecycleEventType(event)))
+    .map((event) => ({
+      type: formatLabel(lifecycleEventType(event)),
+      timestamp: event.timestamp,
+      detail: lifecycleEventDetail(event),
+    }));
+  if (draftChanged) {
+    contributingEvents.push({
+      type: "Draft Modified After Review",
+      timestamp: workflowInvalidation.updated_at,
+      detail: "Current draft changes invalidated reviewed workspace state.",
+    });
+  }
+  return {
+    posture,
+    reason,
+    impact: posture === "continuity_risk" || isRevoked || isSuperseded
+      ? "Resumed execution should require governance revalidation before continuation."
+      : posture === "replay_risk"
+        ? "Replay review has less publication evidence to bind against until a receipt is present."
+        : "No additional continuity action is indicated by the current local registry state.",
+    contributing_events: contributingEvents,
+    scopes: {
+      current_draft: workflowState.impactReviewed ? "impact reviewed" : "pending review",
+      historical_authority: formatLabel(entry.status),
+      registry_lineage: lineageChainText(entry, registry),
+      replay_evidence: entry.latest_receipt_hash || entry.publication_receipt?.receipt_hash ? "receipt-backed" : "receipt pending",
+    },
   };
 }
 
@@ -1608,6 +1667,8 @@ function renderRegistryDetailSummary(detail, entry) {
     registryDetailMetric("Continuity", entry.continuity_posture || "review recommended", coherence.severity === "continuity_risk" ? "Continuity review advised" : "Continuity posture recorded"),
     registryDetailMetric("Coherence", coherence.label, freshnessLabel(coherence.freshness[0] || {})),
   );
+  const scope = registryScopeStrip(coherence.causality);
+  const causality = continuityCausalityPanel(coherence.causality);
 
   const freshness = document.createElement("div");
   freshness.className = "projection-freshness-grid";
@@ -1691,6 +1752,7 @@ function renderRegistryDetailSummary(detail, entry) {
   blocks.className = "registry-detail-blocks";
   blocks.append(
     registryDetailBlock("Identity", identitySummary(entry, summary)),
+    registryDetailBlock("Why This Posture Exists", causality, "wide"),
     registryDetailBlock("Lifecycle", timeline),
     registryDetailBlock("Continuity", freshnessTimeline),
     registryDetailBlock("Replay", replay),
@@ -1703,19 +1765,74 @@ function renderRegistryDetailSummary(detail, entry) {
   shell.append(
     header,
     metrics,
+    scope,
     blocks,
   );
   detail.appendChild(shell);
 }
 
-function registryDetailBlock(title, content) {
+function registryDetailBlock(title, content, variant = "") {
   const block = document.createElement("section");
-  block.className = "registry-detail-block";
+  block.className = `registry-detail-block ${variant}`.trim();
   const heading = document.createElement("h3");
   heading.textContent = title;
   block.appendChild(heading);
   block.appendChild(content);
   return block;
+}
+
+function registryScopeStrip(causality) {
+  const strip = document.createElement("div");
+  strip.className = "registry-scope-strip";
+  const scopes = causality?.scopes || {};
+  for (const [label, value] of Object.entries({
+    "Current Draft": scopes.current_draft || "pending review",
+    "Historical Authority": scopes.historical_authority || "not registered",
+    "Registry Lineage": scopes.registry_lineage || "lineage pending",
+    "Replay Evidence": scopes.replay_evidence || "receipt pending",
+  })) {
+    const item = document.createElement("div");
+    const span = document.createElement("span");
+    span.textContent = label;
+    const strong = document.createElement("strong");
+    strong.textContent = value;
+    item.append(span, strong);
+    strip.appendChild(item);
+  }
+  return strip;
+}
+
+function continuityCausalityPanel(causality) {
+  const panel = document.createElement("div");
+  panel.className = `continuity-causality ${causality?.posture || "healthy"}`;
+  const reason = document.createElement("p");
+  reason.className = "causality-reason";
+  const reasonLabel = document.createElement("strong");
+  reasonLabel.textContent = "Reason";
+  const reasonText = document.createElement("span");
+  reasonText.textContent = causality?.reason || "No continuity risk is indicated by the current local registry state.";
+  reason.append(reasonLabel, reasonText);
+  const impact = document.createElement("p");
+  impact.className = "causality-impact";
+  const impactLabel = document.createElement("strong");
+  impactLabel.textContent = "Operational impact";
+  const impactText = document.createElement("span");
+  impactText.textContent = causality?.impact || "No additional continuity action is indicated.";
+  impact.append(impactLabel, impactText);
+  const events = document.createElement("ol");
+  events.className = "causality-events";
+  const contributing = causality?.contributing_events?.length ? causality.contributing_events : [{ type: "No contributing events", detail: "Lifecycle history has not created a continuity concern.", timestamp: null }];
+  for (const event of contributing.slice(-6)) {
+    const item = document.createElement("li");
+    const title = document.createElement("strong");
+    title.textContent = event.type;
+    const detail = document.createElement("span");
+    detail.textContent = `${event.timestamp ? `${formatDateTime(event.timestamp)} | ` : ""}${event.detail}`;
+    item.append(title, detail);
+    events.appendChild(item);
+  }
+  panel.append(reason, impact, events);
+  return panel;
 }
 
 function identitySummary(entry, summary) {
@@ -1760,7 +1877,7 @@ function freshnessTimelineText(item) {
   if (item.severity === "replay_risk") {
     return "Replay posture is incomplete until receipt evidence is present.";
   }
-  return `Fresh · ${item.generated_at ? `Generated ${relativeTime(item.generated_at)}` : "Current registry state"}.`;
+  return `Fresh - ${item.generated_at ? `Generated ${relativeTime(item.generated_at)}` : "Current registry state"}.`;
 }
 
 function replayReadinessLabel(replay) {
@@ -2091,7 +2208,7 @@ function renderChangeReview(payload, options = {}) {
     narrative.querySelector("p").textContent = "Change Review explains threshold posture, continuity implications, replay expectations, and lifecycle context in operator language.";
     operational.textContent = "Review impact to generate the current authority posture.";
     continuity.textContent = "Registered lineage will show supersession path, resumed execution impact, and replay continuity obligations here.";
-    replay.textContent = "Replay implications appear after the authority impact has been reviewed.";
+    renderReplayPosture(replay, null, null);
     appendLineageEmpty(lineage);
     return;
   }
@@ -2110,7 +2227,7 @@ function renderChangeReview(payload, options = {}) {
     || "Operational impact will appear after review.";
   continuity.textContent = firstText(bundle.continuity_implications)
     || "No continuity implication has been derived yet. Review continuity posture before publication.";
-  replay.textContent = replaySummary(bundle, registryEntry);
+  renderReplayPosture(replay, bundle, registryEntry);
   renderLineageChain(lineage, registryEntry, bundle);
 }
 
@@ -2144,6 +2261,38 @@ function renderLineageChain(node, registryEntry, bundle) {
   draftText.textContent = `${bundle.authority_ref} has generated authority meaning but has not been registered locally.`;
   draft.append(draftTitle, draftText);
   node.appendChild(draft);
+}
+
+function renderReplayPosture(node, bundle, registryEntry) {
+  node.innerHTML = "";
+  const summary = document.createElement("strong");
+  const receiptHash = registryEntry?.publication_receipt?.receipt_hash || registryEntry?.latest_receipt_hash;
+  if (receiptHash) {
+    summary.textContent = "Replay evidence complete";
+    const explanation = document.createElement("span");
+    explanation.textContent = "Receipt-backed replay evidence is available for this registered authority.";
+    const details = document.createElement("details");
+    details.className = "replay-hash-details";
+    const detailsSummary = document.createElement("summary");
+    detailsSummary.textContent = "View receipt hash";
+    const hash = document.createElement("code");
+    hash.className = "replay-hash";
+    hash.textContent = receiptHash;
+    details.append(detailsSummary, hash);
+    node.append(summary, explanation, details);
+    return;
+  }
+  if (bundle?.immutable_inputs?.preview_hash) {
+    summary.textContent = "Replay evidence pending";
+    const explanation = document.createElement("span");
+    explanation.textContent = "Export will create publication receipt evidence that binds this authority to reviewed governance meaning.";
+    node.append(summary, explanation);
+    return;
+  }
+  summary.textContent = "Replay posture pending";
+  const explanation = document.createElement("span");
+  explanation.textContent = "Replay implications appear after the authority impact has been reviewed.";
+  node.append(summary, explanation);
 }
 
 function replaySummary(bundle, registryEntry) {
