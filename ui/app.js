@@ -836,7 +836,7 @@ function continuityCausality(entry, registry = loadBundleRegistry(), severity = 
   } else if (posture === "replay_risk") {
     reason = `${entry.authority_ref} does not have receipt-backed replay evidence attached.`;
   } else if (draftChanged) {
-    reason = "The current draft changed after impact review, so the workspace view is no longer fresh.";
+    reason = "The current draft changed after impact review, so the workspace view is no longer valid.";
   }
   const contributingEvents = events
     .filter((event) => ["drafted", "reviewed", "exported", "registered", "superseded", "revoked"].includes(lifecycleEventType(event)))
@@ -934,7 +934,7 @@ function coherenceTitle(posture) {
 }
 
 function coherenceSummary({ posture, continuityRisks, replayRisks, authorityConflicts, staleProjections }) {
-  if (posture === "healthy") return "Registry coherence is stable across lifecycle, replay, continuity, and state freshness.";
+  if (posture === "healthy") return "Registry coherence is valid across lifecycle, replay, continuity, and state freshness.";
   if (authorityConflicts) return `${authorityConflicts} authority conflict${authorityConflicts === 1 ? "" : "s"} require lifecycle reconciliation.`;
   if (continuityRisks) return `${continuityRisks} continuity risk${continuityRisks === 1 ? "" : "s"} present in local authority lineage.`;
   if (replayRisks) return `${replayRisks} replay posture${replayRisks === 1 ? "" : "s"} missing receipt-backed continuity.`;
@@ -1200,7 +1200,7 @@ function renderCoherenceBanner(selector, coherence) {
     coherenceMetric("Replay Continuity", coherence.counts.replay_degradation ? "Degraded" : "Stable", coherence.counts.replay_degradation ? "replay_risk" : "healthy"),
     coherenceMetric("Continuity Risk", coherence.counts.continuity_risk, coherence.counts.continuity_risk ? "continuity_risk" : "healthy"),
     coherenceMetric("Authority Conflicts", coherence.counts.authority_conflict, coherence.counts.authority_conflict ? "authority_conflict" : "healthy"),
-    coherenceMetric("State Freshness", coherence.counts.stale_projections ? `${coherence.counts.stale_projections} stale` : "Fresh", coherence.counts.stale_projections ? "stale" : "healthy"),
+    coherenceMetric("State Validity", coherence.counts.stale_projections ? `${coherence.counts.stale_projections} stale` : "Valid", coherence.counts.stale_projections ? "stale" : "healthy"),
   );
   node.append(lead, metrics);
   if (coherence.draft_invalidation?.active) {
@@ -1551,7 +1551,7 @@ function freshnessLabel(item) {
   if (item.freshness_posture === "stale") return "Stale";
   if (item.severity === "continuity_risk") return "Warning";
   if (item.severity === "replay_risk") return "Replay Risk";
-  return "Fresh";
+  return "Valid";
 }
 
 function appendMeta(list, label, value) {
@@ -1757,7 +1757,7 @@ function renderRegistryDetailSummary(detail, entry) {
     registryDetailBlock("Drift", drift),
     registryDetailBlock("Governance Meaning", meaning),
     registryDetailBlock("Lineage", graph),
-    registryDetailBlock("State Freshness", freshness),
+    registryDetailBlock("State Validity", freshness),
   );
 
   shell.append(
