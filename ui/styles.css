@@ -1689,8 +1689,8 @@ textarea {
 
 .freshness-timeline li {
   display: grid;
-  grid-template-columns: minmax(160px, 0.32fr) minmax(0, 1fr);
-  gap: 10px;
+  grid-template-columns: minmax(220px, 0.38fr) minmax(0, 1fr);
+  gap: 18px;
   padding: 8px 0;
   border: 1px solid var(--line);
   border-width: 0 0 1px;
@@ -1746,9 +1746,9 @@ textarea {
 .registry-detail-timeline li {
   position: relative;
   display: grid;
-  grid-template-columns: 150px minmax(0, 1fr) minmax(180px, 0.35fr);
-  gap: 12px;
-  padding: 10px 0 10px 16px;
+  grid-template-columns: minmax(150px, 0.24fr) minmax(0, 1fr);
+  gap: 10px 18px;
+  padding: 12px 0 12px 16px;
   border-bottom: 1px solid #ece6de;
   background: transparent;
 }
@@ -1772,9 +1772,15 @@ textarea {
 }
 
 .registry-detail-timeline code {
+  grid-column: 2;
+  display: block;
+  max-width: 100%;
+  margin-top: -4px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 0.76rem;
   color: #36433b;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .relationship-graph {

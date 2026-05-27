@@ -1753,8 +1753,8 @@ function renderRegistryDetailSummary(detail, entry) {
   blocks.append(
     registryDetailBlock("Identity", identitySummary(entry, summary)),
     registryDetailBlock("Why This Posture Exists", causality, "wide"),
-    registryDetailBlock("Lifecycle", timeline),
-    registryDetailBlock("Continuity", freshnessTimeline),
+    registryDetailBlock("Lifecycle", timeline, "wide"),
+    registryDetailBlock("Continuity", freshnessTimeline, "wide"),
     registryDetailBlock("Replay", replay),
     registryDetailBlock("Drift", drift),
     registryDetailBlock("Governance Meaning", meaning),
