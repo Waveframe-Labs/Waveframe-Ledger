@@ -7,6 +7,8 @@ import json
 from copy import deepcopy
 from typing import Any
 
+from governance_ledger.local_registry.lifecycle import validate_lifecycle_transition
+
 AUTHORITY_LIFECYCLE_EVENT_V1 = "authority_lifecycle_event.v1"
 AUTHORITY_REGISTRY_ENTRY_V1 = "authority_registry_entry.v1"
 DIAGNOSTIC_ROLLUP_V1 = "diagnostic_rollup.v1"
@@ -48,6 +50,7 @@ def build_authority_lifecycle_event(
     artifact_hashes: dict[str, Any] | None = None,
     notes: dict[str, Any] | None = None,
     previous_event_id: str | None = None,
+    caused_by_event_id: str | None = None,
     event_id: str | None = None,
 ) -> dict[str, Any]:
     """Build an append-only authority lifecycle event."""
@@ -66,6 +69,7 @@ def build_authority_lifecycle_event(
                 "timestamp": timestamp,
                 "artifact_hashes": artifact_hashes or {},
                 "previous_event_id": previous_event_id,
+                "caused_by_event_id": caused_by_event_id or previous_event_id,
             },
         ),
         "authority_ref": authority_ref,
@@ -77,6 +81,7 @@ def build_authority_lifecycle_event(
         "artifact_hashes": artifact_hashes or {},
         "notes": notes or {},
         "previous_event_id": previous_event_id,
+        "caused_by_event_id": caused_by_event_id or previous_event_id,
     }
     validate_lifecycle_event(event)
     return event
@@ -181,6 +186,8 @@ def append_lifecycle_event(
         validate_lifecycle_event(existing)
         if existing["event_id"] == event["event_id"]:
             raise ValueError("duplicate lifecycle event_id")
+    previous_type = events[-1]["event_type"] if events else None
+    validate_lifecycle_transition(previous_type, event["event_type"])
     return [deepcopy(item) for item in events] + [deepcopy(event)]
 
 
@@ -198,6 +205,8 @@ def validate_lifecycle_event(event: dict[str, Any]) -> None:
         raise ValueError("lifecycle event notes must be an object")
     if event.get("previous_event_id") is not None and not isinstance(event["previous_event_id"], str):
         raise ValueError("lifecycle event previous_event_id must be null or string")
+    if event.get("caused_by_event_id") is not None and not isinstance(event["caused_by_event_id"], str):
+        raise ValueError("lifecycle event caused_by_event_id must be null or string")
 
 
 def validate_registry_entry(entry: dict[str, Any]) -> None:

@@ -624,8 +624,29 @@ function publishCurrentBundleToRegistry(receipt, publicationNotes) {
       publication_receipt: receipt,
       authority_registry_projection: projection,
       authority_workspace_projection: currentArtifacts.authority_workspace_projection,
+      authority_operational_summary: currentArtifacts.authority_operational_summary,
       diagnostics: currentArtifacts.diagnostics || [],
     },
+    operational_summary: registryOperationalSummary({
+      authority_ref: bundle.authority_ref,
+      authority_version: authorityVersionFromRef(bundle.authority_ref),
+      status: existing?.status || "registered",
+      protected_resource: projection.governed_resource || authority.protected_resource,
+      governed_action: projection.governed_action || "unspecified action",
+      continuity_posture: projection.continuity_posture || "continuity review recommended",
+      replay_readiness: receipt?.receipt_hash ? "receipt available" : "receipt pending",
+      publication_receipt: receipt,
+      latest_receipt_hash: receipt?.receipt_hash || null,
+      immutable_inputs: bundle.immutable_inputs,
+      lineage: bundle.lineage,
+      lifecycle_events: registeredLifecycle,
+      diagnostic_summary: diagnosticSummary,
+      bundle,
+      artifacts: {
+        authority_workspace_projection: currentArtifacts.authority_workspace_projection,
+        authority_operational_summary: currentArtifacts.authority_operational_summary,
+      },
+    }),
   };
 
   registry.authorities = [entry, ...registry.authorities.filter((item) => item.authority_ref !== entry.authority_ref)];
@@ -711,6 +732,71 @@ function entryProtectedResource(entry) {
 function diagnosticRollupSummary(rollup) {
   if (!rollup) return "none";
   return `${rollup.finding_count || 0} findings, ${rollup.highest_severity || "none"}`;
+}
+
+function registryOperationalSummary(entry) {
+  const stored = entry.operational_summary || entry.artifacts?.authority_operational_summary;
+  const workspace = entry.artifacts?.authority_workspace_projection || {};
+  const summary = stored
+    ? {
+        ...stored,
+        lifecycle: {
+          ...(stored.lifecycle || {}),
+          status: entry.status,
+          events: registryLifecycleEvents(entry),
+        },
+        replay_readiness: replayReadinessProjection(entry, stored.replay_readiness),
+        relationship_graph: relationshipGraphProjection(entry, stored.relationship_graph),
+      }
+    : {
+        schema_version: "authority_operational_summary.v1",
+        authority_ref: entry.authority_ref,
+        authority_version: entry.authority_version || authorityVersionFromRef(entry.authority_ref),
+        protected_resource: entryProtectedResource(entry),
+        governed_action: entry.governed_action,
+        lifecycle: {
+          status: entry.status,
+          events: registryLifecycleEvents(entry),
+        },
+        drift_summary: [],
+        replay_readiness: replayReadinessProjection(entry),
+        governance_meaning: [
+          workspace.operational_change || firstText(entry.bundle?.operational_implications) || `${entry.authority_ref} governs ${entry.governed_action}.`,
+          workspace.continuity_posture || entry.continuity_posture || "Continuity posture should be reviewed.",
+          workspace.replay_posture || "Replay evidence binds to this authority lineage when receipt evidence is present.",
+        ],
+        relationship_graph: relationshipGraphProjection(entry),
+      };
+  return summary;
+}
+
+function replayReadinessProjection(entry, existing = {}) {
+  const receiptPresent = Boolean(entry.latest_receipt_hash || entry.publication_receipt?.receipt_hash || existing.receipt_present);
+  const immutable = entry.immutable_inputs || {};
+  return {
+    receipt_present: receiptPresent,
+    semantic_hashes_aligned: Boolean(existing.semantic_hashes_aligned || immutable.preview_hash || immutable.review_packet_hashes || immutable.diff_hash),
+    lineage_complete: Boolean(existing.lineage_complete || entry.lineage),
+    manifest_aligned: Boolean(existing.manifest_aligned || immutable.manifest_hash || entry.publication_receipt?.manifest_hash),
+    summary: existing.summary || (receiptPresent ? `Replay can bind to receipt ${entry.latest_receipt_hash || entry.publication_receipt.receipt_hash}.` : "Publication receipt evidence is missing."),
+  };
+}
+
+function relationshipGraphProjection(entry, existing = {}) {
+  const nodes = existing.nodes?.length
+    ? existing.nodes
+    : [
+        {
+          authority_ref: entry.authority_ref,
+          authority_version: entry.authority_version || authorityVersionFromRef(entry.authority_ref),
+          status: entry.status,
+        },
+      ];
+  const edges = existing.edges?.length ? existing.edges : [];
+  if (entry.superseded_by && !edges.some((edge) => edge.from === entry.authority_ref && edge.to === entry.superseded_by)) {
+    edges.push({ from: entry.authority_ref, to: entry.superseded_by, relationship: "superseded_by" });
+  }
+  return { nodes, edges };
 }
 
 function renderBundleRegistry() {
@@ -1185,35 +1271,74 @@ function renderBundleDetail(entry, mode = "summary") {
 }
 
 function renderRegistryDetailSummary(detail, entry) {
+  const summary = registryOperationalSummary(entry);
   const shell = document.createElement("div");
   shell.className = "registry-detail-shell";
   const header = document.createElement("div");
   header.className = "registry-detail-summary";
   const titleBlock = document.createElement("div");
   const title = document.createElement("h3");
-  title.textContent = entry.authority_ref;
+  title.textContent = summary.authority_ref;
   const subtitle = document.createElement("p");
-  subtitle.textContent = `${entryProtectedResource(entry)} | ${entry.governed_action}`;
+  subtitle.textContent = `${summary.protected_resource || entryProtectedResource(entry)} | ${summary.governed_action || entry.governed_action}`;
   titleBlock.append(title, subtitle);
   const status = document.createElement("span");
   status.className = `status-badge ${entry.status}`;
-  status.textContent = formatLabel(entry.status);
+  status.textContent = formatLabel(summary.lifecycle?.status || entry.status);
   header.append(titleBlock, status);
 
   const metrics = document.createElement("div");
   metrics.className = "registry-detail-grid";
   metrics.append(
     registryDetailMetric("Lifecycle", formatLabel(entry.status)),
-    registryDetailMetric("Replay", entry.replay_readiness || (entry.latest_receipt_hash ? "receipt available" : "receipt pending")),
-    registryDetailMetric("Continuity", entry.continuity_posture),
+    registryDetailMetric("Replay", replayReadinessLabel(summary.replay_readiness)),
+    registryDetailMetric("Continuity", entry.continuity_posture || "review recommended"),
     registryDetailMetric("Diagnostics", diagnosticRollupSummary(entry.diagnostic_summary)),
   );
+
+  const meaningTitle = document.createElement("h3");
+  meaningTitle.textContent = "Governance meaning";
+  const meaning = document.createElement("ul");
+  meaning.className = "operations-list";
+  for (const item of summary.governance_meaning || []) {
+    const li = document.createElement("li");
+    const strong = document.createElement("strong");
+    strong.textContent = item;
+    li.appendChild(strong);
+    meaning.appendChild(li);
+  }
+
+  const replayTitle = document.createElement("h3");
+  replayTitle.textContent = "Replay readiness";
+  const replay = document.createElement("dl");
+  replay.className = "compact-dl";
+  renderDefinitionValuesInto(replay, {
+    Receipt: summary.replay_readiness?.receipt_present ? "present" : "missing",
+    "Semantic hashes": summary.replay_readiness?.semantic_hashes_aligned ? "aligned" : "incomplete",
+    Lineage: summary.replay_readiness?.lineage_complete ? "complete" : "incomplete",
+    Manifest: summary.replay_readiness?.manifest_aligned ? "aligned" : "incomplete",
+  });
+
+  const driftTitle = document.createElement("h3");
+  driftTitle.textContent = "Drift summary";
+  const drift = document.createElement("ul");
+  drift.className = "operations-list";
+  const driftItems = summary.drift_summary?.length ? summary.drift_summary : [{ drift_type: "No drift indicators", from: "", to: "No lineage drift currently requires attention." }];
+  for (const item of driftItems) {
+    const li = document.createElement("li");
+    const strong = document.createElement("strong");
+    strong.textContent = formatLabel(item.drift_type);
+    const span = document.createElement("span");
+    span.textContent = item.from || item.to ? `${item.from || "none"} -> ${item.to || "none"}` : "";
+    li.append(strong, span);
+    drift.appendChild(li);
+  }
 
   const timelineTitle = document.createElement("h3");
   timelineTitle.textContent = "Lifecycle timeline";
   const timeline = document.createElement("ol");
   timeline.className = "registry-detail-timeline";
-  for (const event of registryLifecycleEvents(entry)) {
+  for (const event of summary.lifecycle?.events || registryLifecycleEvents(entry)) {
     const item = document.createElement("li");
     const eventName = document.createElement("strong");
     eventName.textContent = formatLabel(lifecycleEventType(event));
@@ -1236,8 +1361,60 @@ function renderRegistryDetailSummary(detail, entry) {
     timeline.appendChild(item);
   }
 
-  shell.append(header, metrics, timelineTitle, timeline);
+  const graphTitle = document.createElement("h3");
+  graphTitle.textContent = "Relationship graph";
+  const graph = renderRelationshipGraph(summary.relationship_graph);
+
+  shell.append(header, metrics, meaningTitle, meaning, replayTitle, replay, driftTitle, drift, timelineTitle, timeline, graphTitle, graph);
   detail.appendChild(shell);
+}
+
+function replayReadinessLabel(replay) {
+  if (!replay) return "receipt pending";
+  return replay.receipt_present && replay.semantic_hashes_aligned && replay.lineage_complete && replay.manifest_aligned
+    ? "replay ready"
+    : replay.receipt_present
+      ? "receipt present"
+      : "receipt pending";
+}
+
+function renderDefinitionValuesInto(node, values) {
+  node.innerHTML = "";
+  for (const [label, value] of Object.entries(values)) {
+    const wrapper = document.createElement("div");
+    const dt = document.createElement("dt");
+    const dd = document.createElement("dd");
+    dt.textContent = label;
+    dd.textContent = value;
+    wrapper.append(dt, dd);
+    node.appendChild(wrapper);
+  }
+}
+
+function renderRelationshipGraph(graph) {
+  const list = document.createElement("ol");
+  list.className = "relationship-graph";
+  const nodes = graph?.nodes || [];
+  const edges = graph?.edges || [];
+  if (!nodes.length) {
+    const item = document.createElement("li");
+    item.textContent = "No lineage relationships recorded yet.";
+    list.appendChild(item);
+    return list;
+  }
+  for (const node of nodes) {
+    const item = document.createElement("li");
+    const label = document.createElement("strong");
+    label.textContent = `${node.authority_ref} ${node.status ? `(${formatLabel(node.status)})` : ""}`;
+    const outgoing = edges.filter((edge) => edge.from === node.authority_ref);
+    const span = document.createElement("span");
+    span.textContent = outgoing.length
+      ? outgoing.map((edge) => `${edge.relationship} -> ${edge.to}`).join("; ")
+      : "current lineage node";
+    item.append(label, span);
+    list.appendChild(item);
+  }
+  return list;
 }
 
 function registryDetailMetric(label, value) {

@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from governance_ledger.local_registry import (
     MemoryRegistryAdapter,
+    build_authority_drift_indicators,
     build_authority_lifecycle_event,
+    build_authority_lineage_projection,
+    build_authority_operational_summary,
     build_authority_registry_entry,
     build_authority_workspace_projection,
     build_diagnostic_rollup,
@@ -90,12 +93,26 @@ def test_exported_event_does_not_equal_registered_event():
 
 def test_registering_authority_creates_registered_lifecycle_event():
     adapter = MemoryRegistryAdapter()
+    drafted = build_authority_lifecycle_event(
+        authority_ref="transfer-policy@3.5.6",
+        event_type="drafted",
+        timestamp="2026-05-26T18:00:00Z",
+    )
+    reviewed = build_authority_lifecycle_event(
+        authority_ref="transfer-policy@3.5.6",
+        event_type="reviewed",
+        timestamp="2026-05-26T18:05:00Z",
+        previous_event_id=drafted["event_id"],
+    )
     exported = build_authority_lifecycle_event(
         authority_ref="transfer-policy@3.5.6",
         event_type="exported",
         timestamp="2026-05-26T18:10:00Z",
+        previous_event_id=reviewed["event_id"],
         artifact_hashes={"bundle_hash": "sha256:bundle", "receipt_hash": "sha256:receipt"},
     )
+    adapter.append_lifecycle_event("transfer-policy@3.5.6", drafted)
+    adapter.append_lifecycle_event("transfer-policy@3.5.6", reviewed)
     adapter.append_lifecycle_event("transfer-policy@3.5.6", exported)
     registered = build_authority_lifecycle_event(
         authority_ref="transfer-policy@3.5.6",
@@ -106,8 +123,30 @@ def test_registering_authority_creates_registered_lifecycle_event():
     )
     events = adapter.append_lifecycle_event("transfer-policy@3.5.6", registered)
 
-    assert [event["event_type"] for event in events] == ["exported", "registered"]
+    assert [event["event_type"] for event in events] == ["drafted", "reviewed", "exported", "registered"]
     assert events[-1]["previous_event_id"] == exported["event_id"]
+    assert events[-1]["caused_by_event_id"] == exported["event_id"]
+
+
+def test_invalid_lifecycle_transition_fails():
+    registered = build_authority_lifecycle_event(
+        authority_ref="transfer-policy@3.5.6",
+        event_type="registered",
+        timestamp="2026-05-26T18:11:00Z",
+    )
+    drafted = build_authority_lifecycle_event(
+        authority_ref="transfer-policy@3.5.6",
+        event_type="drafted",
+        timestamp="2026-05-26T18:12:00Z",
+        previous_event_id=registered["event_id"],
+    )
+
+    try:
+        append_lifecycle_event([registered], drafted)
+    except ValueError as exc:
+        assert "registered -> drafted" in str(exc)
+    else:
+        raise AssertionError("registered -> drafted transition should fail")
 
 
 def test_revoked_authority_keeps_prior_lineage():
@@ -176,9 +215,148 @@ def test_registry_projection_is_deterministic():
     assert first["diagnostic_rollup"]["diagnostic_ids"] == ["GQ004"]
 
 
+def test_drift_detection_compares_previous_registry_state():
+    previous = _registry_entry(
+        "transfer-policy@3.4.5",
+        approval_count=1,
+        escalation_threshold="amount > 250,000",
+        continuity_posture="resume revalidation",
+    )
+    current = _registry_entry(
+        "transfer-policy@3.4.6",
+        approval_count=2,
+        escalation_threshold="amount > 100,000",
+        continuity_posture="resume revalidation and revocation invalidation",
+    )
+
+    drift = build_authority_drift_indicators(previous, current)
+
+    assert {
+        (item["drift_type"], item["severity"], item["from"], item["to"])
+        for item in drift
+    } == {
+        ("continuity_posture_changed", "warning", "resume revalidation", "resume revalidation and revocation invalidation"),
+        ("escalation_threshold_changed", "info", "amount > 250,000", "amount > 100,000"),
+        ("approval_requirement_changed", "warning", 1, 2),
+    }
+
+
+def test_authority_lineage_projection_builds_chain_and_drift():
+    previous = _registry_entry(
+        "transfer-policy@3.4.5",
+        approval_count=1,
+        status="superseded",
+        superseded_by="transfer-policy@3.4.6",
+    )
+    current = _registry_entry(
+        "transfer-policy@3.4.6",
+        approval_count=2,
+        status="revoked",
+        latest_receipt_hash="sha256:receipt",
+    )
+
+    lineage = build_authority_lineage_projection(entries=[current, previous])
+
+    assert lineage["schema_version"] == "authority_lineage_projection.v1"
+    assert [node["authority_ref"] for node in lineage["nodes"]] == [
+        "transfer-policy@3.4.5",
+        "transfer-policy@3.4.6",
+    ]
+    assert {
+        (edge["from"], edge["to"], edge["relationship"])
+        for edge in lineage["edges"]
+    } == {
+        ("transfer-policy@3.4.5", "transfer-policy@3.4.6", "version_successor"),
+        ("transfer-policy@3.4.5", "transfer-policy@3.4.6", "superseded_by"),
+    }
+    assert any(item["drift_type"] == "approval_requirement_changed" for item in lineage["drift_indicators"])
+
+
+def test_authority_operational_summary_renders_governance_object_view():
+    entry = _registry_entry(
+        "transfer-policy@3.4.5",
+        approval_count=1,
+        status="registered",
+        latest_receipt_hash="sha256:receipt",
+    )
+    workspace_projection = {
+        "operational_change": "Executions above $300,000 require treasury governance review.",
+        "continuity_posture": "Resumed workflows invalidate after authority revocation.",
+        "replay_posture": "Replay evidence binds to transfer-policy@3.4.5 lineage.",
+    }
+
+    summary = build_authority_operational_summary(
+        authority={
+            "schema_version": "authority_contract.v1",
+            "protected_resource": "Corporate Treasury Transfer System",
+            "governed_actions": ["transfer funds"],
+        },
+        bundle={"schema_version": "authority_bundle.v1", "authority_ref": "transfer-policy@3.4.5"},
+        workspace_projection=workspace_projection,
+        registry_entry=entry,
+        lineage_entries=[entry],
+    )
+
+    assert summary["schema_version"] == "authority_operational_summary.v1"
+    assert summary["governance_meaning"] == [
+        "Executions above $300,000 require treasury governance review.",
+        "Resumed workflows invalidate after authority revocation.",
+        "Replay evidence binds to transfer-policy@3.4.5 lineage.",
+    ]
+    assert summary["replay_readiness"]["receipt_present"] is True
+    assert summary["relationship_graph"]["nodes"][0]["authority_ref"] == "transfer-policy@3.4.5"
+
+
 def _diagnostic(code: str, domain: str, severity: str) -> dict:
     return {
         "code": code,
         "domain": domain,
         "severity": severity,
+    }
+
+
+def _registry_entry(
+    authority_ref: str,
+    *,
+    approval_count: int,
+    status: str = "registered",
+    escalation_threshold: str = "amount > 250,000",
+    continuity_posture: str = "resume revalidation",
+    superseded_by: str | None = None,
+    latest_receipt_hash: str | None = None,
+) -> dict:
+    return {
+        "schema_version": "authority_registry_entry.v1",
+        "authority_ref": authority_ref,
+        "authority_version": authority_ref.rsplit("@", 1)[1],
+        "status": status,
+        "protected_resource": "Corporate Treasury Transfer System",
+        "governed_action": "transfer funds",
+        "continuity_posture": continuity_posture,
+        "replay_readiness": "receipt available" if latest_receipt_hash else "receipt pending",
+        "diagnostic_summary": {},
+        "latest_bundle_hash": "sha256:bundle",
+        "latest_receipt_hash": latest_receipt_hash,
+        "lifecycle_event_ids": [],
+        "supersedes": None,
+        "superseded_by": superseded_by,
+        "created_at": "2026-05-26T18:00:00Z",
+        "updated_at": "2026-05-26T18:00:00Z",
+        "escalation_threshold": escalation_threshold,
+        "approval_requirement": approval_count,
+        "lifecycle_events": [
+            {
+                "schema_version": "authority_lifecycle_event.v1",
+                "event_id": f"event-{authority_ref}",
+                "authority_ref": authority_ref,
+                "authority_version": authority_ref.rsplit("@", 1)[1],
+                "event_type": status,
+                "timestamp": "2026-05-26T18:00:00Z",
+                "actor": "local-ledger-ui",
+                "source": "governance-ledger",
+                "artifact_hashes": {"bundle_hash": "sha256:bundle"},
+                "notes": {"detail": "Lifecycle event recorded."},
+                "previous_event_id": None,
+            }
+        ],
     }

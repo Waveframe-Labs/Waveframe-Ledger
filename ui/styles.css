@@ -1389,6 +1389,34 @@ textarea {
   color: #36433b;
 }
 
+.relationship-graph {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.relationship-graph li {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.35fr) minmax(0, 1fr);
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #fbfaf7;
+}
+
+.relationship-graph strong {
+  color: var(--green);
+  overflow-wrap: anywhere;
+}
+
+.relationship-graph span {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
 .bundle-row,
 .diagnostic-row {
   padding: 16px;
@@ -1520,6 +1548,7 @@ textarea {
   .registry-controls,
   .registry-detail-grid,
   .registry-detail-timeline li,
+  .relationship-graph li,
   .diagnostics-summary,
   .form-grid,
   .outcome-grid,

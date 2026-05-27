@@ -14,6 +14,7 @@ from urllib.parse import urlparse
 from governance_ledger.local_registry.projection import (
     build_authority_workspace_projection as build_local_authority_workspace_projection,
 )
+from governance_ledger.local_registry.projections.operational import build_authority_operational_summary
 from governance_ledger.semantics.diagnostics import build_governance_quality_diagnostics
 from governance_ledger.semantics.packets import build_governance_review_packet
 from governance_ledger.semantics.preview import build_governance_impact_preview
@@ -140,6 +141,13 @@ def compose_authority_publication(draft: dict[str, Any]) -> dict[str, Any]:
     )
     diagnostics = build_ui_diagnostics(authority, draft, bundle)
     release_narrative = build_authority_release_narrative(authority, preview, bundle)
+    workspace_projection = build_authority_workspace_projection(
+        authority,
+        preview,
+        bundle,
+        diagnostics,
+        release_narrative,
+    )
     return {
         "authority_contract": authority,
         "governance_impact_preview": preview,
@@ -148,12 +156,11 @@ def compose_authority_publication(draft: dict[str, Any]) -> dict[str, Any]:
         "authority_bundle": bundle,
         "authority_registry_projection": build_authority_registry_projection(authority, bundle),
         "authority_release_narrative": release_narrative,
-        "authority_workspace_projection": build_authority_workspace_projection(
-            authority,
-            preview,
-            bundle,
-            diagnostics,
-            release_narrative,
+        "authority_workspace_projection": workspace_projection,
+        "authority_operational_summary": build_authority_operational_summary(
+            authority=authority,
+            bundle=bundle,
+            workspace_projection=workspace_projection,
         ),
         "diagnostics": diagnostics,
     }

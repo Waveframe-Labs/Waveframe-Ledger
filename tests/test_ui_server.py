@@ -29,6 +29,7 @@ def test_ui_server_composes_artifacts_from_authoring_fields():
     registry_projection = result["authority_registry_projection"]
     release_narrative = result["authority_release_narrative"]
     workspace_projection = result["authority_workspace_projection"]
+    operational_summary = result["authority_operational_summary"]
 
     assert authority["schema_version"] == "authority_contract.v1"
     assert authority["protected_resource"] == "Corporate Treasury Transfer System"
@@ -55,6 +56,13 @@ def test_ui_server_composes_artifacts_from_authoring_fields():
     assert workspace_projection["continuity_posture"] == release_narrative["continuity_summary"]
     assert workspace_projection["lifecycle_effect"] == release_narrative["lifecycle_summary"]
     assert workspace_projection["diagnostics_summary"] == {"findings": 2, "warnings": 0, "info": 2}
+    assert operational_summary["schema_version"] == "authority_operational_summary.v1"
+    assert operational_summary["authority_ref"] == "treasury-policy@2.1.0"
+    assert operational_summary["governance_meaning"] == [
+        workspace_projection["operational_change"],
+        workspace_projection["continuity_posture"],
+        workspace_projection["replay_posture"],
+    ]
     assert [diagnostic["code"] for diagnostic in result["diagnostics"]] == ["GQ004", "GQ005"]
     assert {diagnostic["blocks_publication"] for diagnostic in result["diagnostics"]} == {False}
 
