@@ -6,6 +6,8 @@ const registerButton = document.querySelector("#register-button");
 const newDraftButton = document.querySelector("#new-draft-button");
 const extractPolicyButton = document.querySelector("#extract-policy-button");
 const useExtractionButton = document.querySelector("#use-extraction-button");
+const applyAllExtractionButton = document.querySelector("#apply-all-extraction-button");
+const openReconciliationButton = document.querySelector("#open-reconciliation-button");
 const policySourceText = document.querySelector("#policy-source-text");
 const draftSessionStatus = document.querySelector("#draft-session-status");
 let currentArtifacts = null;
@@ -123,6 +125,9 @@ function startNewDraft() {
   };
   exportButton.disabled = true;
   registerButton.disabled = true;
+  useExtractionButton.disabled = true;
+  applyAllExtractionButton.disabled = true;
+  openReconciliationButton.disabled = true;
   $("#status-authority-ref").textContent = "not generated";
   $("#status-semantic").textContent = "draft required";
   $("#status-bundle").textContent = "not exported";
@@ -158,6 +163,8 @@ async function extractPolicySemantics() {
     currentExtraction = extraction;
     renderSemanticExtraction(extraction);
     useExtractionButton.disabled = false;
+    applyAllExtractionButton.disabled = false;
+    openReconciliationButton.disabled = false;
     pendingRegistration = null;
     exportButton.disabled = true;
     registerButton.disabled = true;
@@ -187,24 +194,25 @@ function renderSemanticExtraction(extraction) {
   const actor = candidate.governance_actor || {};
   const approvalChain = candidate.approval_chain_semantics || {};
   renderDefinitionValues("#extracted-authority", {
-    Resource: candidate.protected_system || "missing",
-    Action: candidate.governed_action || "missing",
-    "Approval role": candidate.approver_role || "missing",
-    "Approval count": candidate.approval_count ?? "missing",
-    "Escalation threshold": candidate.escalation_threshold ? `$${Number(candidate.escalation_threshold).toLocaleString()}` : "missing",
-    Continuity: candidate.continuity_revalidation || candidate.revocation_invalidates_resume ? "continuity semantics detected" : "missing",
-    "Validity window": temporal.validity_window || (candidate.validity_days ? `P${candidate.validity_days}D` : "missing"),
-    "Timestamp source": temporal.timestamp_source || "missing",
-    "Snapshot expectation": snapshot.snapshot_required ? "required for resumed workflows" : "missing",
-    "Execution context": executionContext.execution_context ? formatLabel(executionContext.execution_context) : "missing",
-    "Execution boundary": executionContext.execution_boundary ? formatLabel(executionContext.execution_boundary) : "missing",
-    "Responsible actor": actor.actor_id || "missing",
+    Resource: candidate.protected_system || "Not explicitly defined",
+    Action: candidate.governed_action || "Not explicitly defined",
+    "Approval role": candidate.approver_role || "Not explicitly defined",
+    "Approval count": candidate.approval_count ?? "Not explicitly defined",
+    "Escalation threshold": candidate.escalation_threshold ? `$${Number(candidate.escalation_threshold).toLocaleString()}` : "Not explicitly defined",
+    Continuity: candidate.continuity_revalidation || candidate.revocation_invalidates_resume ? "continuity semantics detected" : "Not explicitly defined",
+    "Validity window": temporal.validity_window || (candidate.validity_days ? `P${candidate.validity_days}D` : "Not explicitly defined"),
+    "Timestamp source": temporal.timestamp_source || "Not explicitly defined",
+    "Snapshot expectation": snapshot.snapshot_required ? "required for resumed workflows" : "Not explicitly defined",
+    "Execution context": executionContext.execution_context ? formatLabel(executionContext.execution_context) : "Not explicitly defined",
+    "Execution boundary": executionContext.execution_boundary ? formatLabel(executionContext.execution_boundary) : "Not explicitly defined",
+    "Responsible actor": actor.actor_id || "Not explicitly defined",
     "Approval independence": approvalChain.independence_required ? "required" : "not specified",
     "Actor attestation": approvalChain.attestation_required ? "required" : "not specified",
   });
   renderExtractionList("#extracted-rules", extraction.candidate_rules, "No deterministic obligations extracted.");
   renderExtractionList("#extracted-ambiguities", extraction.ambiguities, "No ambiguity detected by deterministic patterns.");
-  renderExtractionList("#extracted-missing", extraction.missing_information, "No missing anchor fields detected.");
+  renderExtractionList("#extracted-missing", extraction.missing_information, "No undefined anchor fields detected.");
+  renderProvenanceList("#semantic-provenance", extraction.semantic_provenance);
   $("#extraction-status").textContent = `${extraction.schema_version} requires operator confirmation. Source hash ${shortHash(extraction.source_hash)}.`;
 }
 
@@ -224,10 +232,28 @@ function renderExtractionList(selector, items, emptyText) {
   }
 }
 
-function useExtractedDraft() {
+function renderProvenanceList(selector, items) {
+  const node = $(selector);
+  if (!node) return;
+  node.innerHTML = "";
+  const list = items?.length ? items : [{ field: "provenance", confidence: "low", source_spans: [], value: "No deterministic source support recorded." }];
+  for (const item of list) {
+    const li = document.createElement("li");
+    const strong = document.createElement("strong");
+    strong.textContent = `${formatLabel(item.field)} · ${formatLabel(item.confidence || "low")} confidence`;
+    const span = document.createElement("span");
+    const sourceText = item.source_spans?.[0]?.text ? `Source: "${item.source_spans[0].text}"` : "No direct source span recorded.";
+    span.textContent = sourceText;
+    li.append(strong, span);
+    node.appendChild(li);
+  }
+}
+
+function useExtractedDraft(options) {
+  const applyOptions = options || {};
   if (!currentExtraction?.candidate_authority) return;
   applyDraftToForm(currentExtraction.candidate_authority);
-  currentSemanticExtras = semanticExtrasFromCandidate(currentExtraction.candidate_authority);
+  currentSemanticExtras = applyOptions.includeSemantics ? semanticExtrasFromCandidate(currentExtraction.candidate_authority) : {};
   currentArtifacts = null;
   pendingRegistration = null;
   saveDraftSession();
@@ -244,10 +270,23 @@ function useExtractedDraft() {
     receiptGenerated: false,
     authorityRegistered: false,
   });
-  $("#extraction-status").textContent = "Extracted candidate copied into the draft. Review Impact is required before export.";
+  $("#extraction-status").textContent = applyOptions.includeSemantics
+    ? "All candidate semantics copied into the draft. Review Impact is required before export."
+    : "Deterministic fields copied into the draft. Nested semantic candidates remain in extraction review.";
   renderOperatorGuidance(
     "Review extracted meaning next.",
     "Ledger populated the draft from policy text, but publication state has not advanced.",
+  );
+}
+
+function openReconciliationReview() {
+  if (!currentExtraction) return;
+  const ambiguityCount = currentExtraction.ambiguities?.length || 0;
+  const provenanceCount = currentExtraction.semantic_provenance?.length || 0;
+  $("#extraction-status").textContent = `Reconciliation review opened: ${ambiguityCount} ambiguities and ${provenanceCount} provenance entries require operator interpretation before publication.`;
+  renderOperatorGuidance(
+    "Resolve interpretation boundaries.",
+    "Review ambiguities and semantic provenance before applying candidate semantics to the draft.",
   );
 }
 
@@ -2618,7 +2657,9 @@ exportButton.addEventListener("click", exportBundle);
 registerButton.addEventListener("click", registerAuthorityLocally);
 newDraftButton.addEventListener("click", startNewDraft);
 extractPolicyButton.addEventListener("click", extractPolicySemantics);
-useExtractionButton.addEventListener("click", useExtractedDraft);
+useExtractionButton.addEventListener("click", () => useExtractedDraft({ includeSemantics: false }));
+applyAllExtractionButton.addEventListener("click", () => useExtractedDraft({ includeSemantics: true }));
+openReconciliationButton.addEventListener("click", openReconciliationReview);
 form.addEventListener("input", () => {
   saveDraftSession();
   pendingRegistration = null;

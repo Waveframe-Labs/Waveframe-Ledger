@@ -13,6 +13,7 @@
     "confidence_posture",
     "candidate_authority",
     "candidate_rules",
+    "semantic_provenance",
     "ambiguities",
     "missing_information",
     "non_goals"
@@ -38,6 +39,12 @@
           "summary": { "type": "string" },
           "fields": { "type": "object" }
         }
+      }
+    },
+    "semantic_provenance": {
+      "type": "array",
+      "items": {
+        "$ref": "governance_semantic_provenance.v1.json"
       }
     },
     "ambiguities": {

@@ -217,6 +217,7 @@ def extract_governance_semantics(
         )
 
     ambiguities = _ambiguities(text, candidate)
+    semantic_provenance = _semantic_provenance(text, candidate)
     return {
         "schema_version": EXTRACTION_SCHEMA_VERSION,
         "source_id": source["source_id"],
@@ -226,6 +227,7 @@ def extract_governance_semantics(
         "confidence_posture": "requires_human_review",
         "candidate_authority": candidate,
         "candidate_rules": candidate_rules,
+        "semantic_provenance": semantic_provenance,
         "ambiguities": ambiguities,
         "missing_information": missing,
         "non_goals": list(_NON_GOALS),
@@ -277,7 +279,7 @@ def _extract_approval_count(text: str) -> int | None:
     match = re.search(r"\b(one|two|three)\s+(?:independent\s+)?approvals?\b", text, re.IGNORECASE)
     if match:
         return words[match.group(1).lower()]
-    if re.search(r"\bapproval\b|\bapproved\b", text, re.IGNORECASE):
+    if re.search(r"\bapproval\b|\bapproved\b|\bapprove\b", text, re.IGNORECASE):
         return 1
     return None
 
@@ -454,13 +456,13 @@ def _extract_approval_chain_semantics(text: str, role: str, approval_count: int 
     lower = text.lower()
     if not (role or approval_count or "approval" in lower or "reviewer" in lower or "dual control" in lower):
         return {}
-    independence = _contains_any(lower, ["independent reviewer", "independent approval", "independent approvals", "cannot self-approve", "self approve", "dual control", "separation of duties"])
+    independence = _contains_any(lower, ["independent reviewer", "independent approval", "independent approvals", "cannot self-approve", "self approve", "dual control", "separation of duties", "originate and approve"])
     return {
         "schema_version": "approval_chain_semantics.v1",
         "required_approval_count": approval_count,
         "required_roles": [role] if role else [],
         "independence_required": independence,
-        "self_approval_prohibited": _contains_any(lower, ["cannot self-approve", "self approve", "separation of duties"]),
+        "self_approval_prohibited": _contains_any(lower, ["cannot self-approve", "self approve", "separation of duties", "originate and approve"]),
         "independent_actor_refs": [role] if independence and role and "independent" not in role else [],
         "delegation_posture": _delegation_posture(lower),
         "attestation_required": _contains_any(lower, ["attested operator", "attested actor", "attested reviewer", "identity attestation"]),
@@ -640,6 +642,63 @@ def _ambiguities(text: str, candidate: dict[str, Any]) -> list[dict[str, str]]:
             }
         )
     return ambiguities
+
+
+def _semantic_provenance(text: str, candidate: dict[str, Any]) -> list[dict[str, Any]]:
+    entries = []
+    provenance_specs = [
+        ("protected_resource", candidate.get("protected_system"), [candidate.get("protected_system")]),
+        ("governed_action", candidate.get("governed_action"), [candidate.get("governed_action")]),
+        ("approval_role", candidate.get("approver_role"), [candidate.get("approver_role"), str(candidate.get("approver_role") or "").replace("-", " "), "approved by", "approval by", "approval from", "review by"]),
+        ("approval_count", candidate.get("approval_count"), ["approval", "approvals", "approve", "approved"]),
+        ("escalation_threshold", candidate.get("escalation_threshold"), ["above", "over", "exceed", str(candidate.get("escalation_threshold") or "")]),
+        ("validity_window", (candidate.get("temporal_semantics") or {}).get("validity_window"), ["valid for", "expires", "validity"]),
+        ("timestamp_source", (candidate.get("temporal_semantics") or {}).get("timestamp_source"), ["signed execution timestamp", "signed oracle", "block timestamp", "cloud-attested time"]),
+        ("state_snapshot", (candidate.get("state_snapshot_semantics") or {}).get("snapshot_required"), ["current governance state", "current policy version", "revalidat", "snapshot"]),
+        ("execution_context", (candidate.get("execution_context_semantics") or {}).get("execution_context"), ["queued", "scheduled", "batch", "external", "manual override", "multi-step", "resume later"]),
+        ("responsible_actor", (candidate.get("governance_actor") or {}).get("actor_id"), [(candidate.get("governance_actor") or {}).get("actor_id")]),
+        ("approval_independence", (candidate.get("approval_chain_semantics") or {}).get("independence_required"), ["independent reviewer", "cannot self-approve", "dual control", "separation of duties", "originate and approve", "approve"]),
+        ("delegation_posture", (candidate.get("approval_chain_semantics") or {}).get("delegation_posture"), ["delegated authority", "delegation"]),
+        ("attestation_requirement", (candidate.get("approval_chain_semantics") or {}).get("attestation_required"), ["attested operator", "attested actor", "attested reviewer", "identity attestation"]),
+        ("identity_continuity", (candidate.get("identity_continuity_semantics") or {}).get("identity_continuity_required"), ["identity continuity", "same operator", "same approver", "resume"]),
+    ]
+    for field, value, needles in provenance_specs:
+        if value in ("", None, {}, []):
+            continue
+        confidence = _confidence_for_value(value)
+        span = _source_span(text, [needle for needle in needles if needle])
+        entries.append(
+            {
+                "schema_version": "governance_semantic_provenance.v1",
+                "field": field,
+                "value": value,
+                "confidence": confidence if span else "low",
+                "source_spans": [span] if span else [],
+                "extraction_method": "deterministic_pattern",
+            }
+        )
+    return entries
+
+
+def _confidence_for_value(value: Any) -> str:
+    if value in (True, False) or isinstance(value, (int, float)):
+        return "high"
+    if isinstance(value, str) and value not in {"unspecified", "ambiguous", "not_present"}:
+        return "high"
+    return "low"
+
+
+def _source_span(text: str, needles: list[str]) -> dict[str, Any] | None:
+    lower = text.lower()
+    for needle in needles:
+        clean = str(needle or "").lower()
+        if not clean:
+            continue
+        index = lower.find(clean)
+        if index >= 0:
+            end = index + len(clean)
+            return {"text": text[index:end], "start": index, "end": end}
+    return None
 
 
 def _first_match(text: str, patterns: list[str]) -> str:

@@ -35,6 +35,7 @@ def test_semantic_extraction_is_deterministic_and_requires_review():
     assert first["schema_version"] == "governance_semantic_extraction.v1"
     assert first["extraction_method"] == "deterministic_pattern_pass"
     assert first["confidence_posture"] == "requires_human_review"
+    assert first["semantic_provenance"]
     assert "requires operator confirmation before publication" in first["non_goals"]
 
 
@@ -64,6 +65,27 @@ def test_semantic_extraction_extracts_candidate_authority_anchors():
         "temporal_authority_semantics",
         "state_posture_snapshot_semantics",
     }
+    provenance = {item["field"]: item for item in extraction["semantic_provenance"]}
+    assert provenance["approval_role"]["confidence"] == "high"
+    assert provenance["approval_role"]["source_spans"][0]["text"] == "treasury governance"
+    assert provenance["validity_window"]["value"] == "P30D"
+    assert provenance["validity_window"]["extraction_method"] == "deterministic_pattern"
+
+
+def test_semantic_provenance_tracks_confidence_and_source_spans():
+    extraction = extract_governance_semantics(
+        "No individual may originate and approve the same transfer request."
+    )
+
+    provenance = {
+        item["field"]: item
+        for item in extraction["semantic_provenance"]
+    }
+
+    assert provenance["approval_count"]["confidence"] == "high"
+    assert provenance["approval_independence"]["value"] is True
+    assert provenance["approval_independence"]["confidence"] == "high"
+    assert provenance["approval_independence"]["source_spans"][0]["text"] == "originate and approve"
 
 
 def test_semantic_extraction_emits_timestamp_source_ambiguity_when_missing():
@@ -249,6 +271,7 @@ def test_semantic_extraction_keeps_missing_fields_explicit():
 def test_semantic_extraction_schemas_are_canonical():
     source_schema = json.loads((ROOT / "schemas" / "governance_source.v1.json").read_text(encoding="utf-8"))
     extraction_schema = json.loads((ROOT / "schemas" / "governance_semantic_extraction.v1.json").read_text(encoding="utf-8"))
+    provenance_schema = json.loads((ROOT / "schemas" / "governance_semantic_provenance.v1.json").read_text(encoding="utf-8"))
     temporal_schema = json.loads((ROOT / "schemas" / "temporal_authority_semantics.v1.json").read_text(encoding="utf-8"))
     snapshot_schema = json.loads((ROOT / "schemas" / "state_posture_snapshot_semantics.v1.json").read_text(encoding="utf-8"))
     execution_context_schema = json.loads((ROOT / "schemas" / "execution_context_semantics.v1.json").read_text(encoding="utf-8"))
@@ -261,6 +284,9 @@ def test_semantic_extraction_schemas_are_canonical():
     assert "source_text" in source_schema["required"]
     assert extraction_schema["properties"]["schema_version"]["const"] == "governance_semantic_extraction.v1"
     assert "candidate_authority" in extraction_schema["required"]
+    assert "semantic_provenance" in extraction_schema["required"]
+    assert provenance_schema["properties"]["schema_version"]["const"] == "governance_semantic_provenance.v1"
+    assert provenance_schema["properties"]["extraction_method"]["const"] == "deterministic_pattern"
     assert temporal_schema["properties"]["schema_version"]["const"] == "temporal_authority_semantics.v1"
     assert temporal_schema["properties"]["runtime_enforced_by"]["const"] == "Guard/Cloud"
     assert snapshot_schema["properties"]["schema_version"]["const"] == "state_posture_snapshot_semantics.v1"

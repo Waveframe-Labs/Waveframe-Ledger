@@ -192,7 +192,9 @@
             </label>
             <div class="action-row">
               <button id="extract-policy-button" class="secondary-action" type="button">Extract Governance Meaning</button>
-              <button id="use-extraction-button" class="primary-action" type="button" disabled>Use Extracted Draft</button>
+              <button id="use-extraction-button" class="primary-action" type="button" disabled>Apply Deterministic Fields</button>
+              <button id="apply-all-extraction-button" class="secondary-action" type="button" disabled>Apply All Candidate Semantics</button>
+              <button id="open-reconciliation-button" class="secondary-action" type="button" disabled>Open Reconciliation Review</button>
             </div>
             <div id="extraction-review" class="extraction-review" aria-live="polite">
               <article>
@@ -208,8 +210,12 @@
                 <ul id="extracted-ambiguities" class="operations-list"></ul>
               </article>
               <article>
-                <h4>Missing information</h4>
+                <h4>Interpretation boundaries</h4>
                 <ul id="extracted-missing" class="operations-list"></ul>
+              </article>
+              <article>
+                <h4>Semantic provenance</h4>
+                <ul id="semantic-provenance" class="operations-list"></ul>
               </article>
               <p id="extraction-status" class="quiet">Extraction has not run yet. Operator confirmation is required before an authority draft changes.</p>
             </div>
