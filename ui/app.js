@@ -17,6 +17,7 @@ let currentExtraction = null;
 let currentSemanticExtras = {};
 let committedDraft = null;
 let authoringSessionDirty = false;
+let policySourceDirty = false;
 let livePreviewTimer = null;
 let reviewBusy = false;
 let workflowTimestamps = {
@@ -37,6 +38,16 @@ let workflowInvalidation = {
   reason: null,
   updated_at: null,
   invalidated_projections: [],
+};
+let semanticStateMachine = {
+  schema_version: "semantic_state_machine.v1",
+  draft_state: "uncommitted",
+  semantic_state: "not_ready",
+  impact_state: "not_reviewed",
+  publication_state: "blocked",
+  draft_hash: null,
+  artifact_draft_hash: null,
+  invalidation_reason: null,
 };
 const DRAFT_SESSION_KEY = "governance-ledger:draft-authority-session:v1";
 const BUNDLE_REGISTRY_KEY = "governance-ledger:authority-bundle-registry:v1";
@@ -59,6 +70,37 @@ function readDraft() {
     continuity_revalidation: data.get("continuity_revalidation") === "on",
     revocation_invalidates_resume: data.get("revocation_invalidates_resume") === "on",
     ...currentSemanticExtras,
+  };
+}
+
+function canonicalJson(value) {
+  if (Array.isArray(value)) {
+    return `[${value.map((item) => canonicalJson(item)).join(",")}]`;
+  }
+  if (value && typeof value === "object") {
+    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function stableHash(value) {
+  const text = canonicalJson(value);
+  let hash = 2166136261;
+  for (let index = 0; index < text.length; index += 1) {
+    hash ^= text.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return `draft:${(hash >>> 0).toString(16).padStart(8, "0")}`;
+}
+
+function committedDraftHash() {
+  return committedDraft ? stableHash(committedDraft) : null;
+}
+
+function setSemanticState(partial) {
+  semanticStateMachine = {
+    ...semanticStateMachine,
+    ...partial,
   };
 }
 
@@ -100,6 +142,15 @@ function saveDraftSession(options) {
   if (sessionOptions.commit) {
     committedDraft = structuredClone(session.draft);
     authoringSessionDirty = false;
+    setSemanticState({
+      draft_state: "committed",
+      semantic_state: policySourceDirty ? "invalidated" : "manual_authoring_committed",
+      impact_state: policySourceDirty ? "invalidated" : "not_reviewed",
+      publication_state: "blocked",
+      draft_hash: committedDraftHash(),
+      artifact_draft_hash: null,
+      invalidation_reason: policySourceDirty ? "policy_source_changed" : null,
+    });
   }
   window.localStorage.setItem(DRAFT_SESSION_KEY, JSON.stringify(session));
   draftSessionStatus.textContent = sessionOptions.commit
@@ -115,12 +166,30 @@ function restoreDraftSession() {
   if (!session) {
     committedDraft = null;
     authoringSessionDirty = true;
+    setSemanticState({
+      draft_state: "uncommitted",
+      semantic_state: "not_ready",
+      impact_state: "not_reviewed",
+      publication_state: "blocked",
+      draft_hash: null,
+      artifact_draft_hash: null,
+      invalidation_reason: "draft_not_committed",
+    });
     draftSessionStatus.textContent = "No committed draft yet. Save Draft or Review Impact to establish the authority draft.";
     updateWorkflowState({ draftReady: false });
     return;
   }
   committedDraft = session.committed_draft || session.draft || null;
   authoringSessionDirty = Boolean(session.authoring_session_state?.dirty);
+  setSemanticState({
+    draft_state: authoringSessionDirty ? "dirty" : "committed",
+    semantic_state: authoringSessionDirty ? "invalidated" : "manual_authoring_committed",
+    impact_state: authoringSessionDirty ? "invalidated" : "not_reviewed",
+    publication_state: "blocked",
+    draft_hash: committedDraftHash(),
+    artifact_draft_hash: null,
+    invalidation_reason: authoringSessionDirty ? "working_authoring_changes" : "restored_committed_draft",
+  });
   currentSemanticExtras = semanticExtrasFromCandidate(session.draft || {});
   for (const [key, value] of Object.entries(session.draft || {})) {
     const field = form.elements[key];
@@ -143,6 +212,7 @@ function commitCurrentDraft() {
 
 function saveWorkingAuthoringSession() {
   authoringSessionDirty = true;
+  invalidateSemanticLineage("draft_changed");
   return saveDraftSession({ commit: false });
 }
 
@@ -198,6 +268,16 @@ async function extractPolicySemantics() {
       throw new Error(extraction.error || "Unable to extract governance meaning.");
     }
     currentExtraction = extraction;
+    policySourceDirty = false;
+    setSemanticState({
+      draft_state: committedDraft ? "committed" : "uncommitted",
+      semantic_state: "extracted_requires_confirmation",
+      impact_state: "invalidated",
+      publication_state: "blocked",
+      draft_hash: committedDraftHash(),
+      artifact_draft_hash: null,
+      invalidation_reason: "extraction_requires_operator_confirmation",
+    });
     renderSemanticExtraction(extraction);
     useExtractionButton.disabled = false;
     applyAllExtractionButton.disabled = false;
@@ -293,8 +373,29 @@ function useExtractedDraft(options) {
   currentSemanticExtras = applyOptions.includeSemantics ? semanticExtrasFromCandidate(currentExtraction.candidate_authority) : {};
   currentArtifacts = null;
   pendingRegistration = null;
+  policySourceDirty = false;
   commitCurrentDraft();
-  markDraftInvalidated();
+  setSemanticState({
+    draft_state: "committed",
+    semantic_state: "operator_confirmed",
+    impact_state: "invalidated",
+    publication_state: "blocked",
+    draft_hash: committedDraftHash(),
+    artifact_draft_hash: null,
+    invalidation_reason: "extraction_applied_requires_review",
+  });
+  workflowInvalidation = {
+    active: true,
+    reason: "extraction_applied_requires_review",
+    updated_at: new Date().toISOString(),
+    invalidated_projections: [
+      "governance_impact_preview.v1",
+      "authority_diff_impact.v1",
+      "authority_workspace_projection.v1",
+      "authority_operational_summary.v1",
+      "publication_readiness",
+    ],
+  };
   workflowTimestamps.reviewed = null;
   workflowTimestamps.exported = null;
   workflowTimestamps.registered = null;
@@ -361,25 +462,46 @@ async function generateArtifacts(options = {}) {
   const shouldNavigate = options.navigate === true;
   const isReview = options.review === true || shouldNavigate;
   const isBackground = options.background === true;
+  if (!isBackground && !canReviewImpact()) {
+    renderInvalidatedImpact(semanticStateMachine.invalidation_reason || "draft_changed");
+    renderOperatorGuidance(
+      "Current semantics are invalidated.",
+      "Resolve the working draft or source extraction before reviewing operational impact.",
+    );
+    syncPublicationActions();
+    return;
+  }
   if (!isBackground) {
     setBusy(true);
   }
   try {
     commitCurrentDraft();
+    const draft = readDraft();
+    const draftHash = stableHash(draft);
     const response = await fetch("/api/compose", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ draft: readDraft() }),
+      body: JSON.stringify({ draft }),
     });
     const payload = await response.json();
     if (!response.ok) {
       throw new Error(payload.error || "Unable to generate semantic artifacts.");
     }
+    payload.ui_draft_hash = draftHash;
     currentArtifacts = payload;
     pendingRegistration = null;
     if (isReview) {
       workflowTimestamps.reviewed = new Date().toISOString();
       clearWorkflowInvalidation();
+      setSemanticState({
+        draft_state: "committed",
+        semantic_state: "valid",
+        impact_state: "valid",
+        publication_state: "reviewed_not_exported",
+        draft_hash: draftHash,
+        artifact_draft_hash: draftHash,
+        invalidation_reason: null,
+      });
     }
     renderArtifacts(payload, { reviewed: isReview });
     exportButton.disabled = !isReview;
@@ -432,14 +554,32 @@ function renderWorkflowState() {
   syncPublicationActions();
   renderAuthorityContext();
   renderOperationsOverview();
-  renderPublicationProjection(authorityWorkspaceProjection());
+  if (semanticStateMachine.impact_state === "invalidated" && !currentArtifacts) {
+    renderInvalidatedImpact(semanticStateMachine.invalidation_reason);
+    renderInvalidatedChangeReview(semanticStateMachine.invalidation_reason);
+    renderPublicationProjection(null);
+  } else {
+    renderPublicationProjection(authorityWorkspaceProjection());
+  }
 }
 
 function syncPublicationActions() {
   const hasArtifacts = Boolean(currentArtifacts);
-  publicationReviewButton.disabled = reviewBusy || !workflowState.draftReady || workflowState.impactReviewed;
+  const reviewAvailable = canReviewImpact();
+  generateButton.disabled = reviewBusy || !reviewAvailable;
+  publicationReviewButton.disabled = reviewBusy || !reviewAvailable || workflowState.impactReviewed;
   exportButton.disabled = !hasArtifacts || !workflowState.impactReviewed;
   registerButton.disabled = !pendingRegistration || workflowState.authorityRegistered;
+}
+
+function canReviewImpact() {
+  return Boolean(
+    workflowState.draftReady
+      && !authoringSessionDirty
+      && !policySourceDirty
+      && semanticStateMachine.semantic_state !== "invalidated"
+      && semanticStateMachine.draft_state === "committed",
+  );
 }
 
 function renderOperatorGuidance(title, body) {
@@ -503,9 +643,56 @@ function scheduleLivePreview() {
   }, 450);
 }
 
+function renderInvalidatedImpact(reason) {
+  $("#status-semantic").textContent = "semantic extraction invalidated";
+  $("#status-bundle").textContent = "publication blocked";
+  $("#preview-summary").textContent = invalidatedImpactMessage(reason);
+  renderList("#preview-enforcement", ["Extraction and reconciliation are required before Ledger can render current enforcement behavior."]);
+  renderList("#preview-consequences", ["Prior operational consequences were cleared because they were derived from stale semantic lineage."]);
+  renderList("#preview-lifecycle", ["Lifecycle implications require a fresh review derived from the current committed draft."]);
+  renderExecutionContext("#preview-execution-context", null);
+  renderOutcomes([]);
+  renderList("#outcome-explorer", ["No operational outcome is reviewable until semantic meaning is regenerated for the current draft."]);
+}
+
+function renderInvalidatedChangeReview(reason) {
+  const status = $("#change-review-status");
+  const narrative = $("#change-narrative");
+  const operational = $("#change-operational");
+  const continuity = $("#change-continuity");
+  const replay = $("#change-replay");
+  const executionContext = $("#change-execution-context");
+  const lineage = $("#change-lineage");
+  if (!status || !narrative || !operational || !continuity || !replay || !executionContext || !lineage) return;
+  status.textContent = "Semantic lineage invalidated";
+  narrative.querySelector("h3").textContent = "Change review requires current semantic meaning.";
+  narrative.querySelector("p").textContent = invalidatedImpactMessage(reason);
+  operational.textContent = "Operational change is not reviewable until extraction or draft reconciliation is refreshed.";
+  continuity.textContent = "Continuity posture is invalidated because it was derived from prior semantic inputs.";
+  renderReplayPosture(replay, null, null);
+  renderExecutionContext("#change-execution-context", null);
+  lineage.innerHTML = "";
+  appendLineageEmpty(lineage);
+}
+
+function invalidatedImpactMessage(reason) {
+  if (reason === "policy_source_changed") {
+    return "Semantic extraction invalidated by policy text changes. Extract governance meaning again before reviewing operational impact.";
+  }
+  if (reason === "draft_changed") {
+    return "Semantic extraction invalidated by draft changes. Save the draft, then review impact from the current committed authority state.";
+  }
+  return "Semantic extraction invalidated. Regenerate governance meaning before reviewing operational impact.";
+}
+
 function renderArtifacts(payload, options = {}) {
   const reviewed = options.reviewed === true;
   const preserveWorkflow = options.preserveWorkflow === true;
+  if (!preserveWorkflow && payload?.ui_draft_hash && payload.ui_draft_hash !== committedDraftHash()) {
+    renderInvalidatedImpact("draft_changed");
+    renderInvalidatedChangeReview("draft_changed");
+    return;
+  }
   const preview = payload.governance_impact_preview;
   const bundle = payload.authority_bundle;
   const workspaceProjection = authorityWorkspaceProjection(payload);
@@ -989,6 +1176,39 @@ function markDraftInvalidated() {
       "replay_posture",
     ],
   };
+}
+
+function invalidateSemanticLineage(reason) {
+  const now = new Date().toISOString();
+  currentArtifacts = null;
+  pendingRegistration = null;
+  setSemanticState({
+    draft_state: "dirty",
+    semantic_state: "invalidated",
+    impact_state: "invalidated",
+    publication_state: "blocked",
+    draft_hash: committedDraftHash(),
+    artifact_draft_hash: null,
+    invalidation_reason: reason,
+    invalidated_at: now,
+  });
+  workflowInvalidation = {
+    active: true,
+    reason,
+    updated_at: now,
+    invalidated_projections: [
+      "governance_semantic_extraction.v1",
+      "governance_semantic_provenance.v1",
+      "governance_semantic_reconciliation.v1",
+      "governance_impact_preview.v1",
+      "authority_diff_impact.v1",
+      "authority_workspace_projection.v1",
+      "authority_operational_summary.v1",
+      "publication_readiness",
+    ],
+  };
+  renderInvalidatedImpact(reason);
+  renderInvalidatedChangeReview(reason);
 }
 
 function registryCoherenceProjection(registry = loadBundleRegistry()) {
@@ -2702,10 +2922,29 @@ extractPolicyButton.addEventListener("click", extractPolicySemantics);
 useExtractionButton.addEventListener("click", () => useExtractedDraft({ includeSemantics: false }));
 applyAllExtractionButton.addEventListener("click", () => useExtractedDraft({ includeSemantics: true }));
 openReconciliationButton.addEventListener("click", openReconciliationReview);
+policySourceText.addEventListener("input", () => {
+  policySourceDirty = true;
+  currentExtraction = null;
+  useExtractionButton.disabled = true;
+  applyAllExtractionButton.disabled = true;
+  openReconciliationButton.disabled = true;
+  $("#extraction-status").textContent = "Policy text changed. Extract governance meaning again before reviewing operational impact.";
+  invalidateSemanticLineage("policy_source_changed");
+  workflowTimestamps.reviewed = null;
+  workflowTimestamps.exported = null;
+  workflowTimestamps.registered = null;
+  exportButton.disabled = true;
+  registerButton.disabled = true;
+  updateWorkflowState({
+    impactReviewed: false,
+    bundleExported: false,
+    receiptGenerated: false,
+    authorityRegistered: false,
+  });
+});
 form.addEventListener("input", () => {
   saveWorkingAuthoringSession();
   pendingRegistration = null;
-  markDraftInvalidated();
   workflowTimestamps.reviewed = null;
   workflowTimestamps.exported = null;
   workflowTimestamps.registered = null;
@@ -2721,7 +2960,6 @@ form.addEventListener("input", () => {
 form.addEventListener("change", () => {
   saveWorkingAuthoringSession();
   pendingRegistration = null;
-  markDraftInvalidated();
   workflowTimestamps.reviewed = null;
   workflowTimestamps.exported = null;
   workflowTimestamps.registered = null;

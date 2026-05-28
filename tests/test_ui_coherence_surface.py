@@ -31,9 +31,11 @@ def test_draft_edit_marks_projection_invalidation_visible():
     source = APP_JS.read_text(encoding="utf-8")
     input_block = _event_listener_block(source, 'form.addEventListener("input"')
     change_block = _event_listener_block(source, 'form.addEventListener("change"')
+    invalidation_body = _function_body(source, "saveWorkingAuthoringSession")
 
-    assert "markDraftInvalidated()" in input_block
-    assert "markDraftInvalidated()" in change_block
+    assert "saveWorkingAuthoringSession()" in input_block
+    assert "saveWorkingAuthoringSession()" in change_block
+    assert 'invalidateSemanticLineage("draft_changed")' in invalidation_body
 
 
 def test_impact_review_clears_projection_invalidation():

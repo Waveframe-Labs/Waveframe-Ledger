@@ -82,6 +82,7 @@ def test_editing_draft_invalidates_review_export_receipt_and_registration_state(
     for block in (input_block, change_block):
         assert "saveWorkingAuthoringSession()" in block
         assert "saveDraftSession()" not in block
+        assert "markDraftInvalidated()" not in block
         assert "scheduleLivePreview()" not in block
         assert "pendingRegistration = null" in block
         assert "workflowTimestamps.reviewed = null" in block
@@ -137,13 +138,47 @@ def test_using_extracted_draft_requires_impact_review_before_export():
     body = _function_body(source, "useExtractedDraft")
 
     assert "applyDraftToForm" in body
-    assert "markDraftInvalidated()" in body
+    assert 'semantic_state: "operator_confirmed"' in body
+    assert 'impact_state: "invalidated"' in body
     assert "impactReviewed: false" in body
     assert "bundleExported: false" in body
     assert "receiptGenerated: false" in body
     assert "authorityRegistered: false" in body
     assert "Review Impact is required before export." in body
     assert "exportButton.disabled = true" in body
+
+
+def test_policy_source_changes_invalidate_semantic_lineage_before_impact_review():
+    source = APP_JS.read_text(encoding="utf-8")
+    block = _event_listener_block(source, 'policySourceText.addEventListener("input"')
+
+    assert "policySourceDirty = true" in block
+    assert "currentExtraction = null" in block
+    assert 'invalidateSemanticLineage("policy_source_changed")' in block
+    assert "impactReviewed: false" in block
+    assert "bundleExported: false" in block
+    assert "receiptGenerated: false" in block
+    assert "authorityRegistered: false" in block
+
+
+def test_operational_impact_renders_only_current_valid_semantic_lineage():
+    source = APP_JS.read_text(encoding="utf-8")
+    generate_start = source.index("async function generateArtifacts")
+    generate_body = source[generate_start : source.index("function setBusy", generate_start)]
+    render_start = source.index("function renderArtifacts")
+    render_body = source[render_start : source.index("function authorityWorkspaceProjection", render_start)]
+    invalidation_body = _function_body(source, "invalidateSemanticLineage")
+    sync_body = _function_body(source, "syncPublicationActions")
+
+    assert "canReviewImpact()" in generate_body
+    assert "payload.ui_draft_hash = draftHash" in generate_body
+    assert 'semantic_state: "valid"' in generate_body
+    assert 'impact_state: "valid"' in generate_body
+    assert "payload.ui_draft_hash !== committedDraftHash()" in render_body
+    assert "renderInvalidatedImpact" in render_body
+    assert "currentArtifacts = null" in invalidation_body
+    assert "governance_impact_preview.v1" in invalidation_body
+    assert "generateButton.disabled = reviewBusy || !reviewAvailable" in sync_body
 
 
 def test_escalation_authoring_is_text_driven_not_single_threshold_field():
