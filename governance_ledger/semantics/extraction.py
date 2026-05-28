@@ -6,6 +6,8 @@ import hashlib
 import re
 from typing import Any
 
+from governance_ledger.semantics.capabilities import build_governance_capabilities
+
 SOURCE_SCHEMA_VERSION = "governance_source.v1"
 EXTRACTION_SCHEMA_VERSION = "governance_semantic_extraction.v1"
 
@@ -218,6 +220,11 @@ def extract_governance_semantics(
 
     ambiguities = _ambiguities(text, candidate)
     semantic_provenance = _semantic_provenance(text, candidate)
+    candidate_capabilities = build_governance_capabilities(
+        candidate_authority=candidate,
+        candidate_rules=candidate_rules,
+    )
+    candidate["capabilities"] = candidate_capabilities
     return {
         "schema_version": EXTRACTION_SCHEMA_VERSION,
         "source_id": source["source_id"],
@@ -226,6 +233,7 @@ def extract_governance_semantics(
         "extraction_method": "deterministic_pattern_pass",
         "confidence_posture": "requires_human_review",
         "candidate_authority": candidate,
+        "candidate_capabilities": candidate_capabilities,
         "candidate_rules": candidate_rules,
         "semantic_provenance": semantic_provenance,
         "ambiguities": ambiguities,

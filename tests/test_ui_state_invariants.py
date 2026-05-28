@@ -181,6 +181,29 @@ def test_operational_impact_renders_only_current_valid_semantic_lineage():
     assert "generateButton.disabled = reviewBusy || !reviewAvailable" in sync_body
 
 
+def test_ui_uses_action_level_capability_gates():
+    source = APP_JS.read_text(encoding="utf-8")
+    sync_body = _function_body(source, "syncPublicationActions")
+
+    for function_name in (
+        "canExtractSemantics",
+        "canApplyDeterministicFields",
+        "canApplyCandidateSemantics",
+        "canOpenReconciliation",
+        "canReviewImpact",
+        "canExportBundle",
+        "canRegisterAuthority",
+    ):
+        assert f"function {function_name}" in source
+
+    assert "extractPolicyButton.disabled = reviewBusy || !canExtractSemantics()" in sync_body
+    assert "useExtractionButton.disabled = !canApplyDeterministicFields()" in sync_body
+    assert "applyAllExtractionButton.disabled = !canApplyCandidateSemantics()" in sync_body
+    assert "openReconciliationButton.disabled = !canOpenReconciliation()" in sync_body
+    assert "exportButton.disabled = !canExportBundle(hasArtifacts)" in sync_body
+    assert "registerButton.disabled = !canRegisterAuthority()" in sync_body
+
+
 def test_escalation_authoring_is_text_driven_not_single_threshold_field():
     html = (ROOT / "ui" / "index.html").read_text(encoding="utf-8")
     source = APP_JS.read_text(encoding="utf-8")

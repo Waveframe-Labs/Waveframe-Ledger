@@ -566,10 +566,30 @@ function renderWorkflowState() {
 function syncPublicationActions() {
   const hasArtifacts = Boolean(currentArtifacts);
   const reviewAvailable = canReviewImpact();
+  extractPolicyButton.disabled = reviewBusy || !canExtractSemantics();
+  useExtractionButton.disabled = !canApplyDeterministicFields();
+  applyAllExtractionButton.disabled = !canApplyCandidateSemantics();
+  openReconciliationButton.disabled = !canOpenReconciliation();
   generateButton.disabled = reviewBusy || !reviewAvailable;
   publicationReviewButton.disabled = reviewBusy || !reviewAvailable || workflowState.impactReviewed;
-  exportButton.disabled = !hasArtifacts || !workflowState.impactReviewed;
-  registerButton.disabled = !pendingRegistration || workflowState.authorityRegistered;
+  exportButton.disabled = !canExportBundle(hasArtifacts);
+  registerButton.disabled = !canRegisterAuthority();
+}
+
+function canExtractSemantics() {
+  return Boolean(policySourceText?.value?.trim());
+}
+
+function canApplyDeterministicFields() {
+  return Boolean(currentExtraction?.candidate_authority);
+}
+
+function canApplyCandidateSemantics() {
+  return Boolean(currentExtraction?.candidate_authority);
+}
+
+function canOpenReconciliation() {
+  return Boolean(currentExtraction);
 }
 
 function canReviewImpact() {
@@ -580,6 +600,14 @@ function canReviewImpact() {
       && semanticStateMachine.semantic_state !== "invalidated"
       && semanticStateMachine.draft_state === "committed",
   );
+}
+
+function canExportBundle(hasArtifacts = Boolean(currentArtifacts)) {
+  return Boolean(hasArtifacts && workflowState.impactReviewed && semanticStateMachine.impact_state === "valid");
+}
+
+function canRegisterAuthority() {
+  return Boolean(pendingRegistration && workflowState.bundleExported && semanticStateMachine.impact_state === "valid" && !workflowState.authorityRegistered);
 }
 
 function renderOperatorGuidance(title, body) {

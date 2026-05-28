@@ -72,6 +72,45 @@ def test_semantic_extraction_extracts_candidate_authority_anchors():
     assert provenance["validity_window"]["extraction_method"] == "deterministic_pattern"
 
 
+def test_semantic_extraction_emits_action_level_capabilities():
+    extraction = extract_governance_semantics(POLICY_TEXT)
+    capabilities = {
+        item["capability_id"]: item
+        for item in extraction["candidate_capabilities"]
+    }
+
+    assert "transfer_funds" in capabilities
+    assert "approve_transfer_funds" in capabilities
+    assert "resume_transfer_funds" in capabilities
+    transfer = capabilities["transfer_funds"]
+    resume = capabilities["resume_transfer_funds"]
+
+    assert transfer["schema_version"] == "governance_capability.v1"
+    assert {item["requirement_type"] for item in transfer["requirements"]} >= {
+        "approval_requirement",
+        "escalation_threshold",
+        "evidence_requirement",
+    }
+    assert transfer["continuity_semantics"]["schema_version"] == "capability_continuity_semantics.v1"
+    assert transfer["execution_constraints"]["schema_version"] == "capability_execution_constraint.v1"
+    assert transfer["identity_requirements"]["schema_version"] == "capability_identity_requirement.v1"
+    assert resume["action_type"] == "resume_action"
+    assert resume["continuity_semantics"]["revalidation_required"] is True
+    assert any(item["evidence_type"] in {"replay", "replay_evidence"} for item in resume["evidence_requirements"])
+    assert extraction["candidate_authority"]["capabilities"] == extraction["candidate_capabilities"]
+
+
+def test_semantic_extraction_emits_delegation_capability_when_policy_delegates_authority():
+    extraction = extract_governance_semantics(
+        "Payment Workflow transfers above $250,000 require finance approval with delegated authority within boundary."
+    )
+    capabilities = {item["capability_id"]: item for item in extraction["candidate_capabilities"]}
+
+    assert "delegate_authority" in capabilities
+    assert capabilities["delegate_authority"]["action_type"] == "delegation_action"
+    assert capabilities["delegate_authority"]["requirements"][0]["fields"]["delegation_posture"] == "allowed_with_boundary"
+
+
 def test_semantic_provenance_tracks_confidence_and_source_spans():
     extraction = extract_governance_semantics(
         "No individual may originate and approve the same transfer request."
@@ -279,11 +318,18 @@ def test_semantic_extraction_schemas_are_canonical():
     role_schema = json.loads((ROOT / "schemas" / "authority_role_binding.v1.json").read_text(encoding="utf-8"))
     approval_chain_schema = json.loads((ROOT / "schemas" / "approval_chain_semantics.v1.json").read_text(encoding="utf-8"))
     identity_schema = json.loads((ROOT / "schemas" / "identity_continuity_semantics.v1.json").read_text(encoding="utf-8"))
+    capability_schema = json.loads((ROOT / "schemas" / "governance_capability.v1.json").read_text(encoding="utf-8"))
+    capability_requirement_schema = json.loads((ROOT / "schemas" / "capability_requirement.v1.json").read_text(encoding="utf-8"))
+    capability_continuity_schema = json.loads((ROOT / "schemas" / "capability_continuity_semantics.v1.json").read_text(encoding="utf-8"))
+    capability_evidence_schema = json.loads((ROOT / "schemas" / "capability_evidence_requirement.v1.json").read_text(encoding="utf-8"))
+    capability_execution_schema = json.loads((ROOT / "schemas" / "capability_execution_constraint.v1.json").read_text(encoding="utf-8"))
+    capability_identity_schema = json.loads((ROOT / "schemas" / "capability_identity_requirement.v1.json").read_text(encoding="utf-8"))
 
     assert source_schema["properties"]["schema_version"]["const"] == "governance_source.v1"
     assert "source_text" in source_schema["required"]
     assert extraction_schema["properties"]["schema_version"]["const"] == "governance_semantic_extraction.v1"
     assert "candidate_authority" in extraction_schema["required"]
+    assert "candidate_capabilities" in extraction_schema["required"]
     assert "semantic_provenance" in extraction_schema["required"]
     assert provenance_schema["properties"]["schema_version"]["const"] == "governance_semantic_provenance.v1"
     assert provenance_schema["properties"]["extraction_method"]["const"] == "deterministic_pattern"
@@ -298,3 +344,9 @@ def test_semantic_extraction_schemas_are_canonical():
     assert approval_chain_schema["properties"]["schema_version"]["const"] == "approval_chain_semantics.v1"
     assert identity_schema["properties"]["schema_version"]["const"] == "identity_continuity_semantics.v1"
     assert identity_schema["properties"]["runtime_enforced_by"]["const"] == "Guard/Cloud"
+    assert capability_schema["properties"]["schema_version"]["const"] == "governance_capability.v1"
+    assert capability_requirement_schema["properties"]["schema_version"]["const"] == "capability_requirement.v1"
+    assert capability_continuity_schema["properties"]["schema_version"]["const"] == "capability_continuity_semantics.v1"
+    assert capability_evidence_schema["properties"]["schema_version"]["const"] == "capability_evidence_requirement.v1"
+    assert capability_execution_schema["properties"]["schema_version"]["const"] == "capability_execution_constraint.v1"
+    assert capability_identity_schema["properties"]["schema_version"]["const"] == "capability_identity_requirement.v1"

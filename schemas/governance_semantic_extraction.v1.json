@@ -12,6 +12,7 @@
     "extraction_method",
     "confidence_posture",
     "candidate_authority",
+    "candidate_capabilities",
     "candidate_rules",
     "semantic_provenance",
     "ambiguities",
@@ -28,6 +29,10 @@
     "candidate_authority": {
       "type": "object",
       "additionalProperties": true
+    },
+    "candidate_capabilities": {
+      "type": "array",
+      "items": { "$ref": "governance_capability.v1.json" }
     },
     "candidate_rules": {
       "type": "array",
