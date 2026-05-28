@@ -24,6 +24,7 @@ It references:
 - `semantic_ambiguity.v1`
 - `semantic_conflict.v1`
 - `semantic_interpretation_decision.v1`
+- `semantic_stability_projection.v1`
 
 ## Critical Invariant
 
@@ -61,13 +62,37 @@ Operator interpretation:
 ```json
 {
   "schema_version": "semantic_interpretation_decision.v1",
+  "decision_id": "decision-...",
+  "field": "escalation_threshold",
+  "selected_interpretation": 250000,
+  "rejected_interpretations": ["undefined large transfer"],
   "decision_type": "threshold_definition",
+  "ambiguity_id": "ambiguity-large-transfer",
   "resolved_value": 250000,
-  "rationale": "Treasury policy baseline"
+  "operator": "local-ledger-ui",
+  "timestamp": "2026-01-01T00:00:00Z",
+  "rationale": "Treasury policy baseline",
+  "justification": "Treasury policy baseline",
+  "decision_posture": "operator_reviewed"
 }
 ```
 
 Reconciliation records the original ambiguity, the operator interpretation, and the final normalized semantic meaning.
+
+## Operator Decision Ownership
+
+Semantic conflict resolution is operator-owned.
+
+Ledger may extract candidates, detect ambiguity, and normalize confirmed decisions, but it must explicitly record:
+
+- the semantic field being decided
+- the selected interpretation
+- rejected interpretations
+- the operator identity
+- the decision timestamp
+- the justification
+
+Viewing or extracting policy text is not a decision. A semantic interpretation decision is the explicit boundary where candidate meaning becomes operator-owned interpretation provenance.
 
 ## Projection
 
@@ -80,6 +105,19 @@ It may emit:
 - conflicting extracted semantics
 - normalization decisions
 - interpretation completeness posture
+
+`semantic_stability_projection.v1` compares interpretation lineage across extraction or reconciliation runs.
+
+It detects:
+
+- same source text producing different extracted semantics
+- extraction method changes
+- changed operator interpretation decisions
+- semantic meaning drift between versions
+
+This projection answers the organizational question:
+
+> Did interpretation meaning drift, and why?
 
 ## Non-Goals
 

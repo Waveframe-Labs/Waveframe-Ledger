@@ -13,22 +13,40 @@ def build_semantic_interpretation_decision(
     resolved_value: Any,
     rationale: str,
     ambiguity_id: str | None = None,
+    field: str | None = None,
+    selected_interpretation: Any | None = None,
+    rejected_interpretations: list[Any] | None = None,
     operator: str = "local-ledger-ui",
+    timestamp: str | None = None,
+    justification: str | None = None,
 ) -> dict[str, Any]:
+    selected = resolved_value if selected_interpretation is None else selected_interpretation
+    normalized_field = field or _field_for_decision_type(decision_type)
+    normalized_justification = justification or rationale
+    stable_payload = {
+        "decision_type": decision_type,
+        "field": normalized_field,
+        "selected_interpretation": selected,
+        "rejected_interpretations": rejected_interpretations or [],
+        "operator": operator,
+        "justification": normalized_justification,
+    }
+    decision_hash = hashlib.sha256(
+        json.dumps(stable_payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
     return {
         "schema_version": "semantic_interpretation_decision.v1",
-        "decision_id": "decision-" + hashlib.sha256(
-            json.dumps(
-                {"decision_type": decision_type, "resolved_value": resolved_value, "rationale": rationale},
-                sort_keys=True,
-                separators=(",", ":"),
-            ).encode("utf-8")
-        ).hexdigest()[:12],
+        "decision_id": "decision-" + decision_hash[:12],
+        "field": normalized_field,
+        "selected_interpretation": selected,
+        "rejected_interpretations": rejected_interpretations or [],
         "decision_type": decision_type,
         "ambiguity_id": ambiguity_id,
         "resolved_value": resolved_value,
         "rationale": rationale,
         "operator": operator,
+        "timestamp": timestamp or _stable_decision_time(decision_hash),
+        "justification": normalized_justification,
         "decision_posture": "operator_reviewed",
     }
 
@@ -111,6 +129,75 @@ def build_semantic_reconciliation_projection(reconciliation: dict[str, Any]) -> 
     }
 
 
+def build_semantic_stability_projection(
+    *,
+    previous_extraction: dict[str, Any] | None = None,
+    current_extraction: dict[str, Any],
+    previous_reconciliation: dict[str, Any] | None = None,
+    current_reconciliation: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Compare semantic interpretation lineage across extraction or reconciliation runs."""
+    observations: list[dict[str, Any]] = []
+    previous_signature = _extraction_signature(previous_extraction) if previous_extraction else None
+    current_signature = _extraction_signature(current_extraction)
+    same_source = bool(previous_extraction and previous_extraction.get("source_hash") == current_extraction.get("source_hash"))
+    extraction_method_changed = bool(
+        previous_extraction
+        and previous_extraction.get("extraction_method") != current_extraction.get("extraction_method")
+    )
+    semantic_meaning_changed = bool(
+        previous_signature
+        and current_signature
+        and previous_signature["semantic_hash"] != current_signature["semantic_hash"]
+    )
+    decision_changes = _decision_changes(previous_reconciliation, current_reconciliation)
+
+    if same_source and semantic_meaning_changed:
+        observations.append(
+            _stability_observation(
+                observation_type="same_source_semantic_drift",
+                severity="warning",
+                summary="The same governance source produced different extracted semantic meaning.",
+            )
+        )
+    if extraction_method_changed:
+        observations.append(
+            _stability_observation(
+                observation_type="extraction_method_changed",
+                severity="info",
+                summary="Extraction method changed between interpretation runs.",
+            )
+        )
+    for change in decision_changes:
+        observations.append(
+            _stability_observation(
+                observation_type="operator_interpretation_changed",
+                severity="warning",
+                summary=f"Operator interpretation for {change['field']} changed.",
+                details=change,
+            )
+        )
+
+    return {
+        "schema_version": "semantic_stability_projection.v1",
+        "source_hash": current_extraction["source_hash"],
+        "previous_source_hash": previous_extraction.get("source_hash") if previous_extraction else None,
+        "same_source": same_source,
+        "previous_extraction_signature": previous_signature,
+        "current_extraction_signature": current_signature,
+        "extraction_method_changed": extraction_method_changed,
+        "semantic_meaning_changed": semantic_meaning_changed,
+        "interpretation_decision_changes": decision_changes,
+        "stability_observations": observations,
+        "stability_posture": _stability_posture(observations),
+        "non_goals": [
+            "does not approve authority",
+            "does not determine admissibility",
+            "does not infer operator intent beyond recorded decisions",
+        ],
+    }
+
+
 def _semantic_ambiguity(item: dict[str, Any], index: int) -> dict[str, Any]:
     return {
         "schema_version": "semantic_ambiguity.v1",
@@ -143,6 +230,97 @@ def _semantic_conflicts(extraction: dict[str, Any], decisions: list[dict[str, An
                 }
             )
     return conflicts
+
+
+def _field_for_decision_type(decision_type: str) -> str:
+    return {
+        "threshold_definition": "escalation_threshold",
+        "timestamp_source_definition": "timestamp_source",
+        "state_snapshot_subject_definition": "state_snapshot_subject",
+    }.get(decision_type, decision_type)
+
+
+def _stable_decision_time(decision_hash: str) -> str:
+    seconds = int(decision_hash[:8], 16) % (365 * 24 * 60 * 60)
+    return f"2026-01-01T00:00:{seconds % 60:02d}Z"
+
+
+def _extraction_signature(extraction: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not extraction:
+        return None
+    semantic_payload = {
+        "candidate_authority": extraction.get("candidate_authority") or {},
+        "candidate_rules": extraction.get("candidate_rules") or [],
+        "ambiguities": extraction.get("ambiguities") or [],
+        "missing_information": extraction.get("missing_information") or [],
+        "semantic_provenance": extraction.get("semantic_provenance") or [],
+    }
+    return {
+        "source_hash": extraction.get("source_hash"),
+        "extraction_method": extraction.get("extraction_method"),
+        "semantic_hash": _hash_payload(semantic_payload),
+    }
+
+
+def _decision_changes(
+    previous_reconciliation: dict[str, Any] | None,
+    current_reconciliation: dict[str, Any] | None,
+) -> list[dict[str, Any]]:
+    previous = _decisions_by_field(previous_reconciliation)
+    current = _decisions_by_field(current_reconciliation)
+    changes = []
+    for field in sorted(set(previous) | set(current)):
+        previous_value = previous.get(field, {}).get("selected_interpretation")
+        current_value = current.get(field, {}).get("selected_interpretation")
+        if previous_value == current_value:
+            continue
+        changes.append(
+            {
+                "field": field,
+                "previous_interpretation": previous_value,
+                "current_interpretation": current_value,
+                "previous_decision_id": previous.get(field, {}).get("decision_id"),
+                "current_decision_id": current.get(field, {}).get("decision_id"),
+            }
+        )
+    return changes
+
+
+def _decisions_by_field(reconciliation: dict[str, Any] | None) -> dict[str, dict[str, Any]]:
+    if not reconciliation:
+        return {}
+    return {
+        decision.get("field") or decision.get("decision_type"): decision
+        for decision in reconciliation.get("operator_interpretation_decisions", [])
+    }
+
+
+def _stability_observation(
+    *,
+    observation_type: str,
+    severity: str,
+    summary: str,
+    details: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    return {
+        "observation_type": observation_type,
+        "severity": severity,
+        "summary": summary,
+        "details": details or {},
+    }
+
+
+def _stability_posture(observations: list[dict[str, Any]]) -> str:
+    if any(item["severity"] == "warning" for item in observations):
+        return "semantic_drift_detected"
+    if observations:
+        return "semantic_stability_review"
+    return "stable"
+
+
+def _hash_payload(payload: Any) -> str:
+    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    return "sha256:" + hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
 def _expiration_basis_for_source(timestamp_source: str) -> str:
