@@ -80,6 +80,9 @@ def test_editing_draft_invalidates_review_export_receipt_and_registration_state(
     change_block = _event_listener_block(source, 'form.addEventListener("change"')
 
     for block in (input_block, change_block):
+        assert "saveWorkingAuthoringSession()" in block
+        assert "saveDraftSession()" not in block
+        assert "scheduleLivePreview()" not in block
         assert "pendingRegistration = null" in block
         assert "workflowTimestamps.reviewed = null" in block
         assert "workflowTimestamps.exported = null" in block
@@ -90,6 +93,28 @@ def test_editing_draft_invalidates_review_export_receipt_and_registration_state(
         assert "bundleExported: false" in block
         assert "receiptGenerated: false" in block
         assert "authorityRegistered: false" in block
+
+
+def test_authority_header_uses_committed_draft_not_live_form_state():
+    source = APP_JS.read_text(encoding="utf-8")
+    body = _function_body(source, "renderAuthorityContext")
+
+    assert "committedDraft" in body
+    assert "readDraft()" not in body
+    assert "uncommitted draft" in body
+
+
+def test_save_draft_is_explicit_commit_boundary():
+    source = APP_JS.read_text(encoding="utf-8")
+    save_body = _function_body(source, "saveDraftSession")
+    working_body = _function_body(source, "saveWorkingAuthoringSession")
+
+    assert "if (sessionOptions.commit)" in save_body
+    assert "committedDraft = structuredClone(session.draft)" in save_body
+    assert "authoringSessionDirty = false" in save_body
+    assert "authoringSessionDirty = true" in working_body
+    assert "commit: false" in working_body
+    assert 'saveDraftButton.addEventListener("click", commitCurrentDraft)' in source
 
 
 def test_policy_extraction_does_not_advance_publication_workflow():

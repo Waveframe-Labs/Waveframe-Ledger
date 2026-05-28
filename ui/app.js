@@ -4,6 +4,7 @@ const publicationReviewButton = document.querySelector("#publication-review-butt
 const exportButton = document.querySelector("#export-button");
 const registerButton = document.querySelector("#register-button");
 const newDraftButton = document.querySelector("#new-draft-button");
+const saveDraftButton = document.querySelector("#save-draft-button");
 const extractPolicyButton = document.querySelector("#extract-policy-button");
 const useExtractionButton = document.querySelector("#use-extraction-button");
 const applyAllExtractionButton = document.querySelector("#apply-all-extraction-button");
@@ -14,6 +15,8 @@ let currentArtifacts = null;
 let pendingRegistration = null;
 let currentExtraction = null;
 let currentSemanticExtras = {};
+let committedDraft = null;
+let authoringSessionDirty = false;
 let livePreviewTimer = null;
 let reviewBusy = false;
 let workflowTimestamps = {
@@ -59,15 +62,23 @@ function readDraft() {
   };
 }
 
-function buildDraftSession(draft) {
+function buildDraftSession(draft, options) {
+  const sessionOptions = options || {};
   const previous = loadDraftSession();
   const now = new Date().toISOString();
+  const committed = sessionOptions.commit ? draft : committedDraft || previous?.committed_draft || null;
   return {
     schema_version: "draft_authority_session.v1",
     session_id: previous?.session_id || `draft-${crypto.randomUUID()}`,
     created_at: previous?.created_at || now,
     updated_at: now,
     draft,
+    committed_draft: committed,
+    authoring_session_state: {
+      dirty: sessionOptions.commit ? false : authoringSessionDirty,
+      state: sessionOptions.commit ? "committed" : authoringSessionDirty ? "working_changes" : "restored",
+      updated_at: now,
+    },
   };
 }
 
@@ -83,21 +94,33 @@ function loadDraftSession() {
   }
 }
 
-function saveDraftSession() {
-  const session = buildDraftSession(readDraft());
+function saveDraftSession(options) {
+  const sessionOptions = options || {};
+  const session = buildDraftSession(readDraft(), sessionOptions);
+  if (sessionOptions.commit) {
+    committedDraft = structuredClone(session.draft);
+    authoringSessionDirty = false;
+  }
   window.localStorage.setItem(DRAFT_SESSION_KEY, JSON.stringify(session));
-  draftSessionStatus.textContent = `draft_authority_session.v1 saved locally ${new Date(session.updated_at).toLocaleTimeString()}`;
+  draftSessionStatus.textContent = sessionOptions.commit
+    ? `draft_authority_session.v1 committed locally ${new Date(session.updated_at).toLocaleTimeString()}`
+    : `Unsaved draft changes held in working session ${new Date(session.updated_at).toLocaleTimeString()}`;
   workflowTimestamps.draftSaved = session.updated_at;
-  updateWorkflowState({ draftReady: true });
+  updateWorkflowState({ draftReady: Boolean(committedDraft) });
   return session;
 }
 
 function restoreDraftSession() {
   const session = loadDraftSession();
   if (!session) {
-    saveDraftSession();
+    committedDraft = null;
+    authoringSessionDirty = true;
+    draftSessionStatus.textContent = "No committed draft yet. Save Draft or Review Impact to establish the authority draft.";
+    updateWorkflowState({ draftReady: false });
     return;
   }
+  committedDraft = session.committed_draft || session.draft || null;
+  authoringSessionDirty = Boolean(session.authoring_session_state?.dirty);
   currentSemanticExtras = semanticExtrasFromCandidate(session.draft || {});
   for (const [key, value] of Object.entries(session.draft || {})) {
     const field = form.elements[key];
@@ -108,7 +131,19 @@ function restoreDraftSession() {
       field.value = value ?? "";
     }
   }
-  draftSessionStatus.textContent = `draft_authority_session.v1 restored ${new Date(session.updated_at).toLocaleTimeString()}`;
+  draftSessionStatus.textContent = authoringSessionDirty
+    ? `Unsaved draft changes restored from working session ${new Date(session.updated_at).toLocaleTimeString()}`
+    : `draft_authority_session.v1 restored ${new Date(session.updated_at).toLocaleTimeString()}`;
+  updateWorkflowState({ draftReady: Boolean(committedDraft) });
+}
+
+function commitCurrentDraft() {
+  return saveDraftSession({ commit: true });
+}
+
+function saveWorkingAuthoringSession() {
+  authoringSessionDirty = true;
+  return saveDraftSession({ commit: false });
 }
 
 function startNewDraft() {
@@ -117,6 +152,8 @@ function startNewDraft() {
   currentArtifacts = null;
   pendingRegistration = null;
   currentSemanticExtras = {};
+  committedDraft = null;
+  authoringSessionDirty = true;
   workflowTimestamps = {
     draftSaved: null,
     reviewed: null,
@@ -136,14 +173,14 @@ function startNewDraft() {
   $("#receipt-json").textContent = "No publication receipt generated yet.";
   clearWorkflowInvalidation();
   updateWorkflowState({
-    draftReady: true,
+    draftReady: false,
     impactReviewed: false,
     bundleExported: false,
     receiptGenerated: false,
     authorityRegistered: false,
   });
-  draftSessionStatus.textContent = "new draft_authority_session.v1 started locally";
-  saveDraftSession();
+  saveWorkingAuthoringSession();
+  draftSessionStatus.textContent = "New working draft started. Save Draft or Review Impact to commit it.";
 }
 
 async function extractPolicySemantics() {
@@ -256,7 +293,7 @@ function useExtractedDraft(options) {
   currentSemanticExtras = applyOptions.includeSemantics ? semanticExtrasFromCandidate(currentExtraction.candidate_authority) : {};
   currentArtifacts = null;
   pendingRegistration = null;
-  saveDraftSession();
+  commitCurrentDraft();
   markDraftInvalidated();
   workflowTimestamps.reviewed = null;
   workflowTimestamps.exported = null;
@@ -328,7 +365,7 @@ async function generateArtifacts(options = {}) {
     setBusy(true);
   }
   try {
-    saveDraftSession();
+    commitCurrentDraft();
     const response = await fetch("/api/compose", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -413,7 +450,10 @@ function renderOperatorGuidance(title, body) {
     guidance.querySelector("span").textContent = body;
     return;
   }
-  if (!workflowState.draftReady) {
+  if (authoringSessionDirty) {
+    guidance.querySelector("strong").textContent = "Unsaved draft changes.";
+    guidance.querySelector("span").textContent = "Save or review the draft before treating form edits as the current authority posture.";
+  } else if (!workflowState.draftReady) {
     guidance.querySelector("strong").textContent = "Start by defining the authority.";
     guidance.querySelector("span").textContent = "Describe the governed system, action, approvals, escalation, and continuity posture.";
   } else if (!workflowState.impactReviewed) {
@@ -432,7 +472,8 @@ function renderOperatorGuidance(title, body) {
 }
 
 function renderAuthorityContext() {
-  const authorityRef = currentArtifacts?.authority_bundle?.authority_ref || `${readDraft().contract_id || "authority"}@${readDraft().contract_version || "draft"}`;
+  const stableDraft = committedDraft || null;
+  const authorityRef = currentArtifacts?.authority_bundle?.authority_ref || (stableDraft ? `${stableDraft.contract_id || "authority"}@${stableDraft.contract_version || "draft"}` : "uncommitted draft");
   const registryEntry = currentArtifacts?.authority_bundle ? findRegistryEntry(currentArtifacts.authority_bundle.authority_ref) : null;
   $("#context-authority-ref").textContent = authorityRef;
   $("#context-reviewed-at").textContent = workflowTimestamps.reviewed
@@ -441,7 +482,7 @@ function renderAuthorityContext() {
   $("#context-lineage").textContent = registryEntry
     ? `${formatLabel(registryEntry.status)} lineage`
     : "draft lineage";
-  setContextChip("#context-draft-state", true, "Draft");
+  setContextChip("#context-draft-state", !authoringSessionDirty, authoringSessionDirty ? "Unsaved changes" : "Draft");
   setContextChip("#context-review-state", workflowState.impactReviewed, workflowState.impactReviewed ? "Impact reviewed" : "Impact pending");
   setContextChip("#context-export-state", workflowState.bundleExported, workflowState.bundleExported ? "Exported" : "Not exported");
   setContextChip("#context-register-state", workflowState.authorityRegistered, workflowState.authorityRegistered ? "Registered" : "Not registered");
@@ -2656,12 +2697,13 @@ publicationReviewButton.addEventListener("click", () => generateArtifacts({ revi
 exportButton.addEventListener("click", exportBundle);
 registerButton.addEventListener("click", registerAuthorityLocally);
 newDraftButton.addEventListener("click", startNewDraft);
+saveDraftButton.addEventListener("click", commitCurrentDraft);
 extractPolicyButton.addEventListener("click", extractPolicySemantics);
 useExtractionButton.addEventListener("click", () => useExtractedDraft({ includeSemantics: false }));
 applyAllExtractionButton.addEventListener("click", () => useExtractedDraft({ includeSemantics: true }));
 openReconciliationButton.addEventListener("click", openReconciliationReview);
 form.addEventListener("input", () => {
-  saveDraftSession();
+  saveWorkingAuthoringSession();
   pendingRegistration = null;
   markDraftInvalidated();
   workflowTimestamps.reviewed = null;
@@ -2675,10 +2717,9 @@ form.addEventListener("input", () => {
     receiptGenerated: false,
     authorityRegistered: false,
   });
-  scheduleLivePreview();
 });
 form.addEventListener("change", () => {
-  saveDraftSession();
+  saveWorkingAuthoringSession();
   pendingRegistration = null;
   markDraftInvalidated();
   workflowTimestamps.reviewed = null;
@@ -2692,7 +2733,6 @@ form.addEventListener("change", () => {
     receiptGenerated: false,
     authorityRegistered: false,
   });
-  scheduleLivePreview();
 });
 $("#bundle-registry").addEventListener("click", handleRegistryAction);
 $("#registry-search").addEventListener("input", renderBundleRegistry);
@@ -2713,4 +2753,3 @@ renderBundleRegistry();
 renderOperationsOverview();
 renderChangeReview(currentArtifacts, { reviewed: workflowState.impactReviewed });
 showPage(window.location.hash.replace("#", "") || "overview");
-scheduleLivePreview();
