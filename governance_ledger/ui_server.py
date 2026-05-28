@@ -215,6 +215,12 @@ def build_authority_contract_from_draft(draft: dict[str, Any]) -> dict[str, Any]
     validity_days = _positive_int(draft.get("validity_days"), default=30)
     continuity_revalidation = bool(draft.get("continuity_revalidation", True))
     revocation_invalidates_resume = bool(draft.get("revocation_invalidates_resume", True))
+    temporal_semantics = _temporal_semantics_from_draft(draft, validity_days)
+    state_snapshot_semantics = _state_snapshot_semantics_from_draft(
+        draft,
+        continuity_revalidation=continuity_revalidation,
+        revocation_invalidates_resume=revocation_invalidates_resume,
+    )
     category = str(draft.get("governance_category") or "Operational")
     mutation_targets = _string_list(draft.get("mutation_targets")) or [_mutation_target(governed_action)]
 
@@ -292,7 +298,10 @@ def build_authority_contract_from_draft(draft: dict[str, Any]) -> dict[str, Any]
         "validity": {
             "window_days": validity_days,
         },
+        "temporal_semantics": temporal_semantics,
     }
+    if state_snapshot_semantics:
+        authority["state_snapshot_semantics"] = state_snapshot_semantics
     authority["contract_hash"] = _artifact_hash(authority)
     return authority
 
@@ -353,6 +362,31 @@ def build_ui_diagnostics(
                 "Mutation target was derived from governed action; confirm it matches the operational system.",
                 "Replace the derived mutation target if the governed operation uses a different system action.",
                 domain="authoring",
+            )
+        )
+    temporal = authority.get("temporal_semantics") if isinstance(authority.get("temporal_semantics"), dict) else {}
+    if temporal.get("validity_window") and temporal.get("timestamp_source") in (None, "", "unspecified"):
+        diagnostics.append(
+            _ui_diagnostic(
+                "temporal_source_ambiguity",
+                "Temporal Source Ambiguity",
+                "Validity window exists but timestamp source is unspecified.",
+                "Record whether expiration binds to execution payload time, signed oracle time, block timestamp, or Cloud-attested time.",
+                domain="temporal",
+                severity="warning",
+            )
+        )
+    continuity = authority.get("continuity_requirements") if isinstance(authority.get("continuity_requirements"), dict) else {}
+    snapshot = authority.get("state_snapshot_semantics") if isinstance(authority.get("state_snapshot_semantics"), dict) else {}
+    if continuity.get("resume_requires_current_authority") and not snapshot.get("snapshot_required"):
+        diagnostics.append(
+            _ui_diagnostic(
+                "snapshot_continuity_gap",
+                "Snapshot Continuity Gap",
+                "Resumed workflow revalidation is required but no state snapshot expectation is defined.",
+                "Define the governance posture snapshot subject and comparison expectation for resumed workflows.",
+                domain="continuity",
+                severity="warning",
             )
         )
     return diagnostics
@@ -517,6 +551,55 @@ def _format_number(value: Any) -> str:
     if isinstance(value, float):
         return f"{value:,.2f}".rstrip("0").rstrip(".")
     return str(value or "")
+
+
+def _temporal_semantics_from_draft(draft: dict[str, Any], validity_days: int) -> dict[str, Any]:
+    semantics = draft.get("temporal_semantics")
+    if isinstance(semantics, dict) and semantics:
+        result = dict(semantics)
+        result.setdefault("schema_version", "temporal_authority_semantics.v1")
+        result.setdefault("validity_window", f"P{validity_days}D")
+        result.setdefault("timestamp_source", "unspecified")
+        result.setdefault("expiration_basis", "unspecified")
+        result.setdefault("runtime_enforced_by", "Guard/Cloud")
+        return result
+    return {
+        "schema_version": "temporal_authority_semantics.v1",
+        "validity_window": f"P{validity_days}D",
+        "timestamp_source": str(draft.get("timestamp_source") or "unspecified"),
+        "expiration_basis": str(draft.get("expiration_basis") or "unspecified"),
+        "runtime_enforced_by": "Guard/Cloud",
+    }
+
+
+def _state_snapshot_semantics_from_draft(
+    draft: dict[str, Any],
+    *,
+    continuity_revalidation: bool,
+    revocation_invalidates_resume: bool,
+) -> dict[str, Any]:
+    semantics = draft.get("state_snapshot_semantics")
+    if isinstance(semantics, dict) and semantics:
+        result = dict(semantics)
+        result.setdefault("schema_version", "state_posture_snapshot_semantics.v1")
+        result.setdefault("snapshot_required", True)
+        result.setdefault("snapshot_hash_algorithm", "sha256")
+        result.setdefault("snapshot_subject", "active_governance_state")
+        result.setdefault("resume_comparison", "snapshot_hash_must_match_active_state_hash")
+        result.setdefault("drift_result", "continuity_drift_detected")
+        result.setdefault("runtime_enforced_by", "Guard/Cloud")
+        return result
+    if not (continuity_revalidation or revocation_invalidates_resume):
+        return {}
+    return {
+        "schema_version": "state_posture_snapshot_semantics.v1",
+        "snapshot_required": True,
+        "snapshot_hash_algorithm": "sha256",
+        "snapshot_subject": str(draft.get("snapshot_subject") or "active_governance_state"),
+        "resume_comparison": "snapshot_hash_must_match_active_state_hash",
+        "drift_result": "continuity_drift_detected",
+        "runtime_enforced_by": "Guard/Cloud",
+    }
 
 
 def _required_text(draft: dict[str, Any], field: str, label: str) -> str:

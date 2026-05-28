@@ -58,6 +58,25 @@ def build_governance_semantic_reconciliation(
             normalized["escalation_threshold"] = decision.get("resolved_value")
             normalized["escalation_semantics"] = f"Executions above ${int(decision['resolved_value']):,} require escalation review."
             normalization_decisions.append("threshold normalized from operator interpretation")
+        if decision.get("decision_type") == "timestamp_source_definition":
+            temporal = dict(normalized.get("temporal_semantics") or {})
+            temporal.setdefault("schema_version", "temporal_authority_semantics.v1")
+            temporal["timestamp_source"] = str(decision.get("resolved_value") or "unspecified")
+            temporal["expiration_basis"] = _expiration_basis_for_source(temporal["timestamp_source"])
+            temporal["runtime_enforced_by"] = "Guard/Cloud"
+            normalized["temporal_semantics"] = temporal
+            normalization_decisions.append("timestamp source normalized from operator interpretation")
+        if decision.get("decision_type") == "state_snapshot_subject_definition":
+            snapshot = dict(normalized.get("state_snapshot_semantics") or {})
+            snapshot.setdefault("schema_version", "state_posture_snapshot_semantics.v1")
+            snapshot["snapshot_required"] = True
+            snapshot["snapshot_hash_algorithm"] = "sha256"
+            snapshot["snapshot_subject"] = str(decision.get("resolved_value") or "unspecified")
+            snapshot["resume_comparison"] = "snapshot_hash_must_match_active_state_hash"
+            snapshot["drift_result"] = "continuity_drift_detected"
+            snapshot["runtime_enforced_by"] = "Guard/Cloud"
+            normalized["state_snapshot_semantics"] = snapshot
+            normalization_decisions.append("state snapshot subject normalized from operator interpretation")
     return {
         "schema_version": "governance_semantic_reconciliation.v1",
         "source_id": semantic_extraction["source_id"],
@@ -124,3 +143,12 @@ def _semantic_conflicts(extraction: dict[str, Any], decisions: list[dict[str, An
                 }
             )
     return conflicts
+
+
+def _expiration_basis_for_source(timestamp_source: str) -> str:
+    return {
+        "execution_payload": "signed_execution_time",
+        "signed_oracle": "signed_oracle_time",
+        "block_timestamp": "block_timestamp",
+        "cloud_attested_time": "cloud_attested_time",
+    }.get(timestamp_source, "unspecified")

@@ -62,6 +62,51 @@ def test_operator_decision_records_interpretation_provenance_and_normalizes_mean
     assert reconciliation["normalization_decisions"] == ["threshold normalized from operator interpretation"]
 
 
+def test_operator_decisions_normalize_temporal_and_snapshot_semantics():
+    extraction = extract_governance_semantics(
+        "Payment Workflow approval is valid for 30 days and must revalidate on resume."
+    )
+    extraction["ambiguities"] = [
+        {
+            "ambiguity_id": "ambiguity-timestamp-source",
+            "ambiguity_type": "timestamp_source_unspecified",
+            "summary": "Timestamp source is unspecified.",
+            "requires_operator_resolution": True,
+        },
+        {
+            "ambiguity_id": "ambiguity-snapshot-subject",
+            "ambiguity_type": "state_snapshot_subject_unspecified",
+            "summary": "Snapshot subject is unspecified.",
+            "requires_operator_resolution": True,
+        },
+    ]
+    timestamp_decision = build_semantic_interpretation_decision(
+        decision_type="timestamp_source_definition",
+        ambiguity_id="ambiguity-timestamp-source",
+        resolved_value="signed_oracle",
+        rationale="Treasury approvals use signed oracle time.",
+    )
+    snapshot_decision = build_semantic_interpretation_decision(
+        decision_type="state_snapshot_subject_definition",
+        ambiguity_id="ambiguity-snapshot-subject",
+        resolved_value="active_governance_state",
+        rationale="Resume must compare against active governance posture.",
+    )
+
+    reconciliation = build_governance_semantic_reconciliation(
+        semantic_extraction=extraction,
+        interpretation_decisions=[timestamp_decision, snapshot_decision],
+    )
+    normalized = reconciliation["final_normalized_semantic_meaning"]
+
+    assert reconciliation["interpretation_completeness_posture"] == "complete"
+    assert normalized["temporal_semantics"]["timestamp_source"] == "signed_oracle"
+    assert normalized["temporal_semantics"]["expiration_basis"] == "signed_oracle_time"
+    assert normalized["temporal_semantics"]["runtime_enforced_by"] == "Guard/Cloud"
+    assert normalized["state_snapshot_semantics"]["snapshot_subject"] == "active_governance_state"
+    assert normalized["state_snapshot_semantics"]["runtime_enforced_by"] == "Guard/Cloud"
+
+
 def test_semantic_reconciliation_projection_surfaces_completeness_posture():
     extraction = extract_governance_semantics("Large financial transfers require executive review.")
     extraction["ambiguities"].append(

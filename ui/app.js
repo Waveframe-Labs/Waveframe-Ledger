@@ -177,6 +177,8 @@ async function extractPolicySemantics() {
 
 function renderSemanticExtraction(extraction) {
   const candidate = extraction?.candidate_authority || {};
+  const temporal = candidate.temporal_semantics || {};
+  const snapshot = candidate.state_snapshot_semantics || {};
   renderDefinitionValues("#extracted-authority", {
     Resource: candidate.protected_system || "missing",
     Action: candidate.governed_action || "missing",
@@ -184,6 +186,9 @@ function renderSemanticExtraction(extraction) {
     "Approval count": candidate.approval_count ?? "missing",
     "Escalation threshold": candidate.escalation_threshold ? `$${Number(candidate.escalation_threshold).toLocaleString()}` : "missing",
     Continuity: candidate.continuity_revalidation || candidate.revocation_invalidates_resume ? "continuity semantics detected" : "missing",
+    "Validity window": temporal.validity_window || (candidate.validity_days ? `P${candidate.validity_days}D` : "missing"),
+    "Timestamp source": temporal.timestamp_source || "missing",
+    "Snapshot expectation": snapshot.snapshot_required ? "required for resumed workflows" : "missing",
   });
   renderExtractionList("#extracted-rules", extraction.candidate_rules, "No deterministic obligations extracted.");
   renderExtractionList("#extracted-ambiguities", extraction.ambiguities, "No ambiguity detected by deterministic patterns.");

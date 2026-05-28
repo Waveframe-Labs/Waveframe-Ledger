@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from governance_ledger.semantics.publication import build_publication_receipt
-from governance_ledger.ui_server import build_publication_receipt_response, compose_authority_publication
+from governance_ledger.ui_server import build_publication_receipt_response, build_ui_diagnostics, compose_authority_publication
 
 
 def test_ui_server_composes_artifacts_from_authoring_fields():
@@ -34,6 +34,22 @@ def test_ui_server_composes_artifacts_from_authoring_fields():
     assert authority["schema_version"] == "authority_contract.v1"
     assert authority["protected_resource"] == "Corporate Treasury Transfer System"
     assert authority["approval_requirements"]["thresholds"][0]["value"] == 250000
+    assert authority["temporal_semantics"] == {
+        "schema_version": "temporal_authority_semantics.v1",
+        "validity_window": "P30D",
+        "timestamp_source": "unspecified",
+        "expiration_basis": "unspecified",
+        "runtime_enforced_by": "Guard/Cloud",
+    }
+    assert authority["state_snapshot_semantics"] == {
+        "schema_version": "state_posture_snapshot_semantics.v1",
+        "snapshot_required": True,
+        "snapshot_hash_algorithm": "sha256",
+        "snapshot_subject": "active_governance_state",
+        "resume_comparison": "snapshot_hash_must_match_active_state_hash",
+        "drift_result": "continuity_drift_detected",
+        "runtime_enforced_by": "Guard/Cloud",
+    }
     assert preview["schema_version"] == "governance_impact_preview.v1"
     assert packet["schema_version"] == "governance_review_packet.v1"
     assert bundle["schema_version"] == "authority_bundle.v1"
@@ -55,7 +71,7 @@ def test_ui_server_composes_artifacts_from_authoring_fields():
     assert workspace_projection["operational_change"] == release_narrative["operational_change"]
     assert workspace_projection["continuity_posture"] == release_narrative["continuity_summary"]
     assert workspace_projection["lifecycle_effect"] == release_narrative["lifecycle_summary"]
-    assert workspace_projection["diagnostics_summary"] == {"findings": 2, "warnings": 0, "info": 2}
+    assert workspace_projection["diagnostics_summary"] == {"findings": 3, "warnings": 1, "info": 2}
     assert operational_summary["schema_version"] == "authority_operational_summary.v1"
     assert operational_summary["authority_ref"] == "treasury-policy@2.1.0"
     assert operational_summary["governance_meaning"] == [
@@ -63,7 +79,11 @@ def test_ui_server_composes_artifacts_from_authoring_fields():
         workspace_projection["continuity_posture"],
         workspace_projection["replay_posture"],
     ]
-    assert [diagnostic["code"] for diagnostic in result["diagnostics"]] == ["GQ004", "GQ005"]
+    assert [diagnostic["code"] for diagnostic in result["diagnostics"]] == [
+        "GQ004",
+        "GQ005",
+        "temporal_source_ambiguity",
+    ]
     assert {diagnostic["blocks_publication"] for diagnostic in result["diagnostics"]} == {False}
 
 
@@ -78,9 +98,32 @@ def test_ui_server_emits_guidance_diagnostic_for_default_mutation_target():
 
     diagnostics = result["diagnostics"]
 
-    assert {diagnostic["code"] for diagnostic in diagnostics} == {"GQ004", "GQ005", "default_mutation_target"}
+    assert {diagnostic["code"] for diagnostic in diagnostics} == {
+        "GQ004",
+        "GQ005",
+        "default_mutation_target",
+        "temporal_source_ambiguity",
+    }
     assert _diagnostic(diagnostics, "default_mutation_target")["title"] == "Derived Mutation Target"
+    assert _diagnostic(diagnostics, "temporal_source_ambiguity")["title"] == "Temporal Source Ambiguity"
     assert {diagnostic["blocks_publication"] for diagnostic in diagnostics} == {False}
+
+
+def test_ui_server_emits_snapshot_gap_when_continuity_lacks_snapshot_expectation():
+    result = compose_authority_publication(
+        {
+            "protected_system": "Corporate Treasury Transfer System",
+            "governed_action": "transfer funds",
+            "approver_role": "treasury-governance",
+        }
+    )
+    authority = dict(result["authority_contract"])
+    authority.pop("state_snapshot_semantics")
+
+    diagnostics = build_ui_diagnostics(authority, {"mutation_targets": "bank_api.transfer_funds"}, result["authority_bundle"])
+
+    assert _diagnostic(diagnostics, "snapshot_continuity_gap")["title"] == "Snapshot Continuity Gap"
+    assert _diagnostic(diagnostics, "snapshot_continuity_gap")["blocks_publication"] is False
 
 
 def test_ui_server_receipt_builder_supports_publication_notes():

@@ -57,8 +57,26 @@ def extract_governance_semantics(
     approval_count = _extract_approval_count(text)
     threshold = _extract_threshold(text)
     validity_days = _extract_validity_days(text)
-    continuity_revalidation = _contains_any(lower, ["revalidat", "current authority", "posture changes", "supersed"])
+    temporal_semantics = _extract_temporal_semantics(text, validity_days)
+    continuity_revalidation = _contains_any(
+        lower,
+        [
+            "revalidat",
+            "current authority",
+            "current governance state",
+            "current policy version",
+            "policy changes",
+            "posture changes",
+            "supersed",
+            "compare current policy version",
+        ],
+    )
     revocation_invalidates = _contains_any(lower, ["revoked", "revocation"]) and _contains_any(lower, ["resume", "continuity", "invalidate"])
+    state_snapshot_semantics = _extract_state_snapshot_semantics(
+        text,
+        continuity_revalidation=continuity_revalidation,
+        revocation_invalidates=revocation_invalidates,
+    )
     evidence_terms = _extract_evidence_terms(lower)
 
     candidate = {
@@ -72,9 +90,11 @@ def extract_governance_semantics(
         "escalation_threshold": threshold,
         "escalation_semantics": _extract_escalation_semantics(text, threshold, role),
         "validity_days": validity_days,
+        "temporal_semantics": temporal_semantics,
         "mutation_targets": _mutation_target(governed_action) if governed_action else "",
         "continuity_revalidation": continuity_revalidation,
         "revocation_invalidates_resume": revocation_invalidates,
+        "state_snapshot_semantics": state_snapshot_semantics,
     }
 
     missing = []
@@ -115,6 +135,22 @@ def extract_governance_semantics(
                     "continuity_revalidation": continuity_revalidation,
                     "revocation_invalidates_resume": revocation_invalidates,
                 },
+            }
+        )
+    if temporal_semantics:
+        candidate_rules.append(
+            {
+                "rule_type": "temporal_authority_semantics",
+                "summary": _temporal_summary(temporal_semantics),
+                "fields": temporal_semantics,
+            }
+        )
+    if state_snapshot_semantics:
+        candidate_rules.append(
+            {
+                "rule_type": "state_posture_snapshot_semantics",
+                "summary": "Resumed workflows are expected to compare prior governance posture against active governance state.",
+                "fields": state_snapshot_semantics,
             }
         )
     for term in evidence_terms:
@@ -204,6 +240,66 @@ def _extract_validity_days(text: str) -> int | None:
     return int(match.group("days")) if match else None
 
 
+def _extract_temporal_semantics(text: str, validity_days: int | None) -> dict[str, Any]:
+    if validity_days is None and not re.search(r"\bexpires?\s+after\s+approval\b", text, re.IGNORECASE):
+        return {}
+    timestamp_source, expiration_basis = _extract_timestamp_source(text)
+    temporal = {
+        "schema_version": "temporal_authority_semantics.v1",
+        "timestamp_source": timestamp_source,
+        "expiration_basis": expiration_basis,
+        "runtime_enforced_by": "Guard/Cloud",
+    }
+    if validity_days is not None:
+        temporal["validity_window"] = f"P{validity_days}D"
+    else:
+        temporal["expiration_trigger"] = "approval_completion"
+    return temporal
+
+
+def _extract_timestamp_source(text: str) -> tuple[str, str]:
+    lower = text.lower()
+    if _contains_any(lower, ["signed oracle", "oracle timestamp", "oracle time"]):
+        return "signed_oracle", "signed_oracle_time"
+    if "block timestamp" in lower or "block time" in lower:
+        return "block_timestamp", "block_timestamp"
+    if _contains_any(lower, ["cloud attested time", "cloud-attested time", "attested time"]):
+        return "cloud_attested_time", "cloud_attested_time"
+    if _contains_any(lower, ["execution payload", "signed execution time", "signed execution timestamp"]):
+        return "execution_payload", "signed_execution_time"
+    return "unspecified", "unspecified"
+
+
+def _extract_state_snapshot_semantics(
+    text: str,
+    *,
+    continuity_revalidation: bool,
+    revocation_invalidates: bool,
+) -> dict[str, Any]:
+    lower = text.lower()
+    if not (continuity_revalidation or revocation_invalidates or _contains_any(lower, ["current governance state", "current policy version", "snapshot"])):
+        return {}
+    return {
+        "schema_version": "state_posture_snapshot_semantics.v1",
+        "snapshot_required": True,
+        "snapshot_hash_algorithm": "sha256",
+        "snapshot_subject": _extract_snapshot_subject(lower),
+        "resume_comparison": "snapshot_hash_must_match_active_state_hash",
+        "drift_result": "continuity_drift_detected",
+        "runtime_enforced_by": "Guard/Cloud",
+    }
+
+
+def _extract_snapshot_subject(lower: str) -> str:
+    if _contains_any(lower, ["active governance state", "current governance state"]):
+        return "active_governance_state"
+    if "current policy version" in lower or "policy version" in lower:
+        return "current_policy_version"
+    if _contains_any(lower, ["authority posture", "current authority"]):
+        return "authority_posture"
+    return "unspecified"
+
+
 def _extract_escalation_semantics(text: str, threshold: int | None, role: str) -> str:
     if threshold and role:
         return f"Executions above ${threshold:,} require {role} review."
@@ -258,6 +354,22 @@ def _ambiguities(text: str, candidate: dict[str, Any]) -> list[dict[str, str]]:
                 "summary": "Continuity revalidation was detected, but revocation behavior was not explicit.",
             }
         )
+    temporal = candidate.get("temporal_semantics") if isinstance(candidate.get("temporal_semantics"), dict) else {}
+    if temporal.get("validity_window") and temporal.get("timestamp_source") == "unspecified":
+        ambiguities.append(
+            {
+                "ambiguity_type": "timestamp_source_unspecified",
+                "summary": "Validity window was detected, but the timestamp source for expiration interpretation is unspecified.",
+            }
+        )
+    snapshot = candidate.get("state_snapshot_semantics") if isinstance(candidate.get("state_snapshot_semantics"), dict) else {}
+    if snapshot.get("snapshot_required") and snapshot.get("snapshot_subject") == "unspecified":
+        ambiguities.append(
+            {
+                "ambiguity_type": "state_snapshot_subject_unspecified",
+                "summary": "Continuity revalidation was detected, but the governance state snapshot subject is unspecified.",
+            }
+        )
     return ambiguities
 
 
@@ -283,6 +395,15 @@ def _continuity_summary(revalidation: bool, revocation_invalidates: bool) -> str
     if revalidation:
         return "Resumed workflows require continuity revalidation when governance posture changes."
     return "Revoked authorities invalidate resumed execution continuity."
+
+
+def _temporal_summary(temporal: dict[str, Any]) -> str:
+    if temporal.get("validity_window"):
+        return (
+            f"Authority validity intent is {temporal['validity_window']} with "
+            f"{temporal.get('timestamp_source', 'unspecified')} timestamp binding."
+        )
+    return "Authority expiration is tied to approval completion with runtime enforcement outside Ledger."
 
 
 def _contains_any(text: str, needles: list[str]) -> bool:
