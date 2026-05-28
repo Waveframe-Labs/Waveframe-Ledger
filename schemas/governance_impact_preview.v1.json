@@ -62,6 +62,26 @@
         "minLength": 1
       }
     },
+    "execution_context": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "execution_context",
+        "summary",
+        "replay_posture",
+        "resume_posture",
+        "runtime_enforced_by"
+      ],
+      "properties": {
+        "schema_version": { "const": "execution_context_semantics.v1" },
+        "execution_context": { "type": "string", "minLength": 1 },
+        "summary": { "type": "string", "minLength": 1 },
+        "replay_posture": { "type": "string", "minLength": 1 },
+        "resume_posture": { "type": "string", "minLength": 1 },
+        "runtime_enforced_by": { "const": "Guard/Cloud" }
+      }
+    },
     "example_governed_outcomes": {
       "type": "array",
       "minItems": 1,

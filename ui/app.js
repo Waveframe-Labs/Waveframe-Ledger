@@ -11,6 +11,7 @@ const draftSessionStatus = document.querySelector("#draft-session-status");
 let currentArtifacts = null;
 let pendingRegistration = null;
 let currentExtraction = null;
+let currentSemanticExtras = {};
 let livePreviewTimer = null;
 let reviewBusy = false;
 let workflowTimestamps = {
@@ -52,6 +53,7 @@ function readDraft() {
     mutation_targets: data.get("mutation_targets"),
     continuity_revalidation: data.get("continuity_revalidation") === "on",
     revocation_invalidates_resume: data.get("revocation_invalidates_resume") === "on",
+    ...currentSemanticExtras,
   };
 }
 
@@ -94,6 +96,7 @@ function restoreDraftSession() {
     saveDraftSession();
     return;
   }
+  currentSemanticExtras = semanticExtrasFromCandidate(session.draft || {});
   for (const [key, value] of Object.entries(session.draft || {})) {
     const field = form.elements[key];
     if (!field) continue;
@@ -111,6 +114,7 @@ function startNewDraft() {
   form.reset();
   currentArtifacts = null;
   pendingRegistration = null;
+  currentSemanticExtras = {};
   workflowTimestamps = {
     draftSaved: null,
     reviewed: null,
@@ -179,6 +183,7 @@ function renderSemanticExtraction(extraction) {
   const candidate = extraction?.candidate_authority || {};
   const temporal = candidate.temporal_semantics || {};
   const snapshot = candidate.state_snapshot_semantics || {};
+  const executionContext = candidate.execution_context_semantics || {};
   renderDefinitionValues("#extracted-authority", {
     Resource: candidate.protected_system || "missing",
     Action: candidate.governed_action || "missing",
@@ -189,6 +194,8 @@ function renderSemanticExtraction(extraction) {
     "Validity window": temporal.validity_window || (candidate.validity_days ? `P${candidate.validity_days}D` : "missing"),
     "Timestamp source": temporal.timestamp_source || "missing",
     "Snapshot expectation": snapshot.snapshot_required ? "required for resumed workflows" : "missing",
+    "Execution context": executionContext.execution_context ? formatLabel(executionContext.execution_context) : "missing",
+    "Execution boundary": executionContext.execution_boundary ? formatLabel(executionContext.execution_boundary) : "missing",
   });
   renderExtractionList("#extracted-rules", extraction.candidate_rules, "No deterministic obligations extracted.");
   renderExtractionList("#extracted-ambiguities", extraction.ambiguities, "No ambiguity detected by deterministic patterns.");
@@ -215,6 +222,7 @@ function renderExtractionList(selector, items, emptyText) {
 function useExtractedDraft() {
   if (!currentExtraction?.candidate_authority) return;
   applyDraftToForm(currentExtraction.candidate_authority);
+  currentSemanticExtras = semanticExtrasFromCandidate(currentExtraction.candidate_authority);
   currentArtifacts = null;
   pendingRegistration = null;
   saveDraftSession();
@@ -236,6 +244,16 @@ function useExtractedDraft() {
     "Review extracted meaning next.",
     "Ledger populated the draft from policy text, but publication state has not advanced.",
   );
+}
+
+function semanticExtrasFromCandidate(candidate) {
+  const extras = {};
+  for (const key of ["temporal_semantics", "state_snapshot_semantics", "execution_context_semantics"]) {
+    if (candidate?.[key] && typeof candidate[key] === "object") {
+      extras[key] = candidate[key];
+    }
+  }
+  return extras;
 }
 
 function applyDraftToForm(candidate) {
@@ -415,6 +433,7 @@ function renderArtifacts(payload, options = {}) {
   renderList("#preview-enforcement", preview.enforcement_behavior);
   renderList("#preview-consequences", preview.operational_consequences);
   renderList("#preview-lifecycle", preview.lifecycle_implications);
+  renderExecutionContext("#preview-execution-context", preview.execution_context);
   renderOutcomes(preview.example_governed_outcomes);
   renderList("#outcome-explorer", buildOutcomeExplorer(preview, bundle));
 
@@ -486,6 +505,24 @@ function renderPublicationProjection(projection) {
   $("#release-continuity").textContent = projection?.continuity_posture || "Pending impact review.";
   $("#release-lifecycle").textContent = projection?.lifecycle_effect || "Pending impact review.";
   $("#release-registration").textContent = projection?.registry_posture || "Bundle not exported.";
+}
+
+function renderExecutionContext(selector, executionContext) {
+  const node = $(selector);
+  if (!node) return;
+  if (!executionContext) {
+    renderDefinitionValues(selector, {
+      Context: "not modeled",
+      Continuity: "authority defaults",
+    });
+    return;
+  }
+  renderDefinitionValues(selector, {
+    Context: formatLabel(executionContext.execution_context || "unspecified"),
+    "Replay posture": executionContext.replay_posture || "authority defaults",
+    "Resume behavior": executionContext.resume_posture || "not modeled",
+    "Runtime boundary": executionContext.runtime_enforced_by || "Guard/Cloud",
+  });
 }
 
 function renderList(selector, items) {
@@ -2333,8 +2370,9 @@ function renderChangeReview(payload, options = {}) {
   const operational = $("#change-operational");
   const continuity = $("#change-continuity");
   const replay = $("#change-replay");
+  const executionContext = $("#change-execution-context");
   const lineage = $("#change-lineage");
-  if (!status || !narrative || !operational || !continuity || !replay || !lineage) return;
+  if (!status || !narrative || !operational || !continuity || !replay || !executionContext || !lineage) return;
   lineage.innerHTML = "";
   if (!payload?.authority_bundle) {
     status.textContent = "No authority reviewed";
@@ -2343,6 +2381,7 @@ function renderChangeReview(payload, options = {}) {
     operational.textContent = "Review impact to generate the current authority posture.";
     continuity.textContent = "Registered lineage will show supersession path, resumed execution impact, and replay continuity obligations here.";
     renderReplayPosture(replay, null, null);
+    renderExecutionContext("#change-execution-context", null);
     appendLineageEmpty(lineage);
     return;
   }
@@ -2362,6 +2401,7 @@ function renderChangeReview(payload, options = {}) {
   continuity.textContent = firstText(bundle.continuity_implications)
     || "No continuity implication has been derived yet. Review continuity posture before publication.";
   renderReplayPosture(replay, bundle, registryEntry);
+  renderExecutionContext("#change-execution-context", preview.execution_context);
   renderLineageChain(lineage, registryEntry, bundle);
 }
 

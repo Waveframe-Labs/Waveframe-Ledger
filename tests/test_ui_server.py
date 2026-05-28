@@ -19,6 +19,17 @@ def test_ui_server_composes_artifacts_from_authoring_fields():
             "mutation_targets": "bank_api.transfer_funds",
             "continuity_revalidation": True,
             "revocation_invalidates_resume": True,
+            "execution_context_semantics": {
+                "schema_version": "execution_context_semantics.v1",
+                "execution_context": "queued_async",
+                "execution_boundary": "external_worker",
+                "requires_replay_evidence": True,
+                "requires_state_snapshot": True,
+                "requires_temporal_validation": True,
+                "resume_behavior": "revalidate_on_resume",
+                "continuity_risk_profile": "medium",
+                "runtime_enforced_by": "Guard/Cloud",
+            },
         }
     )
 
@@ -50,6 +61,8 @@ def test_ui_server_composes_artifacts_from_authoring_fields():
         "drift_result": "continuity_drift_detected",
         "runtime_enforced_by": "Guard/Cloud",
     }
+    assert authority["execution_context_semantics"]["execution_context"] == "queued_async"
+    assert preview["execution_context"]["replay_posture"] == "Replay-backed continuity required"
     assert preview["schema_version"] == "governance_impact_preview.v1"
     assert packet["schema_version"] == "governance_review_packet.v1"
     assert bundle["schema_version"] == "authority_bundle.v1"
@@ -124,6 +137,46 @@ def test_ui_server_emits_snapshot_gap_when_continuity_lacks_snapshot_expectation
 
     assert _diagnostic(diagnostics, "snapshot_continuity_gap")["title"] == "Snapshot Continuity Gap"
     assert _diagnostic(diagnostics, "snapshot_continuity_gap")["blocks_publication"] is False
+
+
+def test_ui_server_emits_execution_context_diagnostics():
+    result = compose_authority_publication(
+        {
+            "protected_system": "Deployment Workflow",
+            "governed_action": "deferred execution",
+            "approver_role": "release-governance",
+            "continuity_revalidation": False,
+            "revocation_invalidates_resume": False,
+            "execution_context_semantics": {
+                "schema_version": "execution_context_semantics.v1",
+                "execution_context": "resumed_workflow",
+                "execution_boundary": "external_worker",
+                "requires_replay_evidence": True,
+                "requires_state_snapshot": True,
+                "requires_temporal_validation": False,
+                "resume_behavior": "revalidate_on_resume",
+                "continuity_risk_profile": "medium",
+                "runtime_enforced_by": "Guard/Cloud",
+            },
+        }
+    )
+
+    diagnostics = result["diagnostics"]
+
+    assert _diagnostic(diagnostics, "resume_validation_gap")["title"] == "Resume Validation Gap"
+    assert "execution_context_ambiguity" not in {diagnostic["code"] for diagnostic in diagnostics}
+
+
+def test_ui_server_emits_execution_context_ambiguity_for_deferred_text_without_context():
+    result = compose_authority_publication(
+        {
+            "protected_system": "Deployment Workflow",
+            "governed_action": "deferred execution",
+            "approver_role": "release-governance",
+        }
+    )
+
+    assert _diagnostic(result["diagnostics"], "execution_context_ambiguity")["title"] == "Execution Context Ambiguity"
 
 
 def test_ui_server_receipt_builder_supports_publication_notes():

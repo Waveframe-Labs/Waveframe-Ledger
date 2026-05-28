@@ -60,6 +60,36 @@ def test_escalation_thresholds_produce_escalation_examples():
     }
 
 
+def test_execution_context_semantics_appear_in_preview():
+    preview = build_governance_impact_preview(
+        {
+            **_authority_contract(),
+            "execution_context_semantics": {
+                "schema_version": "execution_context_semantics.v1",
+                "execution_context": "queued_async",
+                "execution_boundary": "external_worker",
+                "requires_replay_evidence": True,
+                "requires_state_snapshot": True,
+                "requires_temporal_validation": True,
+                "resume_behavior": "revalidate_on_resume",
+                "continuity_risk_profile": "medium",
+                "runtime_enforced_by": "Guard/Cloud",
+            },
+        }
+    )
+
+    assert preview["execution_context"] == {
+        "schema_version": "execution_context_semantics.v1",
+        "execution_context": "queued_async",
+        "summary": "queued async execution context",
+        "replay_posture": "Replay-backed continuity required",
+        "resume_posture": "Resume revalidation required",
+        "runtime_enforced_by": "Guard/Cloud",
+    }
+    assert "Execution context requires replay-backed continuity evidence." in preview["operational_consequences"]
+    assert "Execution may resume later and must revalidate governance posture on resume." in preview["lifecycle_implications"]
+
+
 def test_preview_does_not_import_or_invoke_guard(monkeypatch):
     monkeypatch.setitem(sys.modules, "waveframe_guard", None)
 

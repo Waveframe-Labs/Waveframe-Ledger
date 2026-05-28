@@ -221,6 +221,7 @@ def build_authority_contract_from_draft(draft: dict[str, Any]) -> dict[str, Any]
         continuity_revalidation=continuity_revalidation,
         revocation_invalidates_resume=revocation_invalidates_resume,
     )
+    execution_context_semantics = _execution_context_semantics_from_draft(draft)
     category = str(draft.get("governance_category") or "Operational")
     mutation_targets = _string_list(draft.get("mutation_targets")) or [_mutation_target(governed_action)]
 
@@ -302,6 +303,8 @@ def build_authority_contract_from_draft(draft: dict[str, Any]) -> dict[str, Any]
     }
     if state_snapshot_semantics:
         authority["state_snapshot_semantics"] = state_snapshot_semantics
+    if execution_context_semantics:
+        authority["execution_context_semantics"] = execution_context_semantics
     authority["contract_hash"] = _artifact_hash(authority)
     return authority
 
@@ -385,6 +388,40 @@ def build_ui_diagnostics(
                 "Snapshot Continuity Gap",
                 "Resumed workflow revalidation is required but no state snapshot expectation is defined.",
                 "Define the governance posture snapshot subject and comparison expectation for resumed workflows.",
+                domain="continuity",
+                severity="warning",
+            )
+        )
+    execution_context = authority.get("execution_context_semantics") if isinstance(authority.get("execution_context_semantics"), dict) else {}
+    if _draft_implies_deferred_execution(draft) and not execution_context:
+        diagnostics.append(
+            _ui_diagnostic(
+                "execution_context_ambiguity",
+                "Execution Context Ambiguity",
+                "Governance semantics imply deferred execution but no execution context was defined.",
+                "Model whether execution is queued, scheduled, external, resumed, agent-orchestrated, or Cloud-attested.",
+                domain="execution_context",
+                severity="warning",
+            )
+        )
+    if execution_context.get("requires_replay_evidence") and not _string_list(authority.get("replay_requirements")):
+        diagnostics.append(
+            _ui_diagnostic(
+                "replay_requirement_gap",
+                "Replay Requirement Gap",
+                "Queued or deferred execution semantics require replay evidence expectations.",
+                "Record replay requirements that bind execution evidence to the authority version.",
+                domain="replay",
+                severity="warning",
+            )
+        )
+    if execution_context.get("resume_behavior") == "revalidate_on_resume" and not continuity.get("resume_requires_current_authority"):
+        diagnostics.append(
+            _ui_diagnostic(
+                "resume_validation_gap",
+                "Resume Validation Gap",
+                "Resumable execution context exists without continuity revalidation semantics.",
+                "Require resumed workflows to revalidate against current governance posture.",
                 domain="continuity",
                 severity="warning",
             )
@@ -602,6 +639,23 @@ def _state_snapshot_semantics_from_draft(
     }
 
 
+def _execution_context_semantics_from_draft(draft: dict[str, Any]) -> dict[str, Any]:
+    semantics = draft.get("execution_context_semantics")
+    if isinstance(semantics, dict) and semantics:
+        result = dict(semantics)
+        result.setdefault("schema_version", "execution_context_semantics.v1")
+        result.setdefault("execution_context", "unspecified")
+        result.setdefault("execution_boundary", "unspecified")
+        result.setdefault("requires_replay_evidence", False)
+        result.setdefault("requires_state_snapshot", False)
+        result.setdefault("requires_temporal_validation", False)
+        result.setdefault("resume_behavior", "unspecified")
+        result.setdefault("continuity_risk_profile", "unspecified")
+        result.setdefault("runtime_enforced_by", "Guard/Cloud")
+        return result
+    return {}
+
+
 def _required_text(draft: dict[str, Any], field: str, label: str) -> str:
     value = draft.get(field)
     if not isinstance(value, str) or not value.strip():
@@ -633,6 +687,24 @@ def _string_list(value: Any) -> list[str]:
     if isinstance(value, str):
         return [item.strip() for item in value.split(",") if item.strip()]
     return []
+
+
+def _draft_implies_deferred_execution(draft: dict[str, Any]) -> bool:
+    text = " ".join(
+        str(draft.get(field) or "")
+        for field in ("governed_action", "escalation_semantics", "protected_system")
+    ).lower()
+    return any(
+        phrase in text
+        for phrase in (
+            "deferred execution",
+            "later execution",
+            "future execution",
+            "asynchronous execution",
+            "async execution",
+            "delayed execution",
+        )
+    )
 
 
 def _slug(value: Any) -> str:

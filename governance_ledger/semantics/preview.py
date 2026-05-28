@@ -24,12 +24,13 @@ def build_governance_impact_preview(authority_contract: dict[str, Any]) -> dict[
     artifact_requirements = _artifact_requirements(contract)
     lifecycle_transitions = _lifecycle_transitions(contract)
     continuity_requirements = _continuity_requirements(contract)
+    execution_context = _execution_context(contract)
 
-    enforcement_behavior = _enforcement_behavior(thresholds, required_roles, artifact_requirements)
-    operational_consequences = _operational_consequences(thresholds, artifact_requirements)
-    lifecycle_implications = _lifecycle_implications(lifecycle_transitions, continuity_requirements)
+    enforcement_behavior = _enforcement_behavior(thresholds, required_roles, artifact_requirements, execution_context)
+    operational_consequences = _operational_consequences(thresholds, artifact_requirements, execution_context)
+    lifecycle_implications = _lifecycle_implications(lifecycle_transitions, continuity_requirements, execution_context)
 
-    return {
+    preview = {
         "schema_version": GOVERNANCE_IMPACT_PREVIEW_V1,
         "authority_ref": authority_ref,
         "contract_id": contract_id,
@@ -46,6 +47,9 @@ def build_governance_impact_preview(authority_contract: dict[str, Any]) -> dict[
             continuity_requirements,
         ),
     }
+    if execution_context:
+        preview["execution_context"] = _execution_context_preview(execution_context)
+    return preview
 
 
 def format_governance_impact_preview(preview: dict[str, Any]) -> str:
@@ -64,6 +68,9 @@ def format_governance_impact_preview(preview: dict[str, Any]) -> str:
         "",
         "Lifecycle Implications:",
         *_indented(preview.get("lifecycle_implications", [])),
+        "",
+        "Execution Context:",
+        *_indented(_format_execution_context(preview.get("execution_context"))),
         "",
         "Example Governed Outcomes:",
         *_indented(
@@ -178,10 +185,16 @@ def _continuity_requirements(contract: dict[str, Any]) -> dict[str, Any]:
     return {}
 
 
+def _execution_context(contract: dict[str, Any]) -> dict[str, Any]:
+    value = contract.get("execution_context_semantics")
+    return value if isinstance(value, dict) else {}
+
+
 def _enforcement_behavior(
     thresholds: list[dict[str, Any]],
     required_roles: list[str],
     artifact_requirements: list[str],
+    execution_context: dict[str, Any],
 ) -> list[str]:
     behavior = [_threshold_sentence(threshold) for threshold in thresholds]
     for role in required_roles:
@@ -189,12 +202,17 @@ def _enforcement_behavior(
             behavior.append(f"Executions require {role} authority evidence.")
     for artifact in artifact_requirements:
         behavior.append(f"Executions require {artifact} evidence artifacts.")
+    if execution_context.get("requires_temporal_validation"):
+        behavior.append("Execution context requires temporal validation by Guard or Cloud.")
+    if execution_context.get("requires_state_snapshot"):
+        behavior.append("Execution context requires governance state snapshot expectations.")
     return behavior or ["Executions follow the published authority contract requirements."]
 
 
 def _operational_consequences(
     thresholds: list[dict[str, Any]],
     artifact_requirements: list[str],
+    execution_context: dict[str, Any],
 ) -> list[str]:
     consequences = [
         "Blocked executions generate immutable replay and evidence artifacts.",
@@ -203,12 +221,15 @@ def _operational_consequences(
         consequences.append("Executions crossing approval thresholds require explicit approval evidence before completion.")
     if artifact_requirements:
         consequences.append("Missing required artifacts prevent governed completion until evidence is attached.")
+    if execution_context.get("requires_replay_evidence"):
+        consequences.append("Execution context requires replay-backed continuity evidence.")
     return consequences
 
 
 def _lifecycle_implications(
     lifecycle_transitions: list[dict[str, str]],
     continuity_requirements: dict[str, Any],
+    execution_context: dict[str, Any],
 ) -> list[str]:
     implications = []
     if lifecycle_transitions:
@@ -218,6 +239,8 @@ def _lifecycle_implications(
         implications.append("Revoked authorities invalidate resumed execution continuity.")
     if _truthy(continuity_requirements, "resume_requires_current_authority", "resume_requires_authority_hash"):
         implications.append("Resumed executions must remain bound to the current authority identity.")
+    if execution_context.get("resume_behavior") == "revalidate_on_resume":
+        implications.append("Execution may resume later and must revalidate governance posture on resume.")
     return implications or ["Lifecycle continuity follows the authority contract without additional stage constraints."]
 
 
@@ -263,6 +286,22 @@ def _threshold_sentence(threshold: dict[str, Any]) -> str:
     return f"Executions with {field} {operator} {value} require {_review_phrase(role)}."
 
 
+def _execution_context_preview(execution_context: dict[str, Any]) -> dict[str, str]:
+    context = str(execution_context.get("execution_context") or "unspecified")
+    return {
+        "schema_version": "execution_context_semantics.v1",
+        "execution_context": context,
+        "summary": f"{context.replace('_', ' ')} execution context",
+        "replay_posture": "Replay-backed continuity required"
+        if execution_context.get("requires_replay_evidence")
+        else "Replay evidence follows authority defaults",
+        "resume_posture": "Resume revalidation required"
+        if execution_context.get("resume_behavior") == "revalidate_on_resume"
+        else "No resume revalidation behavior modeled",
+        "runtime_enforced_by": execution_context.get("runtime_enforced_by") or "Guard/Cloud",
+    }
+
+
 def _format_value(field: Any, value: Any) -> str:
     if field == "amount" and isinstance(value, (int, float)):
         return f"${value:,.0f}"
@@ -300,3 +339,13 @@ def _indented(lines: Any) -> list[str]:
     if not materialized:
         return ["  none"]
     return [f"  {line}" for line in materialized]
+
+
+def _format_execution_context(execution_context: Any) -> list[str]:
+    if not isinstance(execution_context, dict):
+        return []
+    return [
+        execution_context.get("summary", ""),
+        execution_context.get("replay_posture", ""),
+        execution_context.get("resume_posture", ""),
+    ]

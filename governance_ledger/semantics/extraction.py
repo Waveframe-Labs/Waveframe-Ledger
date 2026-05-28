@@ -77,6 +77,7 @@ def extract_governance_semantics(
         continuity_revalidation=continuity_revalidation,
         revocation_invalidates=revocation_invalidates,
     )
+    execution_context_semantics = _extract_execution_context_semantics(text)
     evidence_terms = _extract_evidence_terms(lower)
 
     candidate = {
@@ -95,6 +96,7 @@ def extract_governance_semantics(
         "continuity_revalidation": continuity_revalidation,
         "revocation_invalidates_resume": revocation_invalidates,
         "state_snapshot_semantics": state_snapshot_semantics,
+        "execution_context_semantics": execution_context_semantics,
     }
 
     missing = []
@@ -151,6 +153,14 @@ def extract_governance_semantics(
                 "rule_type": "state_posture_snapshot_semantics",
                 "summary": "Resumed workflows are expected to compare prior governance posture against active governance state.",
                 "fields": state_snapshot_semantics,
+            }
+        )
+    if execution_context_semantics:
+        candidate_rules.append(
+            {
+                "rule_type": "execution_context_semantics",
+                "summary": _execution_context_summary(execution_context_semantics),
+                "fields": execution_context_semantics,
             }
         )
     for term in evidence_terms:
@@ -300,6 +310,66 @@ def _extract_snapshot_subject(lower: str) -> str:
     return "unspecified"
 
 
+def _extract_execution_context_semantics(text: str) -> dict[str, Any]:
+    lower = text.lower()
+    context = ""
+    boundary = "unspecified"
+    if _contains_any(lower, ["queued deployment", "queued execution", "queued transfer", "queued "]):
+        context = "queued_async"
+        boundary = "external_worker"
+    elif _contains_any(lower, ["scheduled transfer", "scheduled execution", "scheduled deployment"]):
+        context = "scheduled_execution"
+        boundary = "scheduler"
+    elif _contains_any(lower, ["batch execution", "batch transfer", "batch deployment"]):
+        context = "queued_async"
+        boundary = "external_worker"
+    elif _contains_any(lower, ["external settlement system", "external system", "settlement system"]):
+        context = "external_system_execution"
+        boundary = "external_system"
+    elif _contains_any(lower, ["manual override"]):
+        context = "local_interactive"
+        boundary = "local_process"
+    elif _contains_any(lower, ["multi-step approval", "multi stage approval", "multi-stage approval"]):
+        context = "human_approval_chain"
+        boundary = "human_review"
+    elif _contains_any(lower, ["multi-stage workflow", "multi stage workflow", "multi-step workflow"]):
+        context = "multi_stage_workflow"
+        boundary = "agent_orchestrator"
+    elif _contains_any(lower, ["agent orchestrated", "agent-orchestrated", "agent orchestration"]):
+        context = "agent_orchestrated"
+        boundary = "agent_orchestrator"
+    elif _contains_any(lower, ["cloud attested execution", "cloud-attested execution"]):
+        context = "cloud_attested_execution"
+        boundary = "cloud_attestation"
+    elif _contains_any(lower, ["resume after approval", "execution may resume later", "may resume later", "resumed workflow"]):
+        context = "resumed_workflow"
+        boundary = "external_worker"
+    if not context:
+        return {}
+    resumable = context == "resumed_workflow" or _contains_any(lower, ["resume", "resumed", "may resume later"])
+    temporal = context in {"queued_async", "scheduled_execution", "external_system_execution", "cloud_attested_execution"}
+    replay = context not in {"local_interactive"}
+    return {
+        "schema_version": "execution_context_semantics.v1",
+        "execution_context": context,
+        "execution_boundary": boundary,
+        "requires_replay_evidence": replay,
+        "requires_state_snapshot": resumable or context in {"queued_async", "scheduled_execution", "multi_stage_workflow"},
+        "requires_temporal_validation": temporal,
+        "resume_behavior": "revalidate_on_resume" if resumable else "none",
+        "continuity_risk_profile": _execution_risk_profile(context, resumable),
+        "runtime_enforced_by": "Guard/Cloud",
+    }
+
+
+def _execution_risk_profile(context: str, resumable: bool) -> str:
+    if context in {"external_system_execution", "cloud_attested_execution"}:
+        return "high"
+    if resumable or context in {"queued_async", "scheduled_execution", "multi_stage_workflow", "agent_orchestrated"}:
+        return "medium"
+    return "low"
+
+
 def _extract_escalation_semantics(text: str, threshold: int | None, role: str) -> str:
     if threshold and role:
         return f"Executions above ${threshold:,} require {role} review."
@@ -370,6 +440,13 @@ def _ambiguities(text: str, candidate: dict[str, Any]) -> list[dict[str, str]]:
                 "summary": "Continuity revalidation was detected, but the governance state snapshot subject is unspecified.",
             }
         )
+    if _implies_deferred_execution(text) and not candidate.get("execution_context_semantics"):
+        ambiguities.append(
+            {
+                "ambiguity_type": "execution_context_ambiguity",
+                "summary": "Policy language implies deferred execution, but no canonical execution context was deterministically extracted.",
+            }
+        )
     return ambiguities
 
 
@@ -404,6 +481,27 @@ def _temporal_summary(temporal: dict[str, Any]) -> str:
             f"{temporal.get('timestamp_source', 'unspecified')} timestamp binding."
         )
     return "Authority expiration is tied to approval completion with runtime enforcement outside Ledger."
+
+
+def _execution_context_summary(execution_context: dict[str, Any]) -> str:
+    context = str(execution_context.get("execution_context", "unspecified")).replace("_", " ")
+    if execution_context.get("requires_replay_evidence"):
+        return f"{context.title()} requires replay-backed governance evidence."
+    return f"{context.title()} execution context is modeled for governance interpretation."
+
+
+def _implies_deferred_execution(text: str) -> bool:
+    return _contains_any(
+        text.lower(),
+        [
+            "deferred execution",
+            "later execution",
+            "future execution",
+            "asynchronous execution",
+            "async execution",
+            "delayed execution",
+        ],
+    )
 
 
 def _contains_any(text: str, needles: list[str]) -> bool:

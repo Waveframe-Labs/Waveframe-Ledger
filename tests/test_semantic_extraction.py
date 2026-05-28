@@ -151,6 +151,37 @@ def test_semantic_extraction_expires_after_approval_records_temporal_trigger():
     assert temporal["runtime_enforced_by"] == "Guard/Cloud"
 
 
+def test_semantic_extraction_normalizes_execution_context_semantics():
+    extraction = extract_governance_semantics(
+        "Queued deployment may resume later after approval and requires replay evidence."
+    )
+    execution_context = extraction["candidate_authority"]["execution_context_semantics"]
+
+    assert execution_context == {
+        "schema_version": "execution_context_semantics.v1",
+        "execution_context": "queued_async",
+        "execution_boundary": "external_worker",
+        "requires_replay_evidence": True,
+        "requires_state_snapshot": True,
+        "requires_temporal_validation": True,
+        "resume_behavior": "revalidate_on_resume",
+        "continuity_risk_profile": "medium",
+        "runtime_enforced_by": "Guard/Cloud",
+    }
+    assert "execution_context_semantics" in {rule["rule_type"] for rule in extraction["candidate_rules"]}
+
+
+def test_semantic_extraction_emits_execution_context_ambiguity_for_vague_deferred_execution():
+    extraction = extract_governance_semantics("Approval controls deferred execution after governance review.")
+
+    assert "execution_context_semantics" not in {
+        rule["rule_type"] for rule in extraction["candidate_rules"]
+    }
+    assert "execution_context_ambiguity" in {
+        ambiguity["ambiguity_type"] for ambiguity in extraction["ambiguities"]
+    }
+
+
 def test_semantic_extraction_keeps_missing_fields_explicit():
     extraction = extract_governance_semantics("This policy requires appropriate approval for sensitive actions.")
 
@@ -165,6 +196,7 @@ def test_semantic_extraction_schemas_are_canonical():
     extraction_schema = json.loads((ROOT / "schemas" / "governance_semantic_extraction.v1.json").read_text(encoding="utf-8"))
     temporal_schema = json.loads((ROOT / "schemas" / "temporal_authority_semantics.v1.json").read_text(encoding="utf-8"))
     snapshot_schema = json.loads((ROOT / "schemas" / "state_posture_snapshot_semantics.v1.json").read_text(encoding="utf-8"))
+    execution_context_schema = json.loads((ROOT / "schemas" / "execution_context_semantics.v1.json").read_text(encoding="utf-8"))
 
     assert source_schema["properties"]["schema_version"]["const"] == "governance_source.v1"
     assert "source_text" in source_schema["required"]
@@ -174,3 +206,5 @@ def test_semantic_extraction_schemas_are_canonical():
     assert temporal_schema["properties"]["runtime_enforced_by"]["const"] == "Guard/Cloud"
     assert snapshot_schema["properties"]["schema_version"]["const"] == "state_posture_snapshot_semantics.v1"
     assert snapshot_schema["properties"]["runtime_enforced_by"]["const"] == "Guard/Cloud"
+    assert execution_context_schema["properties"]["schema_version"]["const"] == "execution_context_semantics.v1"
+    assert execution_context_schema["properties"]["runtime_enforced_by"]["const"] == "Guard/Cloud"
