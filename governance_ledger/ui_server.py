@@ -222,6 +222,7 @@ def build_authority_contract_from_draft(draft: dict[str, Any]) -> dict[str, Any]
         revocation_invalidates_resume=revocation_invalidates_resume,
     )
     execution_context_semantics = _execution_context_semantics_from_draft(draft)
+    identity_semantics = _identity_semantics_from_draft(draft, approver_role, approval_count, governed_action)
     category = str(draft.get("governance_category") or "Operational")
     mutation_targets = _string_list(draft.get("mutation_targets")) or [_mutation_target(governed_action)]
 
@@ -305,6 +306,7 @@ def build_authority_contract_from_draft(draft: dict[str, Any]) -> dict[str, Any]
         authority["state_snapshot_semantics"] = state_snapshot_semantics
     if execution_context_semantics:
         authority["execution_context_semantics"] = execution_context_semantics
+    authority.update(identity_semantics)
     authority["contract_hash"] = _artifact_hash(authority)
     return authority
 
@@ -423,6 +425,55 @@ def build_ui_diagnostics(
                 "Resumable execution context exists without continuity revalidation semantics.",
                 "Require resumed workflows to revalidate against current governance posture.",
                 domain="continuity",
+                severity="warning",
+            )
+        )
+    approval_chain = authority.get("approval_chain_semantics") if isinstance(authority.get("approval_chain_semantics"), dict) else {}
+    if approval_chain.get("independence_required") and not approval_chain.get("independent_actor_refs"):
+        diagnostics.append(
+            _ui_diagnostic(
+                "approval_independence_ambiguity",
+                "Approval Independence Ambiguity",
+                "Approval semantics imply separation-of-duties but independent actors are undefined.",
+                "Define which actors or roles must remain independent in the approval chain.",
+                domain="identity",
+                severity="warning",
+            )
+        )
+    if approval_chain.get("delegation_posture") == "ambiguous":
+        diagnostics.append(
+            _ui_diagnostic(
+                "delegation_ambiguity",
+                "Delegation Ambiguity",
+                "Delegated authority language exists without delegation boundaries.",
+                "Record whether delegation is prohibited or bounded by a named authority scope.",
+                domain="identity",
+                severity="warning",
+            )
+        )
+    identity_continuity = authority.get("identity_continuity_semantics") if isinstance(authority.get("identity_continuity_semantics"), dict) else {}
+    if (continuity.get("resume_requires_current_authority") or execution_context.get("resume_behavior") == "revalidate_on_resume") and not identity_continuity.get("identity_continuity_required"):
+        diagnostics.append(
+            _ui_diagnostic(
+                "identity_continuity_gap",
+                "Identity Continuity Gap",
+                "Resumable workflow semantics exist without identity continuity expectations.",
+                "Record that actor or role bindings must remain valid when execution resumes.",
+                domain="identity",
+                severity="warning",
+            )
+        )
+    actor = authority.get("governance_actor") if isinstance(authority.get("governance_actor"), dict) else {}
+    threshold = (authority.get("escalation_requirements") or {}).get("threshold") if isinstance(authority.get("escalation_requirements"), dict) else {}
+    threshold_value = threshold.get("value") if isinstance(threshold, dict) else None
+    if isinstance(threshold_value, (int, float)) and threshold_value >= 250000 and not actor.get("attestation_required"):
+        diagnostics.append(
+            _ui_diagnostic(
+                "attestation_requirement_gap",
+                "Attestation Requirement Gap",
+                "High-impact governance posture exists without actor attestation semantics.",
+                "Record whether the responsible actor must provide attested identity evidence.",
+                domain="identity",
                 severity="warning",
             )
         )
@@ -654,6 +705,65 @@ def _execution_context_semantics_from_draft(draft: dict[str, Any]) -> dict[str, 
         result.setdefault("runtime_enforced_by", "Guard/Cloud")
         return result
     return {}
+
+
+def _identity_semantics_from_draft(
+    draft: dict[str, Any],
+    approver_role: str,
+    approval_count: int,
+    governed_action: str,
+) -> dict[str, Any]:
+    result = {}
+    for key in (
+        "governance_actor",
+        "authority_role_binding",
+        "approval_chain_semantics",
+        "identity_continuity_semantics",
+    ):
+        if isinstance(draft.get(key), dict) and draft[key]:
+            result[key] = dict(draft[key])
+    if "governance_actor" not in result:
+        result["governance_actor"] = {
+            "schema_version": "governance_actor.v1",
+            "actor_id": approver_role,
+            "actor_type": "human_role",
+            "authority_scope": [f"{_slug(governed_action).replace('-', '_')}_approval"],
+            "delegation_allowed": False,
+            "attestation_required": False,
+            "identity_continuity_required": bool((draft.get("continuity_revalidation", True))),
+        }
+    if "authority_role_binding" not in result:
+        result["authority_role_binding"] = {
+            "schema_version": "authority_role_binding.v1",
+            "role_id": approver_role,
+            "actor_ref": approver_role,
+            "responsibilities": ["approval_responsibility"],
+            "accountability_boundary": "governance_approval",
+            "delegation_posture": "not_allowed",
+        }
+    if "approval_chain_semantics" not in result:
+        result["approval_chain_semantics"] = {
+            "schema_version": "approval_chain_semantics.v1",
+            "required_approval_count": approval_count,
+            "required_roles": [approver_role],
+            "independence_required": approval_count > 1,
+            "self_approval_prohibited": approval_count > 1,
+            "independent_actor_refs": [approver_role] if approval_count > 1 else [],
+            "delegation_posture": "not_allowed",
+            "attestation_required": False,
+            "human_in_loop_required": True,
+            "ai_recommendation_posture": "not_present",
+        }
+    continuity = bool(draft.get("continuity_revalidation", True))
+    if continuity and "identity_continuity_semantics" not in result:
+        result["identity_continuity_semantics"] = {
+            "schema_version": "identity_continuity_semantics.v1",
+            "identity_continuity_required": True,
+            "resume_identity_check": "actor_or_role_binding_must_remain_valid",
+            "identity_revocation_effect": "review_required",
+            "runtime_enforced_by": "Guard/Cloud",
+        }
+    return result
 
 
 def _required_text(draft: dict[str, Any], field: str, label: str) -> str:

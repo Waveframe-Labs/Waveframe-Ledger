@@ -184,6 +184,8 @@ function renderSemanticExtraction(extraction) {
   const temporal = candidate.temporal_semantics || {};
   const snapshot = candidate.state_snapshot_semantics || {};
   const executionContext = candidate.execution_context_semantics || {};
+  const actor = candidate.governance_actor || {};
+  const approvalChain = candidate.approval_chain_semantics || {};
   renderDefinitionValues("#extracted-authority", {
     Resource: candidate.protected_system || "missing",
     Action: candidate.governed_action || "missing",
@@ -196,6 +198,9 @@ function renderSemanticExtraction(extraction) {
     "Snapshot expectation": snapshot.snapshot_required ? "required for resumed workflows" : "missing",
     "Execution context": executionContext.execution_context ? formatLabel(executionContext.execution_context) : "missing",
     "Execution boundary": executionContext.execution_boundary ? formatLabel(executionContext.execution_boundary) : "missing",
+    "Responsible actor": actor.actor_id || "missing",
+    "Approval independence": approvalChain.independence_required ? "required" : "not specified",
+    "Actor attestation": approvalChain.attestation_required ? "required" : "not specified",
   });
   renderExtractionList("#extracted-rules", extraction.candidate_rules, "No deterministic obligations extracted.");
   renderExtractionList("#extracted-ambiguities", extraction.ambiguities, "No ambiguity detected by deterministic patterns.");
@@ -248,7 +253,15 @@ function useExtractedDraft() {
 
 function semanticExtrasFromCandidate(candidate) {
   const extras = {};
-  for (const key of ["temporal_semantics", "state_snapshot_semantics", "execution_context_semantics"]) {
+  for (const key of [
+    "temporal_semantics",
+    "state_snapshot_semantics",
+    "execution_context_semantics",
+    "governance_actor",
+    "authority_role_binding",
+    "approval_chain_semantics",
+    "identity_continuity_semantics",
+  ]) {
     if (candidate?.[key] && typeof candidate[key] === "object") {
       extras[key] = candidate[key];
     }

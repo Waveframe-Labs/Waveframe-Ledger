@@ -78,6 +78,14 @@ def extract_governance_semantics(
         revocation_invalidates=revocation_invalidates,
     )
     execution_context_semantics = _extract_execution_context_semantics(text)
+    governance_actor = _extract_governance_actor(text, role, governed_action, continuity_revalidation)
+    authority_role_binding = _extract_authority_role_binding(text, role)
+    approval_chain_semantics = _extract_approval_chain_semantics(text, role, approval_count)
+    identity_continuity_semantics = _extract_identity_continuity_semantics(
+        text,
+        continuity_revalidation=continuity_revalidation,
+        execution_context=execution_context_semantics,
+    )
     evidence_terms = _extract_evidence_terms(lower)
 
     candidate = {
@@ -97,6 +105,10 @@ def extract_governance_semantics(
         "revocation_invalidates_resume": revocation_invalidates,
         "state_snapshot_semantics": state_snapshot_semantics,
         "execution_context_semantics": execution_context_semantics,
+        "governance_actor": governance_actor,
+        "authority_role_binding": authority_role_binding,
+        "approval_chain_semantics": approval_chain_semantics,
+        "identity_continuity_semantics": identity_continuity_semantics,
     }
 
     missing = []
@@ -163,6 +175,38 @@ def extract_governance_semantics(
                 "fields": execution_context_semantics,
             }
         )
+    if governance_actor:
+        candidate_rules.append(
+            {
+                "rule_type": "governance_actor",
+                "summary": f"{governance_actor['actor_id']} carries governance actor responsibility.",
+                "fields": governance_actor,
+            }
+        )
+    if authority_role_binding:
+        candidate_rules.append(
+            {
+                "rule_type": "authority_role_binding",
+                "summary": f"{authority_role_binding['role_id']} is bound to {authority_role_binding['accountability_boundary']} responsibility.",
+                "fields": authority_role_binding,
+            }
+        )
+    if approval_chain_semantics:
+        candidate_rules.append(
+            {
+                "rule_type": "approval_chain_semantics",
+                "summary": _approval_chain_summary(approval_chain_semantics),
+                "fields": approval_chain_semantics,
+            }
+        )
+    if identity_continuity_semantics:
+        candidate_rules.append(
+            {
+                "rule_type": "identity_continuity_semantics",
+                "summary": "Identity continuity expectations apply to resumed governance posture.",
+                "fields": identity_continuity_semantics,
+            }
+        )
     for term in evidence_terms:
         candidate_rules.append(
             {
@@ -219,7 +263,7 @@ def _extract_governed_action(text: str) -> str:
 
 def _extract_role(text: str) -> str:
     patterns = [
-        r"(?:approved by|approval by|requires? approval from|requires? review by)\s+(?:the\s+)?(?P<value>[A-Za-z0-9 -]+?)(?:\.|,|;|\s+for|\s+when|\s+before|$)",
+        r"(?:approved by|approval by|requires? approval from|requires? review by)\s+(?:the\s+)?(?P<value>[A-Za-z0-9 -]+?)(?:\.|,|;|\s+for|\s+when|\s+before|\s+with|\s+and|$)",
         r"(?:approver role|approval role)\s*:\s*(?P<value>[^.\n]+)",
     ]
     return _slug(_first_match(text, patterns))
@@ -370,6 +414,139 @@ def _execution_risk_profile(context: str, resumable: bool) -> str:
     return "low"
 
 
+def _extract_governance_actor(
+    text: str,
+    role: str,
+    governed_action: str,
+    continuity_revalidation: bool,
+) -> dict[str, Any]:
+    actor_id = role or _identity_actor_from_text(text)
+    if not actor_id:
+        return {}
+    lower = text.lower()
+    return {
+        "schema_version": "governance_actor.v1",
+        "actor_id": actor_id,
+        "actor_type": _actor_type(actor_id, lower),
+        "authority_scope": [_authority_scope(governed_action)],
+        "delegation_allowed": _delegation_posture(lower) == "allowed_with_boundary",
+        "attestation_required": _contains_any(lower, ["attested operator", "attested actor", "attested reviewer", "identity attestation"]),
+        "identity_continuity_required": continuity_revalidation or _contains_any(lower, ["identity continuity", "same operator", "same approver"]),
+    }
+
+
+def _extract_authority_role_binding(text: str, role: str) -> dict[str, Any]:
+    role_id = role or _identity_actor_from_text(text)
+    if not role_id:
+        return {}
+    lower = text.lower()
+    return {
+        "schema_version": "authority_role_binding.v1",
+        "role_id": role_id,
+        "actor_ref": role_id,
+        "responsibilities": _responsibilities(lower),
+        "accountability_boundary": _accountability_boundary(lower),
+        "delegation_posture": _delegation_posture(lower),
+    }
+
+
+def _extract_approval_chain_semantics(text: str, role: str, approval_count: int | None) -> dict[str, Any]:
+    lower = text.lower()
+    if not (role or approval_count or "approval" in lower or "reviewer" in lower or "dual control" in lower):
+        return {}
+    independence = _contains_any(lower, ["independent reviewer", "independent approval", "independent approvals", "cannot self-approve", "self approve", "dual control", "separation of duties"])
+    return {
+        "schema_version": "approval_chain_semantics.v1",
+        "required_approval_count": approval_count,
+        "required_roles": [role] if role else [],
+        "independence_required": independence,
+        "self_approval_prohibited": _contains_any(lower, ["cannot self-approve", "self approve", "separation of duties"]),
+        "independent_actor_refs": [role] if independence and role and "independent" not in role else [],
+        "delegation_posture": _delegation_posture(lower),
+        "attestation_required": _contains_any(lower, ["attested operator", "attested actor", "attested reviewer", "identity attestation"]),
+        "human_in_loop_required": _contains_any(lower, ["human-in-the-loop", "human in the loop", "human approval"]),
+        "ai_recommendation_posture": "recommendation_only" if "ai-generated recommendation" in lower else "not_present",
+    }
+
+
+def _extract_identity_continuity_semantics(
+    text: str,
+    *,
+    continuity_revalidation: bool,
+    execution_context: dict[str, Any],
+) -> dict[str, Any]:
+    lower = text.lower()
+    required = continuity_revalidation or execution_context.get("resume_behavior") == "revalidate_on_resume" or _contains_any(lower, ["identity continuity", "same operator", "same approver"])
+    if not required:
+        return {}
+    return {
+        "schema_version": "identity_continuity_semantics.v1",
+        "identity_continuity_required": True,
+        "resume_identity_check": "actor_or_role_binding_must_remain_valid",
+        "identity_revocation_effect": "revoked_identity_invalidates_resume"
+        if _contains_any(lower, ["identity revocation", "revoked identity", "revoked actor", "revoked role"])
+        else "review_required",
+        "runtime_enforced_by": "Guard/Cloud",
+    }
+
+
+def _identity_actor_from_text(text: str) -> str:
+    patterns = [
+        r"(?:approved by|approval by|requires? approval from|requires? review by)\s+(?:the\s+)?(?P<value>finance|security team|manager|independent reviewer|attested operator|human operator)",
+        r"\b(?P<value>finance|security team|manager|independent reviewer|attested operator)\s+approval\b",
+    ]
+    return _slug(_first_match(text, patterns))
+
+
+def _actor_type(actor_id: str, lower: str) -> str:
+    if "ai-generated recommendation" in lower:
+        return "agent"
+    if "external" in lower:
+        return "external_party"
+    if "team" in actor_id or actor_id in {"finance", "security-team"}:
+        return "team"
+    return "human_role"
+
+
+def _authority_scope(governed_action: str) -> str:
+    if governed_action:
+        return f"{_slug(governed_action).replace('-', '_')}_approval"
+    return "governance_approval"
+
+
+def _responsibilities(lower: str) -> list[str]:
+    responsibilities = ["approval_responsibility"]
+    if "review" in lower or "reviewer" in lower:
+        responsibilities.append("review_responsibility")
+    if "override" in lower or "break glass" in lower:
+        responsibilities.append("override_responsibility")
+    if "attested" in lower:
+        responsibilities.append("attestation_responsibility")
+    if "ai-generated recommendation" in lower:
+        responsibilities.append("recommendation_responsibility")
+    return sorted(set(responsibilities))
+
+
+def _accountability_boundary(lower: str) -> str:
+    if "break glass" in lower:
+        return "break_glass"
+    if "manager override" in lower or "override" in lower:
+        return "manager_override"
+    if "security team" in lower:
+        return "security_review"
+    if "ai-generated recommendation" in lower:
+        return "recommendation_only"
+    return "governance_approval"
+
+
+def _delegation_posture(lower: str) -> str:
+    if "delegated authority" not in lower and "delegation" not in lower:
+        return "not_allowed"
+    if _contains_any(lower, ["within boundary", "bounded delegation", "delegation boundary"]):
+        return "allowed_with_boundary"
+    return "ambiguous"
+
+
 def _extract_escalation_semantics(text: str, threshold: int | None, role: str) -> str:
     if threshold and role:
         return f"Executions above ${threshold:,} require {role} review."
@@ -447,6 +624,21 @@ def _ambiguities(text: str, candidate: dict[str, Any]) -> list[dict[str, str]]:
                 "summary": "Policy language implies deferred execution, but no canonical execution context was deterministically extracted.",
             }
         )
+    approval_chain = candidate.get("approval_chain_semantics") if isinstance(candidate.get("approval_chain_semantics"), dict) else {}
+    if approval_chain.get("independence_required") and not approval_chain.get("independent_actor_refs"):
+        ambiguities.append(
+            {
+                "ambiguity_type": "approval_independence_ambiguity",
+                "summary": "Approval semantics imply separation-of-duties, but independent actors are undefined.",
+            }
+        )
+    if approval_chain.get("delegation_posture") == "ambiguous":
+        ambiguities.append(
+            {
+                "ambiguity_type": "delegation_ambiguity",
+                "summary": "Delegated authority language exists without delegation boundaries.",
+            }
+        )
     return ambiguities
 
 
@@ -488,6 +680,14 @@ def _execution_context_summary(execution_context: dict[str, Any]) -> str:
     if execution_context.get("requires_replay_evidence"):
         return f"{context.title()} requires replay-backed governance evidence."
     return f"{context.title()} execution context is modeled for governance interpretation."
+
+
+def _approval_chain_summary(approval_chain: dict[str, Any]) -> str:
+    count = approval_chain.get("required_approval_count") or "operator-reviewed"
+    roles = ", ".join(approval_chain.get("required_roles") or ["unspecified role"])
+    if approval_chain.get("independence_required"):
+        return f"{count} approvals require independent responsibility from {roles}."
+    return f"{count} approvals bind responsibility to {roles}."
 
 
 def _implies_deferred_execution(text: str) -> bool:

@@ -62,6 +62,17 @@ def test_ui_server_composes_artifacts_from_authoring_fields():
         "runtime_enforced_by": "Guard/Cloud",
     }
     assert authority["execution_context_semantics"]["execution_context"] == "queued_async"
+    assert authority["governance_actor"] == {
+        "schema_version": "governance_actor.v1",
+        "actor_id": "treasury-governance",
+        "actor_type": "human_role",
+        "authority_scope": ["transfer_funds_approval"],
+        "delegation_allowed": False,
+        "attestation_required": False,
+        "identity_continuity_required": True,
+    }
+    assert authority["approval_chain_semantics"]["required_approval_count"] == 2
+    assert authority["identity_continuity_semantics"]["runtime_enforced_by"] == "Guard/Cloud"
     assert preview["execution_context"]["replay_posture"] == "Replay-backed continuity required"
     assert preview["schema_version"] == "governance_impact_preview.v1"
     assert packet["schema_version"] == "governance_review_packet.v1"
@@ -84,7 +95,7 @@ def test_ui_server_composes_artifacts_from_authoring_fields():
     assert workspace_projection["operational_change"] == release_narrative["operational_change"]
     assert workspace_projection["continuity_posture"] == release_narrative["continuity_summary"]
     assert workspace_projection["lifecycle_effect"] == release_narrative["lifecycle_summary"]
-    assert workspace_projection["diagnostics_summary"] == {"findings": 3, "warnings": 1, "info": 2}
+    assert workspace_projection["diagnostics_summary"] == {"findings": 4, "warnings": 2, "info": 2}
     assert operational_summary["schema_version"] == "authority_operational_summary.v1"
     assert operational_summary["authority_ref"] == "treasury-policy@2.1.0"
     assert operational_summary["governance_meaning"] == [
@@ -96,6 +107,7 @@ def test_ui_server_composes_artifacts_from_authoring_fields():
         "GQ004",
         "GQ005",
         "temporal_source_ambiguity",
+        "attestation_requirement_gap",
     ]
     assert {diagnostic["blocks_publication"] for diagnostic in result["diagnostics"]} == {False}
 
@@ -116,9 +128,11 @@ def test_ui_server_emits_guidance_diagnostic_for_default_mutation_target():
         "GQ005",
         "default_mutation_target",
         "temporal_source_ambiguity",
+        "attestation_requirement_gap",
     }
     assert _diagnostic(diagnostics, "default_mutation_target")["title"] == "Derived Mutation Target"
     assert _diagnostic(diagnostics, "temporal_source_ambiguity")["title"] == "Temporal Source Ambiguity"
+    assert _diagnostic(diagnostics, "attestation_requirement_gap")["title"] == "Attestation Requirement Gap"
     assert {diagnostic["blocks_publication"] for diagnostic in diagnostics} == {False}
 
 
@@ -177,6 +191,42 @@ def test_ui_server_emits_execution_context_ambiguity_for_deferred_text_without_c
     )
 
     assert _diagnostic(result["diagnostics"], "execution_context_ambiguity")["title"] == "Execution Context Ambiguity"
+
+
+def test_ui_server_emits_identity_responsibility_diagnostics():
+    result = compose_authority_publication(
+        {
+            "protected_system": "Corporate Treasury Transfer System",
+            "governed_action": "transfer funds",
+            "approver_role": "treasury-governance",
+            "approval_chain_semantics": {
+                "schema_version": "approval_chain_semantics.v1",
+                "required_approval_count": 2,
+                "required_roles": ["treasury-governance"],
+                "independence_required": True,
+                "self_approval_prohibited": True,
+                "independent_actor_refs": [],
+                "delegation_posture": "ambiguous",
+                "attestation_required": True,
+                "human_in_loop_required": True,
+                "ai_recommendation_posture": "not_present",
+            },
+            "governance_actor": {
+                "schema_version": "governance_actor.v1",
+                "actor_id": "treasury-governance",
+                "actor_type": "human_role",
+                "authority_scope": ["transfer_funds_approval"],
+                "delegation_allowed": False,
+                "attestation_required": True,
+                "identity_continuity_required": True,
+            },
+        }
+    )
+
+    diagnostics = result["diagnostics"]
+
+    assert _diagnostic(diagnostics, "approval_independence_ambiguity")["title"] == "Approval Independence Ambiguity"
+    assert _diagnostic(diagnostics, "delegation_ambiguity")["title"] == "Delegation Ambiguity"
 
 
 def test_ui_server_receipt_builder_supports_publication_notes():

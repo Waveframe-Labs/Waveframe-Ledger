@@ -171,6 +171,61 @@ def test_semantic_extraction_normalizes_execution_context_semantics():
     assert "execution_context_semantics" in {rule["rule_type"] for rule in extraction["candidate_rules"]}
 
 
+def test_semantic_extraction_normalizes_identity_and_responsibility_semantics():
+    extraction = extract_governance_semantics(
+        "Transfers above $250,000 must be approved by finance with dual control and cannot self-approve. "
+        "Requires attested operator and human-in-the-loop review."
+    )
+    candidate = extraction["candidate_authority"]
+
+    assert candidate["governance_actor"] == {
+        "schema_version": "governance_actor.v1",
+        "actor_id": "finance",
+        "actor_type": "team",
+        "authority_scope": ["transfer_funds_approval"],
+        "delegation_allowed": False,
+        "attestation_required": True,
+        "identity_continuity_required": False,
+    }
+    assert candidate["authority_role_binding"]["role_id"] == "finance"
+    assert candidate["approval_chain_semantics"]["independence_required"] is True
+    assert candidate["approval_chain_semantics"]["self_approval_prohibited"] is True
+    assert candidate["approval_chain_semantics"]["attestation_required"] is True
+    assert candidate["approval_chain_semantics"]["human_in_loop_required"] is True
+    assert {
+        "governance_actor",
+        "authority_role_binding",
+        "approval_chain_semantics",
+    }.issubset({rule["rule_type"] for rule in extraction["candidate_rules"]})
+
+
+def test_semantic_extraction_emits_identity_ambiguities():
+    extraction = extract_governance_semantics(
+        "Large transfers require independent reviewer approval and delegated authority."
+    )
+
+    ambiguity_types = {item["ambiguity_type"] for item in extraction["ambiguities"]}
+
+    assert "approval_independence_ambiguity" in ambiguity_types
+    assert "delegation_ambiguity" in ambiguity_types
+
+
+def test_semantic_extraction_identity_continuity_for_resumed_workflows():
+    extraction = extract_governance_semantics(
+        "Execution may resume later and the same approver identity must remain valid."
+    )
+
+    identity = extraction["candidate_authority"]["identity_continuity_semantics"]
+
+    assert identity == {
+        "schema_version": "identity_continuity_semantics.v1",
+        "identity_continuity_required": True,
+        "resume_identity_check": "actor_or_role_binding_must_remain_valid",
+        "identity_revocation_effect": "review_required",
+        "runtime_enforced_by": "Guard/Cloud",
+    }
+
+
 def test_semantic_extraction_emits_execution_context_ambiguity_for_vague_deferred_execution():
     extraction = extract_governance_semantics("Approval controls deferred execution after governance review.")
 
@@ -197,6 +252,10 @@ def test_semantic_extraction_schemas_are_canonical():
     temporal_schema = json.loads((ROOT / "schemas" / "temporal_authority_semantics.v1.json").read_text(encoding="utf-8"))
     snapshot_schema = json.loads((ROOT / "schemas" / "state_posture_snapshot_semantics.v1.json").read_text(encoding="utf-8"))
     execution_context_schema = json.loads((ROOT / "schemas" / "execution_context_semantics.v1.json").read_text(encoding="utf-8"))
+    actor_schema = json.loads((ROOT / "schemas" / "governance_actor.v1.json").read_text(encoding="utf-8"))
+    role_schema = json.loads((ROOT / "schemas" / "authority_role_binding.v1.json").read_text(encoding="utf-8"))
+    approval_chain_schema = json.loads((ROOT / "schemas" / "approval_chain_semantics.v1.json").read_text(encoding="utf-8"))
+    identity_schema = json.loads((ROOT / "schemas" / "identity_continuity_semantics.v1.json").read_text(encoding="utf-8"))
 
     assert source_schema["properties"]["schema_version"]["const"] == "governance_source.v1"
     assert "source_text" in source_schema["required"]
@@ -208,3 +267,8 @@ def test_semantic_extraction_schemas_are_canonical():
     assert snapshot_schema["properties"]["runtime_enforced_by"]["const"] == "Guard/Cloud"
     assert execution_context_schema["properties"]["schema_version"]["const"] == "execution_context_semantics.v1"
     assert execution_context_schema["properties"]["runtime_enforced_by"]["const"] == "Guard/Cloud"
+    assert actor_schema["properties"]["schema_version"]["const"] == "governance_actor.v1"
+    assert role_schema["properties"]["schema_version"]["const"] == "authority_role_binding.v1"
+    assert approval_chain_schema["properties"]["schema_version"]["const"] == "approval_chain_semantics.v1"
+    assert identity_schema["properties"]["schema_version"]["const"] == "identity_continuity_semantics.v1"
+    assert identity_schema["properties"]["runtime_enforced_by"]["const"] == "Guard/Cloud"
