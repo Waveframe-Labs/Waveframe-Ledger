@@ -171,21 +171,19 @@
           <div class="section-heading">
             <div>
               <div class="section-kicker">Step 1</div>
-              <h2>Create Authority</h2>
-              <p class="section-intent">Describe the operational authority you want Ledger to publish. The form asks governance questions; Ledger turns the answers into deterministic artifacts.</p>
+              <h2>Draft Policy</h2>
+              <p class="section-intent">Author governance language, extract candidate semantics, reconcile ambiguity, then commit a deterministic interpretation before operational impact review.</p>
               <p id="draft-session-status" class="session-status">draft_authority_session.v1 saved locally</p>
             </div>
             <div class="action-row">
-              <button id="new-draft-button" class="secondary-action" type="button">New Draft</button>
-              <button id="save-draft-button" class="secondary-action" type="button">Save Draft</button>
-              <button id="generate-button" class="primary-action" type="button">Review Impact</button>
+              <button id="new-draft-button" class="secondary-action" type="button">New Working Session</button>
             </div>
           </div>
 
           <section class="policy-ingestion-panel" aria-label="Policy ingestion">
             <div class="policy-ingestion-copy">
-              <h3>Policy Text</h3>
-              <p>Paste governance language first. Ledger extracts candidate meaning for operator review; publication still requires explicit confirmation.</p>
+              <h3>Step 1 - Policy Text</h3>
+              <p>Paste governance language first. Extraction creates provisional candidate semantics; publication still requires explicit operator commitment.</p>
             </div>
             <label class="policy-text-input">
               <span>Paste governance policy text</span>
@@ -193,13 +191,14 @@
             </label>
             <div class="action-row">
               <button id="extract-policy-button" class="secondary-action" type="button">Extract Governance Meaning</button>
-              <button id="use-extraction-button" class="primary-action" type="button" disabled>Apply Deterministic Fields</button>
-              <button id="apply-all-extraction-button" class="secondary-action" type="button" disabled>Apply All Candidate Semantics</button>
-              <button id="open-reconciliation-button" class="secondary-action" type="button" disabled>Open Reconciliation Review</button>
+              <button id="open-reconciliation-button" class="secondary-action" type="button" disabled>Reconcile Ambiguities</button>
+              <button id="use-extraction-button" class="primary-action" type="button" disabled>Commit Semantic Interpretation</button>
+              <button id="generate-button" class="primary-action" type="button" disabled>Generate Operational Impact</button>
             </div>
             <div id="extraction-review" class="extraction-review" aria-live="polite">
               <article class="capability-review-panel">
-                <h4>Capabilities</h4>
+                <h4>Step 2 - Candidate Semantics</h4>
+                <p class="candidate-warning">Provisional. Not yet committed as authority meaning.</p>
                 <div id="extracted-capabilities" class="capability-list"></div>
               </article>
               <article>
@@ -452,7 +451,7 @@
               <p class="section-intent">Confirm publication posture, export the bundle, then register the authority lifecycle event locally.</p>
             </div>
             <div class="action-row">
-              <button id="publication-review-button" class="primary-action compact-action" type="button">Review Impact</button>
+              <button id="publication-review-button" class="primary-action compact-action" type="button">Generate Operational Impact</button>
               <button id="export-button" class="secondary-action" type="button" disabled>Export Bundle</button>
               <button id="register-button" class="primary-action compact-action" type="button" disabled>Register Authority Locally</button>
             </div>

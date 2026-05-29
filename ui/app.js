@@ -175,7 +175,7 @@ function restoreDraftSession() {
       artifact_draft_hash: null,
       invalidation_reason: "draft_not_committed",
     });
-    draftSessionStatus.textContent = "No committed draft yet. Save Draft or Review Impact to establish the authority draft.";
+    draftSessionStatus.textContent = "No committed semantic interpretation yet. Extract and commit policy meaning to continue.";
     updateWorkflowState({ draftReady: false });
     return;
   }
@@ -233,7 +233,7 @@ function startNewDraft() {
   exportButton.disabled = true;
   registerButton.disabled = true;
   useExtractionButton.disabled = true;
-  applyAllExtractionButton.disabled = true;
+  if (applyAllExtractionButton) applyAllExtractionButton.disabled = true;
   openReconciliationButton.disabled = true;
   $("#status-authority-ref").textContent = "not generated";
   $("#status-semantic").textContent = "draft required";
@@ -250,7 +250,7 @@ function startNewDraft() {
     authorityRegistered: false,
   });
   saveWorkingAuthoringSession();
-  draftSessionStatus.textContent = "New working draft started. Save Draft or Review Impact to commit it.";
+  draftSessionStatus.textContent = "New working session started. Extract candidate semantics to continue.";
 }
 
 async function extractPolicySemantics() {
@@ -279,9 +279,6 @@ async function extractPolicySemantics() {
       invalidation_reason: "extraction_requires_operator_confirmation",
     });
     renderSemanticExtraction(extraction);
-    useExtractionButton.disabled = false;
-    applyAllExtractionButton.disabled = false;
-    openReconciliationButton.disabled = false;
     pendingRegistration = null;
     exportButton.disabled = true;
     registerButton.disabled = true;
@@ -298,8 +295,8 @@ async function extractPolicySemantics() {
   } catch (error) {
     renderDiagnostics([{ severity: "error", code: "policy_extraction_error", text: error.message }]);
   } finally {
-    extractPolicyButton.disabled = false;
     extractPolicyButton.textContent = "Extract Governance Meaning";
+    syncPublicationActions();
   }
 }
 
@@ -473,27 +470,26 @@ function renderProvenanceList(selector, items) {
   }
 }
 
-function useExtractedDraft(options) {
-  const applyOptions = options || {};
+function commitSemanticInterpretation() {
   if (!currentExtraction?.candidate_authority) return;
   applyDraftToForm(currentExtraction.candidate_authority);
-  currentSemanticExtras = applyOptions.includeSemantics ? semanticExtrasFromCandidate(currentExtraction.candidate_authority) : {};
+  currentSemanticExtras = semanticExtrasFromCandidate(currentExtraction.candidate_authority);
   currentArtifacts = null;
   pendingRegistration = null;
   policySourceDirty = false;
   commitCurrentDraft();
   setSemanticState({
     draft_state: "committed",
-    semantic_state: "operator_confirmed",
+    semantic_state: "committed",
     impact_state: "invalidated",
     publication_state: "blocked",
     draft_hash: committedDraftHash(),
     artifact_draft_hash: null,
-    invalidation_reason: "extraction_applied_requires_review",
+    invalidation_reason: "semantic_interpretation_committed_requires_impact_review",
   });
   workflowInvalidation = {
     active: true,
-    reason: "extraction_applied_requires_review",
+    reason: "semantic_interpretation_committed_requires_impact_review",
     updated_at: new Date().toISOString(),
     invalidated_projections: [
       "governance_impact_preview.v1",
@@ -515,12 +511,10 @@ function useExtractedDraft(options) {
     receiptGenerated: false,
     authorityRegistered: false,
   });
-  $("#extraction-status").textContent = applyOptions.includeSemantics
-    ? "All candidate semantics copied into the draft. Review Impact is required before export."
-    : "Deterministic fields copied into the draft. Nested semantic candidates remain in extraction review.";
+  $("#extraction-status").textContent = `Semantic interpretation committed. Fingerprint ${shortHash(committedDraftHash() || "draft:unavailable")}. Generate Operational Impact next.`;
   renderOperatorGuidance(
-    "Review extracted meaning next.",
-    "Ledger populated the draft from policy text, but publication state has not advanced.",
+    "Semantic interpretation committed.",
+    "Generate operational impact from the committed semantic interpretation before publication review.",
   );
 }
 
@@ -528,10 +522,11 @@ function openReconciliationReview() {
   if (!currentExtraction) return;
   const ambiguityCount = currentExtraction.ambiguities?.length || 0;
   const provenanceCount = currentExtraction.semantic_provenance?.length || 0;
-  $("#extraction-status").textContent = `Reconciliation review opened: ${ambiguityCount} ambiguities and ${provenanceCount} provenance entries require operator interpretation before publication.`;
+  document.querySelector("#reconciliation-workflow")?.scrollIntoView({ behavior: "smooth", block: "center" });
+  $("#extraction-status").textContent = `Step 3 - Reconciliation Review: ${ambiguityCount} ambiguities and ${provenanceCount} provenance entries are ready for operator interpretation decisions.`;
   renderOperatorGuidance(
     "Resolve interpretation boundaries.",
-    "Review ambiguities and semantic provenance before applying candidate semantics to the draft.",
+    "Save interpretation decisions, then commit semantic interpretation before impact review.",
   );
 }
 
@@ -628,9 +623,9 @@ async function generateArtifacts(options = {}) {
 function setBusy(isBusy) {
   reviewBusy = isBusy;
   generateButton.disabled = isBusy;
-  generateButton.textContent = isBusy ? "Preparing impact..." : "Review Impact";
+  generateButton.textContent = isBusy ? "Generating Impact..." : "Generate Operational Impact";
   publicationReviewButton.disabled = isBusy;
-  publicationReviewButton.textContent = isBusy ? "Reviewing Impact..." : "Review Impact";
+  publicationReviewButton.textContent = isBusy ? "Generating Impact..." : "Generate Operational Impact";
   if (!isBusy) {
     syncPublicationActions();
   }
@@ -672,11 +667,11 @@ function renderWorkflowState() {
 
 function syncPublicationActions() {
   const hasArtifacts = Boolean(currentArtifacts);
-  const reviewAvailable = canReviewImpact();
+  const reviewAvailable = canGenerateOperationalImpact();
   extractPolicyButton.disabled = reviewBusy || !canExtractSemantics();
-  useExtractionButton.disabled = !canApplyDeterministicFields();
-  applyAllExtractionButton.disabled = !canApplyCandidateSemantics();
-  openReconciliationButton.disabled = !canOpenReconciliation();
+  useExtractionButton.disabled = !canCommitSemanticInterpretation();
+  if (applyAllExtractionButton) applyAllExtractionButton.disabled = true;
+  openReconciliationButton.disabled = !canReconcileAmbiguities();
   generateButton.disabled = reviewBusy || !reviewAvailable;
   publicationReviewButton.disabled = reviewBusy || !reviewAvailable || workflowState.impactReviewed;
   exportButton.disabled = !canExportBundle(hasArtifacts);
@@ -687,26 +682,26 @@ function canExtractSemantics() {
   return Boolean(policySourceText?.value?.trim());
 }
 
-function canApplyDeterministicFields() {
-  return Boolean(currentExtraction?.candidate_authority);
+function canCommitSemanticInterpretation() {
+  return Boolean(currentExtraction?.candidate_authority && semanticStateMachine.semantic_state !== "committed");
 }
 
-function canApplyCandidateSemantics() {
-  return Boolean(currentExtraction?.candidate_authority);
-}
-
-function canOpenReconciliation() {
+function canReconcileAmbiguities() {
   return Boolean(currentExtraction);
 }
 
-function canReviewImpact() {
+function canGenerateOperationalImpact() {
   return Boolean(
     workflowState.draftReady
       && !authoringSessionDirty
       && !policySourceDirty
-      && semanticStateMachine.semantic_state !== "invalidated"
+      && semanticStateMachine.semantic_state === "committed"
       && semanticStateMachine.draft_state === "committed",
   );
+}
+
+function canReviewImpact() {
+  return canGenerateOperationalImpact();
 }
 
 function canExportBundle(hasArtifacts = Boolean(currentArtifacts)) {
@@ -727,13 +722,13 @@ function renderOperatorGuidance(title, body) {
   }
   if (authoringSessionDirty) {
     guidance.querySelector("strong").textContent = "Unsaved draft changes.";
-    guidance.querySelector("span").textContent = "Save or review the draft before treating form edits as the current authority posture.";
+    guidance.querySelector("span").textContent = "Extract and commit semantic interpretation before treating edits as authority posture.";
   } else if (!workflowState.draftReady) {
-    guidance.querySelector("strong").textContent = "Start by defining the authority.";
-    guidance.querySelector("span").textContent = "Describe the governed system, action, approvals, escalation, and continuity posture.";
+    guidance.querySelector("strong").textContent = "Draft policy text.";
+    guidance.querySelector("span").textContent = "Extract candidate semantics, reconcile ambiguities, then commit the semantic interpretation.";
   } else if (!workflowState.impactReviewed) {
-    guidance.querySelector("strong").textContent = "Review operational impact next.";
-    guidance.querySelector("span").textContent = "Ledger has a draft. Review impact to confirm governance meaning before export.";
+    guidance.querySelector("strong").textContent = "Generate operational impact next.";
+    guidance.querySelector("span").textContent = "Ledger has committed semantics. Generate impact to review publication-relevant meaning.";
   } else if (!workflowState.bundleExported) {
     guidance.querySelector("strong").textContent = "Impact is reviewed.";
     guidance.querySelector("span").textContent = "Export the authority bundle to create receipt evidence and prepare local registration.";
@@ -2692,10 +2687,10 @@ async function exportBundle() {
       {
         severity: "warning",
         code: "impact_review_required",
-        title: "Review impact before exporting.",
+        title: "Generate operational impact before exporting.",
         domain: "publication",
         text: "The authority draft changed after the last reviewed impact.",
-        recommendation: "Click Review Impact, then export the authority bundle.",
+        recommendation: "Generate Operational Impact, then export the authority bundle.",
       },
     ]);
     showPage("diagnostics");
@@ -3052,16 +3047,16 @@ publicationReviewButton.addEventListener("click", () => generateArtifacts({ revi
 exportButton.addEventListener("click", exportBundle);
 registerButton.addEventListener("click", registerAuthorityLocally);
 newDraftButton.addEventListener("click", startNewDraft);
-saveDraftButton.addEventListener("click", commitCurrentDraft);
+saveDraftButton?.addEventListener("click", commitCurrentDraft);
 extractPolicyButton.addEventListener("click", extractPolicySemantics);
-useExtractionButton.addEventListener("click", () => useExtractedDraft({ includeSemantics: false }));
-applyAllExtractionButton.addEventListener("click", () => useExtractedDraft({ includeSemantics: true }));
+useExtractionButton.addEventListener("click", commitSemanticInterpretation);
+applyAllExtractionButton?.addEventListener("click", commitSemanticInterpretation);
 openReconciliationButton.addEventListener("click", openReconciliationReview);
 policySourceText.addEventListener("input", () => {
   policySourceDirty = true;
   currentExtraction = null;
   useExtractionButton.disabled = true;
-  applyAllExtractionButton.disabled = true;
+  if (applyAllExtractionButton) applyAllExtractionButton.disabled = true;
   openReconciliationButton.disabled = true;
   $("#extraction-status").textContent = "Policy text changed. Extract governance meaning again before reviewing operational impact.";
   invalidateSemanticLineage("policy_source_changed");

@@ -105,7 +105,7 @@ def test_authority_header_uses_committed_draft_not_live_form_state():
     assert "uncommitted draft" in body
 
 
-def test_save_draft_is_explicit_commit_boundary():
+def test_working_session_does_not_commit_semantic_interpretation():
     source = APP_JS.read_text(encoding="utf-8")
     save_body = _function_body(source, "saveDraftSession")
     working_body = _function_body(source, "saveWorkingAuthoringSession")
@@ -115,7 +115,7 @@ def test_save_draft_is_explicit_commit_boundary():
     assert "authoringSessionDirty = false" in save_body
     assert "authoringSessionDirty = true" in working_body
     assert "commit: false" in working_body
-    assert 'saveDraftButton.addEventListener("click", commitCurrentDraft)' in source
+    assert 'useExtractionButton.addEventListener("click", commitSemanticInterpretation)' in source
 
 
 def test_policy_extraction_does_not_advance_publication_workflow():
@@ -133,18 +133,18 @@ def test_policy_extraction_does_not_advance_publication_workflow():
     assert "generateArtifacts" not in body
 
 
-def test_using_extracted_draft_requires_impact_review_before_export():
+def test_committing_semantic_interpretation_is_boundary_before_operational_impact():
     source = APP_JS.read_text(encoding="utf-8")
-    body = _function_body(source, "useExtractedDraft")
+    body = _function_body(source, "commitSemanticInterpretation")
 
     assert "applyDraftToForm" in body
-    assert 'semantic_state: "operator_confirmed"' in body
+    assert 'semantic_state: "committed"' in body
     assert 'impact_state: "invalidated"' in body
     assert "impactReviewed: false" in body
     assert "bundleExported: false" in body
     assert "receiptGenerated: false" in body
     assert "authorityRegistered: false" in body
-    assert "Review Impact is required before export." in body
+    assert "Generate Operational Impact next" in body
     assert "exportButton.disabled = true" in body
 
 
@@ -187,9 +187,9 @@ def test_ui_uses_action_level_capability_gates():
 
     for function_name in (
         "canExtractSemantics",
-        "canApplyDeterministicFields",
-        "canApplyCandidateSemantics",
-        "canOpenReconciliation",
+        "canCommitSemanticInterpretation",
+        "canReconcileAmbiguities",
+        "canGenerateOperationalImpact",
         "canReviewImpact",
         "canExportBundle",
         "canRegisterAuthority",
@@ -197,11 +197,25 @@ def test_ui_uses_action_level_capability_gates():
         assert f"function {function_name}" in source
 
     assert "extractPolicyButton.disabled = reviewBusy || !canExtractSemantics()" in sync_body
-    assert "useExtractionButton.disabled = !canApplyDeterministicFields()" in sync_body
-    assert "applyAllExtractionButton.disabled = !canApplyCandidateSemantics()" in sync_body
-    assert "openReconciliationButton.disabled = !canOpenReconciliation()" in sync_body
+    assert "useExtractionButton.disabled = !canCommitSemanticInterpretation()" in sync_body
+    assert "openReconciliationButton.disabled = !canReconcileAmbiguities()" in sync_body
     assert "exportButton.disabled = !canExportBundle(hasArtifacts)" in sync_body
     assert "registerButton.disabled = !canRegisterAuthority()" in sync_body
+
+
+def test_authoring_ui_exposes_staged_pipeline_not_apply_buttons():
+    html = (ROOT / "ui" / "index.html").read_text(encoding="utf-8")
+    source = APP_JS.read_text(encoding="utf-8")
+
+    assert "Draft Policy" in html
+    assert "Extract Governance Meaning" in html
+    assert "Reconcile Ambiguities" in html
+    assert "Commit Semantic Interpretation" in html
+    assert "Generate Operational Impact" in html
+    assert "Apply Deterministic Fields" not in html
+    assert "Apply All Candidate Semantics" not in html
+    assert "Save Draft" not in html
+    assert "useExtractedDraft" not in source
 
 
 def test_extraction_ui_renders_capabilities_as_first_class_surface():
@@ -210,7 +224,7 @@ def test_extraction_ui_renders_capabilities_as_first_class_surface():
     body = _function_body(source, "renderSemanticExtraction")
 
     assert 'id="extracted-capabilities"' in html
-    assert "Capabilities" in html
+    assert "Candidate Semantics" in html
     assert "renderCapabilities(\"#extracted-capabilities\"" in body
     assert "Governed targets" in body
     assert "Governed operations" in body
