@@ -310,9 +310,13 @@ function renderSemanticExtraction(extraction) {
   const executionContext = candidate.execution_context_semantics || {};
   const actor = candidate.governance_actor || {};
   const approvalChain = candidate.approval_chain_semantics || {};
+  renderCapabilities("#extracted-capabilities", extraction.candidate_capabilities || candidate.capabilities || []);
   renderDefinitionValues("#extracted-authority", {
     Resource: candidate.protected_system || "Not explicitly defined",
     Action: candidate.governed_action || "Not explicitly defined",
+    "Governed targets": summarizeArray(candidate.governed_targets || candidate.governed_action_targets),
+    "Governed operations": summarizeArray(candidate.governed_operations),
+    "Mutation classes": summarizeArray(candidate.mutation_classes),
     "Approval role": candidate.approver_role || "Not explicitly defined",
     "Approval count": candidate.approval_count ?? "Not explicitly defined",
     "Escalation threshold": candidate.escalation_threshold ? `$${Number(candidate.escalation_threshold).toLocaleString()}` : "Not explicitly defined",
@@ -330,7 +334,110 @@ function renderSemanticExtraction(extraction) {
   renderExtractionList("#extracted-ambiguities", extraction.ambiguities, "No ambiguity detected by deterministic patterns.");
   renderExtractionList("#extracted-missing", extraction.missing_information, "No undefined anchor fields detected.");
   renderProvenanceList("#semantic-provenance", extraction.semantic_provenance);
+  renderReconciliationWorkflow("#reconciliation-workflow", extraction.ambiguities);
   $("#extraction-status").textContent = `${extraction.schema_version} requires operator confirmation. Source hash ${shortHash(extraction.source_hash)}.`;
+}
+
+function renderCapabilities(selector, capabilities) {
+  const node = $(selector);
+  if (!node) return;
+  node.innerHTML = "";
+  const list = capabilities?.length ? capabilities : [];
+  if (!list.length) {
+    const empty = document.createElement("p");
+    empty.className = "quiet";
+    empty.textContent = "No operational capabilities were deterministically extracted.";
+    node.appendChild(empty);
+    return;
+  }
+  for (const capability of list) {
+    const article = document.createElement("article");
+    article.className = "capability-card";
+    const heading = document.createElement("h5");
+    heading.textContent = formatLabel(capability.action || capability.capability_id);
+    const type = document.createElement("span");
+    type.className = "capability-type";
+    type.textContent = formatLabel(capability.action_type);
+    const bullets = document.createElement("ul");
+    bullets.className = "capability-bullets";
+    for (const summary of capabilitySummaries(capability)) {
+      const item = document.createElement("li");
+      item.textContent = summary;
+      bullets.appendChild(item);
+    }
+    article.append(heading, type, bullets);
+    node.appendChild(article);
+  }
+}
+
+function capabilitySummaries(capability) {
+  const summaries = [];
+  for (const requirement of capability.requirements || []) {
+    if (requirement.summary) summaries.push(requirement.summary);
+  }
+  const continuity = capability.continuity_semantics || {};
+  if (continuity.revalidation_required) summaries.push("Requires continuity validation before resumed execution.");
+  if (continuity.revocation_invalidates_resume) summaries.push("Revoked authority invalidates resumed execution.");
+  const snapshot = continuity.state_snapshot_semantics || {};
+  if (snapshot.snapshot_required) summaries.push("Requires snapshot hash comparison against active governance posture.");
+  for (const evidence of capability.evidence_requirements || []) {
+    if (evidence.summary) summaries.push(evidence.summary);
+  }
+  const identity = capability.identity_requirements?.approval_chain_semantics || {};
+  if (identity.independence_required) summaries.push("Requires independent approval responsibilities.");
+  if (identity.self_approval_prohibited) summaries.push("Self approval is prohibited.");
+  if (identity.ai_recommendation_posture === "advisory_only") summaries.push("AI recommendations are advisory only.");
+  return [...new Set(summaries)].slice(0, 7);
+}
+
+function renderReconciliationWorkflow(selector, ambiguities) {
+  const node = $(selector);
+  if (!node) return;
+  node.innerHTML = "";
+  const list = ambiguities?.filter((item) => item.requires_operator_resolution !== false) || [];
+  if (!list.length) {
+    const empty = document.createElement("p");
+    empty.className = "quiet";
+    empty.textContent = "No operator resolution workflow is required for the current extraction.";
+    node.appendChild(empty);
+    return;
+  }
+  for (const ambiguity of list) {
+    const item = document.createElement("div");
+    item.className = "resolution-item";
+    const title = document.createElement("strong");
+    title.textContent = formatLabel(ambiguity.ambiguity_type || ambiguity.type || "semantic ambiguity");
+    const summary = document.createElement("p");
+    summary.textContent = ambiguity.summary || ambiguity.text || "Operator interpretation is required.";
+    const choices = document.createElement("div");
+    choices.className = "resolution-choices";
+    for (const choice of resolutionChoicesForAmbiguity(ambiguity)) {
+      const label = document.createElement("span");
+      label.textContent = choice;
+      choices.appendChild(label);
+    }
+    item.append(title, summary, choices);
+    node.appendChild(item);
+  }
+}
+
+function resolutionChoicesForAmbiguity(ambiguity) {
+  const type = ambiguity.ambiguity_type || ambiguity.type || "";
+  if (type === "timestamp_source_unspecified") {
+    return ["Block publication", "Assume orchestrator timestamp", "Require signed authority timestamp", "Mark unresolved ambiguity"];
+  }
+  if (type === "state_snapshot_subject_unspecified") {
+    return ["Require active governance state snapshot", "Require current policy version snapshot", "Mark unresolved ambiguity"];
+  }
+  if (type === "approval_independence_ambiguity") {
+    return ["Require independent actors", "Define reviewer roles", "Mark unresolved ambiguity"];
+  }
+  return ["Resolve interpretation", "Reject candidate meaning", "Mark unresolved ambiguity"];
+}
+
+function summarizeArray(values) {
+  const list = (values || []).filter(Boolean).map((item) => formatLabel(item));
+  return list.length ? list.join(", ") : "Not explicitly defined";
 }
 
 function renderExtractionList(selector, items, emptyText) {

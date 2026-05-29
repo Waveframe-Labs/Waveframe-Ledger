@@ -204,6 +204,33 @@ def test_ui_uses_action_level_capability_gates():
     assert "registerButton.disabled = !canRegisterAuthority()" in sync_body
 
 
+def test_extraction_ui_renders_capabilities_as_first_class_surface():
+    html = (ROOT / "ui" / "index.html").read_text(encoding="utf-8")
+    source = APP_JS.read_text(encoding="utf-8")
+    body = _function_body(source, "renderSemanticExtraction")
+
+    assert 'id="extracted-capabilities"' in html
+    assert "Capabilities" in html
+    assert "renderCapabilities(\"#extracted-capabilities\"" in body
+    assert "Governed targets" in body
+    assert "Governed operations" in body
+    assert "Mutation classes" in body
+    assert "function capabilitySummaries" in source
+
+
+def test_extraction_ui_surfaces_operator_resolution_workflow():
+    html = (ROOT / "ui" / "index.html").read_text(encoding="utf-8")
+    source = APP_JS.read_text(encoding="utf-8")
+    body = _function_body(source, "renderSemanticExtraction")
+
+    assert 'id="reconciliation-workflow"' in html
+    assert "Operator resolution workflow" in html
+    assert "renderReconciliationWorkflow(\"#reconciliation-workflow\"" in body
+    assert "Block publication" in source
+    assert "Require signed authority timestamp" in source
+    assert "Mark unresolved ambiguity" in source
+
+
 def test_escalation_authoring_is_text_driven_not_single_threshold_field():
     html = (ROOT / "ui" / "index.html").read_text(encoding="utf-8")
     source = APP_JS.read_text(encoding="utf-8")

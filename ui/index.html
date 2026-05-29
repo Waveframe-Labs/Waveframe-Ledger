@@ -198,12 +198,16 @@
               <button id="open-reconciliation-button" class="secondary-action" type="button" disabled>Open Reconciliation Review</button>
             </div>
             <div id="extraction-review" class="extraction-review" aria-live="polite">
+              <article class="capability-review-panel">
+                <h4>Capabilities</h4>
+                <div id="extracted-capabilities" class="capability-list"></div>
+              </article>
               <article>
                 <h4>Extracted authority candidate</h4>
                 <dl id="extracted-authority" class="compact-dl"></dl>
               </article>
               <article>
-                <h4>Extracted obligations</h4>
+                <h4>Operational governance narrative</h4>
                 <ul id="extracted-rules" class="operations-list"></ul>
               </article>
               <article>
@@ -217,6 +221,10 @@
               <article>
                 <h4>Semantic provenance</h4>
                 <ul id="semantic-provenance" class="operations-list"></ul>
+              </article>
+              <article>
+                <h4>Operator resolution workflow</h4>
+                <div id="reconciliation-workflow" class="resolution-workflow"></div>
               </article>
               <p id="extraction-status" class="quiet">Extraction has not run yet. Operator confirmation is required before an authority draft changes.</p>
             </div>

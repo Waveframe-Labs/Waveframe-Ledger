@@ -91,6 +91,9 @@ def extract_governance_semantics(
     )
     ai_boundary_semantics = _extract_ai_boundary_semantics(text)
     governed_action_targets = _extract_governed_action_targets(text)
+    governed_targets = governed_action_targets or ([protected_resource] if protected_resource else [])
+    governed_operations = _extract_governed_operations(text, governed_action)
+    mutation_classes = _extract_mutation_classes(text, governed_action, continuity_revalidation, ai_boundary_semantics)
     emergency_delegation_semantics = _extract_emergency_delegation_semantics(text)
     evidence_terms = _extract_evidence_terms(lower)
 
@@ -98,6 +101,9 @@ def extract_governance_semantics(
         "protected_system": protected_resource,
         "governed_action": governed_action,
         "governed_action_targets": governed_action_targets,
+        "governed_targets": governed_targets,
+        "governed_operations": governed_operations,
+        "mutation_classes": mutation_classes,
         "contract_id": _slug(protected_resource or "policy-authority"),
         "contract_version": "0.1.0",
         "governance_category": _extract_domain(text),
@@ -319,6 +325,50 @@ def _extract_governed_action_targets(text: str) -> list[str]:
         for part in raw.split(",")
         if part.strip()
     ]
+
+
+def _extract_governed_operations(text: str, governed_action: str) -> list[str]:
+    lower = text.lower()
+    operations = []
+    for needle, operation in [
+        ("modifying", "modify"),
+        ("modify", "modify"),
+        ("resume", "resume"),
+        ("resumed", "resume"),
+        ("approve", "approve"),
+        ("approval", "approve"),
+        ("delegated", "delegate"),
+        ("delegation", "delegate"),
+        ("publish", "publish"),
+        ("revoke", "revoke"),
+        ("supersede", "supersede"),
+    ]:
+        if needle in lower:
+            operations.append(operation)
+    if governed_action:
+        operations.append(_slug(governed_action).replace("-", "_"))
+    return sorted(set(operations))
+
+
+def _extract_mutation_classes(
+    text: str,
+    governed_action: str,
+    continuity_revalidation: bool,
+    ai_boundary_semantics: dict[str, Any],
+) -> list[str]:
+    lower = text.lower()
+    classes = []
+    if ai_boundary_semantics or "ai-assisted" in lower:
+        classes.append("ai_assisted_operational_modification")
+    if continuity_revalidation or _contains_any(lower, ["resumed", "resume", "continuity", "snapshot"]):
+        classes.append("continuity_sensitive_execution")
+    if "emergency" in lower and _contains_any(lower, ["delegated", "delegation", "override"]):
+        classes.append("emergency_delegated_remediation")
+    if "recommendation" in lower and "ai" in lower:
+        classes.append("ai_recommendation_advisory_boundary")
+    if governed_action:
+        classes.append(_slug(governed_action).replace("-", "_"))
+    return sorted(set(classes))
 
 
 def _extract_role(text: str) -> str:

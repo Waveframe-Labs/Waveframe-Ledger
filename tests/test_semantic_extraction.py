@@ -138,6 +138,14 @@ def test_semantic_extraction_recognizes_ai_operations_policy():
         "identity_posture",
         "infrastructure_configuration",
     ]
+    assert candidate["governed_targets"] == candidate["governed_action_targets"]
+    assert set(candidate["governed_operations"]) >= {"modify", "resume", "approve", "delegate"}
+    assert {
+        "ai_assisted_operational_modification",
+        "continuity_sensitive_execution",
+        "emergency_delegated_remediation",
+        "ai_recommendation_advisory_boundary",
+    }.issubset(candidate["mutation_classes"])
     assert candidate["execution_context_semantics"]["execution_context"] == "queued_async"
     assert candidate["execution_context_semantics"]["execution_boundary"] == "external_orchestration_system"
     assert candidate["execution_context_semantics"]["requires_replay_evidence"] is True
