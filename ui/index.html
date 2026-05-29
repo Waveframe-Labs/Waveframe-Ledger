@@ -187,7 +187,7 @@
             </div>
             <label class="policy-text-input">
               <span>Paste governance policy text</span>
-              <textarea id="policy-source-text" rows="7">Corporate Treasury Transfer System transfers above $250,000 require approval by treasury governance. Approval is valid for 30 days. Resumed workflows must revalidate if authority posture changes, and revoked authorities invalidate resumed execution. Approval evidence and decision trace are required for replay.</textarea>
+              <textarea id="policy-source-text" rows="7" placeholder="Example: Corporate Treasury Transfer System transfers above $250,000 require approval by treasury governance. Approval is valid for 30 days. Resumed workflows must revalidate if authority posture changes, and revoked authorities invalidate resumed execution."></textarea>
             </label>
             <div class="action-row">
               <button id="extract-policy-button" class="secondary-action" type="button">Extract Governance Meaning</button>
@@ -238,27 +238,27 @@
               <div class="form-grid">
                 <label>
                   <span>What operational system is governed?</span>
-                  <input name="protected_system" value="Corporate Treasury Transfer System" />
+                  <input name="protected_system" placeholder="Corporate Treasury Transfer System" />
                   <small>This anchors the authority to a protected operational resource.</small>
                 </label>
                 <label>
                   <span>What action is being controlled?</span>
-                  <input name="governed_action" value="transfer funds" />
+                  <input name="governed_action" placeholder="transfer funds" />
                   <small>Ledger uses this to frame governed outcomes and mutation scope.</small>
                 </label>
                 <label>
                   <span>Authority reference</span>
-                  <input name="contract_id" value="treasury-policy" />
+                  <input name="contract_id" placeholder="treasury-policy" />
                   <small>Stable authority identity for publication and replay binding.</small>
                 </label>
                 <label>
                   <span>Authority version</span>
-                  <input name="contract_version" value="2.1.0" />
+                  <input name="contract_version" placeholder="2.1.0" />
                   <small>Version changes create a new governance posture.</small>
                 </label>
                 <label class="wide">
                   <span>Which operational mutation targets are governed?</span>
-                  <input name="mutation_targets" value="bank_api.transfer_funds" />
+                  <input name="mutation_targets" placeholder="bank_api.transfer_funds" />
                   <small>Mutation targets identify the operational actions this authority is meant to constrain.</small>
                 </label>
               </div>
@@ -272,22 +272,23 @@
               <div class="form-grid">
                 <label>
                   <span>Who is authorized to approve execution?</span>
-                  <input name="approver_role" value="treasury-governance" />
+                  <input name="approver_role" placeholder="treasury-governance" />
                   <small>Named authority roles avoid ambiguous approval semantics.</small>
                 </label>
                 <label>
                   <span>How many independent approvals are required before execution is admissible?</span>
-                  <input name="approval_count" type="number" min="1" value="1" />
+                  <input name="approval_count" type="number" min="1" placeholder="2" />
                   <small>Independent approval count clarifies review strength before execution.</small>
                 </label>
                 <label>
                   <span>How long is admissibility valid after approval?</span>
-                  <input name="validity_days" type="number" min="1" value="30" />
+                  <input name="validity_days" type="number" min="1" placeholder="30" />
                   <small>Validity windows prevent stale approvals from authorizing later execution.</small>
                 </label>
                 <label>
                   <span>Governance category</span>
                   <select name="governance_category">
+                    <option value="">Select category</option>
                     <option>Financial</option>
                     <option>Access Control</option>
                     <option>Operational</option>
@@ -315,7 +316,7 @@
               <div class="form-grid">
                 <label class="wide">
                   <span>Describe escalation expectations and governance intervention conditions.</span>
-                  <textarea name="escalation_semantics" rows="6">Transfers above $250,000 require treasury governance review.</textarea>
+                  <textarea name="escalation_semantics" rows="6" placeholder="Example: Transfers above $250,000 require treasury governance review."></textarea>
                   <small>Include review triggers, approval obligations, deployment controls, credential escalation requirements, or operational conditions requiring governance intervention.</small>
                   <div class="semantic-helper-chips" aria-label="Escalation semantic helpers">
                     <span>financial review</span>
@@ -337,12 +338,12 @@
               <fieldset class="guided-questions">
                 <legend>Continuity guarantees</legend>
                 <label class="check-row">
-                  <input name="continuity_revalidation" type="checkbox" checked />
+                  <input name="continuity_revalidation" type="checkbox" />
                   <span>Should resumed workflows require revalidation if governance posture changes before execution completes?</span>
                   <small>Continuity revalidation prevents long-running workflows from executing under outdated governance posture.</small>
                 </label>
                 <label class="check-row">
-                  <input name="revocation_invalidates_resume" type="checkbox" checked />
+                  <input name="revocation_invalidates_resume" type="checkbox" />
                   <span>Should revoked authorities invalidate resumed execution continuity?</span>
                   <small>Revocation invalidation prevents paused work from continuing under authority that no longer exists.</small>
                 </label>

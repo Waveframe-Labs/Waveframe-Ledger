@@ -165,17 +165,17 @@ function restoreDraftSession() {
   const session = loadDraftSession();
   if (!session) {
     committedDraft = null;
-    authoringSessionDirty = true;
-    setSemanticState({
-      draft_state: "uncommitted",
-      semantic_state: "not_ready",
-      impact_state: "not_reviewed",
-      publication_state: "blocked",
-      draft_hash: null,
-      artifact_draft_hash: null,
-      invalidation_reason: "draft_not_committed",
-    });
-    draftSessionStatus.textContent = "No committed semantic interpretation yet. Extract and commit policy meaning to continue.";
+    authoringSessionDirty = false;
+    policySourceDirty = false;
+    currentExtraction = null;
+    currentSemanticExtras = {};
+    if (policySourceText) policySourceText.value = "";
+    resetSemanticStateMachine("draft_not_committed");
+    clearAuthoringFields();
+    clearExtractionReview();
+    clearOperationalImpact();
+    clearPublicationReadiness();
+    draftSessionStatus.textContent = "No committed authority draft. Start with policy text or manual authoring.";
     updateWorkflowState({ draftReady: false });
     return;
   }
@@ -216,20 +216,94 @@ function saveWorkingAuthoringSession() {
   return saveDraftSession({ commit: false });
 }
 
+function resetSemanticStateMachine(reason = "no_committed_draft") {
+  setSemanticState({
+    draft_state: "uncommitted",
+    semantic_state: "not_ready",
+    impact_state: "not_reviewed",
+    publication_state: "blocked",
+    draft_hash: null,
+    artifact_draft_hash: null,
+    invalidation_reason: reason,
+  });
+}
+
+function clearAuthoringFields() {
+  for (const field of Array.from(form.elements)) {
+    if (!field.name) continue;
+    if (field.type === "checkbox") {
+      field.checked = false;
+    } else if (field.tagName === "SELECT") {
+      field.selectedIndex = 0;
+    } else {
+      field.value = "";
+    }
+  }
+}
+
+function clearExtractionReview() {
+  currentExtraction = null;
+  currentSemanticExtras = {};
+  renderCapabilities("#extracted-capabilities", []);
+  renderDefinitionValues("#extracted-authority", {
+    "Candidate status": "No candidate semantics extracted",
+    "Commit status": "No committed authority draft",
+  });
+  renderExtractionList("#extracted-rules", [], "No candidate obligations extracted.");
+  renderExtractionList("#extracted-ambiguities", [], "No extraction ambiguities recorded.");
+  renderExtractionList("#extracted-missing", [], "No interpretation boundaries recorded.");
+  renderProvenanceList("#semantic-provenance", []);
+  renderReconciliationWorkflow("#reconciliation-workflow", []);
+  $("#extraction-status").textContent = "Extraction has not run yet. Operator confirmation is required before an authority draft changes.";
+}
+
+function clearOperationalImpact() {
+  $("#preview-summary").textContent = "No committed semantic interpretation yet. Commit semantics before generating operational impact.";
+  renderList("#preview-enforcement", []);
+  renderList("#preview-consequences", []);
+  renderList("#preview-lifecycle", []);
+  renderList("#outcome-explorer", []);
+  renderOutcomes([]);
+  renderExecutionContext("#change-execution-context", null);
+  renderChangeReview(null);
+  renderPublicationProjection(null);
+  $("#bundle-meaning").textContent = "No bundle generated yet.";
+  renderList("#publication-consequences", []);
+  $("#manifest-json").textContent = "No publication manifest generated yet.";
+  $("#bundle-json").textContent = "No authority bundle generated yet.";
+  $("#receipt-json").textContent = "No publication receipt generated yet.";
+}
+
+function clearPublicationReadiness() {
+  for (const field of document.querySelectorAll(".readiness-list input[type='checkbox']")) {
+    field.checked = false;
+  }
+  for (const field of document.querySelectorAll(".notes-panel textarea")) {
+    field.value = "";
+  }
+}
+
 function startNewDraft() {
   window.localStorage.removeItem(DRAFT_SESSION_KEY);
-  form.reset();
   currentArtifacts = null;
   pendingRegistration = null;
+  currentExtraction = null;
   currentSemanticExtras = {};
   committedDraft = null;
-  authoringSessionDirty = true;
+  authoringSessionDirty = false;
+  policySourceDirty = false;
   workflowTimestamps = {
     draftSaved: null,
     reviewed: null,
     exported: null,
     registered: null,
   };
+  if (policySourceText) policySourceText.value = "";
+  clearAuthoringFields();
+  resetSemanticStateMachine();
+  clearExtractionReview();
+  clearOperationalImpact();
+  clearPublicationReadiness();
   exportButton.disabled = true;
   registerButton.disabled = true;
   useExtractionButton.disabled = true;
@@ -239,8 +313,6 @@ function startNewDraft() {
   $("#status-semantic").textContent = "draft required";
   $("#status-bundle").textContent = "not exported";
   $("#release-registration").textContent = "Bundle not exported.";
-  renderPublicationProjection(null);
-  $("#receipt-json").textContent = "No publication receipt generated yet.";
   clearWorkflowInvalidation();
   updateWorkflowState({
     draftReady: false,
@@ -249,8 +321,12 @@ function startNewDraft() {
     receiptGenerated: false,
     authorityRegistered: false,
   });
-  saveWorkingAuthoringSession();
-  draftSessionStatus.textContent = "New working session started. Extract candidate semantics to continue.";
+  draftSessionStatus.textContent = "No committed authority draft. Start with policy text or manual authoring.";
+  renderAuthorityContext();
+  renderOperationsOverview();
+  renderBundleRegistry();
+  syncPublicationActions();
+  showPage("draft");
 }
 
 async function extractPolicySemantics() {
@@ -743,7 +819,7 @@ function renderOperatorGuidance(title, body) {
 
 function renderAuthorityContext() {
   const stableDraft = committedDraft || null;
-  const authorityRef = currentArtifacts?.authority_bundle?.authority_ref || (stableDraft ? `${stableDraft.contract_id || "authority"}@${stableDraft.contract_version || "draft"}` : "uncommitted draft");
+  const authorityRef = currentArtifacts?.authority_bundle?.authority_ref || (stableDraft ? `${stableDraft.contract_id || "authority"}@${stableDraft.contract_version || "draft"}` : "No committed authority draft");
   const registryEntry = currentArtifacts?.authority_bundle ? findRegistryEntry(currentArtifacts.authority_bundle.authority_ref) : null;
   $("#context-authority-ref").textContent = authorityRef;
   $("#context-reviewed-at").textContent = workflowTimestamps.reviewed

@@ -102,7 +102,32 @@ def test_authority_header_uses_committed_draft_not_live_form_state():
 
     assert "committedDraft" in body
     assert "readDraft()" not in body
-    assert "uncommitted draft" in body
+    assert "No committed authority draft" in body
+
+
+def test_new_working_session_is_empty_not_sample_authority_clone():
+    html = (ROOT / "ui" / "index.html").read_text(encoding="utf-8")
+    source = APP_JS.read_text(encoding="utf-8")
+    body = _function_body(source, "startNewDraft")
+
+    assert "policySourceText.value = \"\"" in body
+    assert "clearAuthoringFields()" in body
+    assert "clearExtractionReview()" in body
+    assert "clearOperationalImpact()" in body
+    assert "clearPublicationReadiness()" in body
+    assert "resetSemanticStateMachine()" in body
+    assert "currentExtraction = null" in body
+    assert "committedDraft = null" in body
+    assert "authoringSessionDirty = false" in body
+    assert "saveWorkingAuthoringSession()" not in body
+    assert "No committed authority draft" in body
+    assert ">Corporate Treasury Transfer System transfers above" not in html
+    assert 'value="Corporate Treasury Transfer System"' not in html
+    assert 'value="transfer funds"' not in html
+    assert 'value="treasury-policy"' not in html
+    assert 'name="continuity_revalidation" type="checkbox" checked' not in html
+    assert 'name="revocation_invalidates_resume" type="checkbox" checked' not in html
+    assert "Transfers above $250,000 require treasury governance review.</textarea>" not in html
 
 
 def test_working_session_does_not_commit_semantic_interpretation():
