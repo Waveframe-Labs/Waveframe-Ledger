@@ -103,6 +103,7 @@ def test_authority_header_uses_committed_draft_not_live_form_state():
     assert "committedDraft" in body
     assert "readDraft()" not in body
     assert "No committed authority draft" in body
+    assert "No committed authority draft" in (ROOT / "ui" / "index.html").read_text(encoding="utf-8")
 
 
 def test_new_working_session_is_empty_not_sample_authority_clone():
@@ -121,10 +122,15 @@ def test_new_working_session_is_empty_not_sample_authority_clone():
     assert "authoringSessionDirty = false" in body
     assert "saveWorkingAuthoringSession()" not in body
     assert "No committed authority draft" in body
+    assert "Manual Authority Definition" in html
+    assert "Advanced Manual Authoring" not in html
     assert ">Corporate Treasury Transfer System transfers above" not in html
     assert 'value="Corporate Treasury Transfer System"' not in html
     assert 'value="transfer funds"' not in html
     assert 'value="treasury-policy"' not in html
+    assert 'placeholder="e.g. Corporate Treasury Transfer System"' in html
+    assert 'placeholder="e.g. transfer funds"' in html
+    assert 'placeholder="e.g. treasury-policy"' in html
     assert 'name="continuity_revalidation" type="checkbox" checked' not in html
     assert 'name="revocation_invalidates_resume" type="checkbox" checked' not in html
     assert "Transfers above $250,000 require treasury governance review.</textarea>" not in html

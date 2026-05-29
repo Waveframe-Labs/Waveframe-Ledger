@@ -34,7 +34,7 @@
         <header class="authority-context" aria-label="Current authority context">
           <div class="authority-context-main">
             <span class="section-kicker">Current authority</span>
-            <strong id="context-authority-ref">treasury-policy@2.1.0</strong>
+            <strong id="context-authority-ref">No committed authority draft</strong>
           </div>
           <div class="authority-context-state" aria-label="Authority lifecycle state">
             <span id="context-draft-state" class="context-chip active">Draft</span>
@@ -232,33 +232,33 @@
           <form id="authority-form" class="authority-form">
             <details class="authoring-section governance-module">
               <summary class="authoring-copy">
-                <h3>Advanced Manual Authoring</h3>
-                <p>Define the operational system and action this authority controls.</p>
+                <h3>Manual Authority Definition</h3>
+                <p>Operator-authored semantic anchors. These fields stay empty until explicitly written or populated by a committed interpretation.</p>
               </summary>
               <div class="form-grid">
                 <label>
                   <span>What operational system is governed?</span>
-                  <input name="protected_system" placeholder="Corporate Treasury Transfer System" />
+                  <input name="protected_system" placeholder="e.g. Corporate Treasury Transfer System" />
                   <small>This anchors the authority to a protected operational resource.</small>
                 </label>
                 <label>
                   <span>What action is being controlled?</span>
-                  <input name="governed_action" placeholder="transfer funds" />
+                  <input name="governed_action" placeholder="e.g. transfer funds" />
                   <small>Ledger uses this to frame governed outcomes and mutation scope.</small>
                 </label>
                 <label>
                   <span>Authority reference</span>
-                  <input name="contract_id" placeholder="treasury-policy" />
+                  <input name="contract_id" placeholder="e.g. treasury-policy" />
                   <small>Stable authority identity for publication and replay binding.</small>
                 </label>
                 <label>
                   <span>Authority version</span>
-                  <input name="contract_version" placeholder="2.1.0" />
+                  <input name="contract_version" placeholder="e.g. 2.1.0" />
                   <small>Version changes create a new governance posture.</small>
                 </label>
                 <label class="wide">
                   <span>Which operational mutation targets are governed?</span>
-                  <input name="mutation_targets" placeholder="bank_api.transfer_funds" />
+                  <input name="mutation_targets" placeholder="e.g. bank_api.transfer_funds" />
                   <small>Mutation targets identify the operational actions this authority is meant to constrain.</small>
                 </label>
               </div>
@@ -272,17 +272,17 @@
               <div class="form-grid">
                 <label>
                   <span>Who is authorized to approve execution?</span>
-                  <input name="approver_role" placeholder="treasury-governance" />
+                  <input name="approver_role" placeholder="e.g. treasury-governance" />
                   <small>Named authority roles avoid ambiguous approval semantics.</small>
                 </label>
                 <label>
                   <span>How many independent approvals are required before execution is admissible?</span>
-                  <input name="approval_count" type="number" min="1" placeholder="2" />
+                  <input name="approval_count" type="number" min="1" placeholder="e.g. 2" />
                   <small>Independent approval count clarifies review strength before execution.</small>
                 </label>
                 <label>
                   <span>How long is admissibility valid after approval?</span>
-                  <input name="validity_days" type="number" min="1" placeholder="30" />
+                  <input name="validity_days" type="number" min="1" placeholder="e.g. 30" />
                   <small>Validity windows prevent stale approvals from authorizing later execution.</small>
                 </label>
                 <label>
@@ -316,7 +316,7 @@
               <div class="form-grid">
                 <label class="wide">
                   <span>Describe escalation expectations and governance intervention conditions.</span>
-                  <textarea name="escalation_semantics" rows="6" placeholder="Example: Transfers above $250,000 require treasury governance review."></textarea>
+                  <textarea name="escalation_semantics" rows="6" placeholder="e.g. Transfers above $250,000 require treasury governance review."></textarea>
                   <small>Include review triggers, approval obligations, deployment controls, credential escalation requirements, or operational conditions requiring governance intervention.</small>
                   <div class="semantic-helper-chips" aria-label="Escalation semantic helpers">
                     <span>financial review</span>
