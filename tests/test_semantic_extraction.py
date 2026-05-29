@@ -14,6 +14,19 @@ POLICY_TEXT = (
     "and revoked authorities invalidate resumed execution. Approval evidence and decision trace are required for replay."
 )
 
+AI_OPERATIONS_POLICY = (
+    "AI-generated operational recommendations are classified as advisory governance inputs and do not independently authorize execution.\n\n"
+    "Any AI-assisted workflow capable of modifying production systems, financial state, customer data, identity posture, or infrastructure configuration must execute through a replay-attested governance boundary.\n\n"
+    "Queued or asynchronous AI execution workflows must preserve replay continuity, governance lineage, execution chronology, and governance state snapshots throughout the execution lifecycle.\n\n"
+    "Resumed AI workflows must compare the original governance snapshot hash against the active governance posture prior to continuation. If continuity drift exists, execution must pause pending governance review.\n\n"
+    "No AI agent may independently approve, attest, supersede, revoke, or publish governance authorities.\n\n"
+    "Execution involving external orchestration systems, remote workers, or cloud-managed automation must retain cryptographically linked replay evidence connecting execution actions to the originating governance authority.\n\n"
+    "All high-impact AI-assisted operations require independent human approval from both Operational Governance and Security Oversight. The same actor may not satisfy both approval responsibilities.\n\n"
+    "Delegated emergency override authority may temporarily authorize AI-assisted remediation actions during declared operational incidents. Emergency delegation expires after 6 hours unless renewed through governance review.\n\n"
+    "AI-generated execution recommendations affecting customer-visible systems require attested human acknowledgment prior to execution.\n\n"
+    "Governance authorities for autonomous operational systems expire 7 days after publication unless renewed through governance continuity review."
+)
+
 
 def test_governance_source_v1_captures_policy_text_and_stable_hash():
     first = build_governance_source(POLICY_TEXT)
@@ -109,6 +122,60 @@ def test_semantic_extraction_emits_delegation_capability_when_policy_delegates_a
     assert "delegate_authority" in capabilities
     assert capabilities["delegate_authority"]["action_type"] == "delegation_action"
     assert capabilities["delegate_authority"]["requirements"][0]["fields"]["delegation_posture"] == "allowed_with_boundary"
+
+
+def test_semantic_extraction_recognizes_ai_operations_policy():
+    extraction = extract_governance_semantics(AI_OPERATIONS_POLICY)
+    candidate = extraction["candidate_authority"]
+    capabilities = {item["capability_id"]: item for item in extraction["candidate_capabilities"]}
+
+    assert candidate["protected_system"] == "Autonomous Operational Systems"
+    assert candidate["governed_action"] == "AI-assisted operational modification"
+    assert candidate["governed_action_targets"] == [
+        "production_systems",
+        "financial_state",
+        "customer_data",
+        "identity_posture",
+        "infrastructure_configuration",
+    ]
+    assert candidate["execution_context_semantics"]["execution_context"] == "queued_async"
+    assert candidate["execution_context_semantics"]["execution_boundary"] == "external_orchestration_system"
+    assert candidate["execution_context_semantics"]["requires_replay_evidence"] is True
+    assert candidate["execution_context_semantics"]["requires_state_snapshot"] is True
+    assert candidate["state_snapshot_semantics"]["snapshot_subject"] == "original_governance_snapshot_hash"
+    assert candidate["state_snapshot_semantics"]["resume_comparison"] == "original_snapshot_hash_must_match_active_governance_posture"
+    assert candidate["state_snapshot_semantics"]["drift_behavior"] == "pause_pending_governance_review"
+    assert candidate["approval_count"] == 2
+    assert candidate["approver_roles"] == ["operational-governance", "security-oversight"]
+    assert candidate["approval_chain_semantics"]["required_roles"] == ["operational-governance", "security-oversight"]
+    assert candidate["approval_chain_semantics"]["independence_required"] is True
+    assert candidate["approval_chain_semantics"]["self_approval_prohibited"] is True
+    assert candidate["approval_chain_semantics"]["attestation_required"] is True
+    assert candidate["approval_chain_semantics"]["ai_recommendation_posture"] == "advisory_only"
+    assert candidate["ai_boundary_semantics"]["recommendation_posture"] == "advisory_only"
+    assert candidate["ai_boundary_semantics"]["independent_authorization_prohibited"] is True
+    assert set(candidate["ai_boundary_semantics"]["prohibited_authority_actions"]) == {
+        "approve",
+        "attest",
+        "supersede",
+        "revoke",
+        "publish",
+    }
+    assert candidate["ai_boundary_semantics"]["human_acknowledgment_required"] is True
+    assert candidate["temporal_semantics"]["validity_window"] == "P7D"
+    assert candidate["emergency_delegation_semantics"]["validity_window"] == "PT6H"
+    assert candidate["emergency_delegation_semantics"]["authorized_action"] == "ai_assisted_remediation"
+    assert {
+        "ai_assisted_operational_modification",
+        "resume_ai_workflow",
+        "emergency_delegated_remediation",
+        "ai_generated_recommendation",
+    }.issubset(capabilities)
+    assert "cryptographically_linked_replay_evidence" in {
+        item["fields"]["evidence_term"]
+        for item in extraction["candidate_rules"]
+        if item["rule_type"] == "required_evidence"
+    }
 
 
 def test_semantic_provenance_tracks_confidence_and_source_spans():

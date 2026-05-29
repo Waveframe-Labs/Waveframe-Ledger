@@ -21,7 +21,7 @@
     "capability_id": { "type": "string", "minLength": 1 },
     "action": { "type": "string", "minLength": 1 },
     "action_type": {
-      "enum": ["governed_action", "approval_action", "resume_action", "delegation_action"]
+      "enum": ["governed_action", "approval_action", "resume_action", "delegation_action", "ai_recommendation_action"]
     },
     "requirements": {
       "type": "array",

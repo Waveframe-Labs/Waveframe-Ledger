@@ -43,6 +43,40 @@ def build_governance_capabilities(
             )
         )
 
+    ai_boundary = candidate_authority.get("ai_boundary_semantics") or {}
+    if ai_boundary:
+        capabilities.append(
+            _capability(
+                capability_id="ai_generated_recommendation",
+                action="AI-generated recommendation",
+                action_type="ai_recommendation_action",
+                requirements=[
+                    _requirement(
+                        requirement_type="advisory_only_boundary",
+                        summary="AI-generated recommendations are advisory governance inputs and do not independently authorize execution.",
+                        fields=ai_boundary,
+                    )
+                ],
+                continuity_semantics={},
+                evidence_requirements=[],
+                execution_constraints={},
+                identity_requirements=_identity_requirements(candidate_authority),
+            )
+        )
+        if primary_action != "ai_assisted_operational_modification":
+            capabilities.append(
+                _capability(
+                    capability_id="ai_assisted_operational_modification",
+                    action="AI-assisted operational modification",
+                    action_type="governed_action",
+                    requirements=_primary_requirements(candidate_authority, rules),
+                    continuity_semantics=_continuity_semantics(candidate_authority),
+                    evidence_requirements=_evidence_requirements(rules),
+                    execution_constraints=_execution_constraints(candidate_authority),
+                    identity_requirements=_identity_requirements(candidate_authority),
+                )
+            )
+
     if candidate_authority.get("continuity_revalidation") or candidate_authority.get("state_snapshot_semantics"):
         capabilities.append(
             _capability(
@@ -62,6 +96,25 @@ def build_governance_capabilities(
                 identity_requirements=_identity_requirements(candidate_authority),
             )
         )
+        if ai_boundary:
+            capabilities.append(
+                _capability(
+                    capability_id="resume_ai_workflow",
+                    action="resume AI workflow",
+                    action_type="resume_action",
+                    requirements=[
+                        _requirement(
+                            requirement_type="continuity_snapshot_comparison",
+                            summary="Resumed AI workflows must compare original governance snapshot hash against active governance posture.",
+                            fields=candidate_authority.get("state_snapshot_semantics") or {},
+                        )
+                    ],
+                    continuity_semantics=_continuity_semantics(candidate_authority),
+                    evidence_requirements=_replay_evidence_requirements(rules),
+                    execution_constraints=_execution_constraints(candidate_authority),
+                    identity_requirements=_identity_requirements(candidate_authority),
+                )
+            )
 
     delegation_posture = (
         (candidate_authority.get("approval_chain_semantics") or {}).get("delegation_posture")
@@ -88,6 +141,32 @@ def build_governance_capabilities(
                     )
                 ],
                 execution_constraints={},
+                identity_requirements=_identity_requirements(candidate_authority),
+            )
+        )
+
+    emergency = candidate_authority.get("emergency_delegation_semantics") or {}
+    if emergency:
+        capabilities.append(
+            _capability(
+                capability_id="emergency_delegated_remediation",
+                action="emergency delegated remediation",
+                action_type="delegation_action",
+                requirements=[
+                    _requirement(
+                        requirement_type="temporary_emergency_delegation",
+                        summary="Emergency delegated remediation authority is temporary and expires unless renewed through governance review.",
+                        fields=emergency,
+                    )
+                ],
+                continuity_semantics={},
+                evidence_requirements=[
+                    _evidence_requirement(
+                        evidence_type="attested_delegation_evidence",
+                        summary="Emergency delegation requires attested delegation evidence.",
+                    )
+                ],
+                execution_constraints=_execution_constraints(candidate_authority),
                 identity_requirements=_identity_requirements(candidate_authority),
             )
         )

@@ -56,7 +56,8 @@ def extract_governance_semantics(
     protected_resource = _extract_protected_resource(text)
     governed_action = _extract_governed_action(text)
     role = _extract_role(text)
-    approval_count = _extract_approval_count(text)
+    approval_roles = _extract_approval_roles(text)
+    approval_count = _extract_approval_count(text, approval_roles)
     threshold = _extract_threshold(text)
     validity_days = _extract_validity_days(text)
     temporal_semantics = _extract_temporal_semantics(text, validity_days)
@@ -88,15 +89,20 @@ def extract_governance_semantics(
         continuity_revalidation=continuity_revalidation,
         execution_context=execution_context_semantics,
     )
+    ai_boundary_semantics = _extract_ai_boundary_semantics(text)
+    governed_action_targets = _extract_governed_action_targets(text)
+    emergency_delegation_semantics = _extract_emergency_delegation_semantics(text)
     evidence_terms = _extract_evidence_terms(lower)
 
     candidate = {
         "protected_system": protected_resource,
         "governed_action": governed_action,
+        "governed_action_targets": governed_action_targets,
         "contract_id": _slug(protected_resource or "policy-authority"),
         "contract_version": "0.1.0",
         "governance_category": _extract_domain(text),
         "approver_role": role,
+        "approver_roles": approval_roles,
         "approval_count": approval_count,
         "escalation_threshold": threshold,
         "escalation_semantics": _extract_escalation_semantics(text, threshold, role),
@@ -111,6 +117,8 @@ def extract_governance_semantics(
         "authority_role_binding": authority_role_binding,
         "approval_chain_semantics": approval_chain_semantics,
         "identity_continuity_semantics": identity_continuity_semantics,
+        "ai_boundary_semantics": ai_boundary_semantics,
+        "emergency_delegation_semantics": emergency_delegation_semantics,
     }
 
     missing = []
@@ -209,11 +217,27 @@ def extract_governance_semantics(
                 "fields": identity_continuity_semantics,
             }
         )
+    if ai_boundary_semantics:
+        candidate_rules.append(
+            {
+                "rule_type": "ai_boundary_semantics",
+                "summary": "AI-generated operational recommendations are advisory and cannot independently authorize execution.",
+                "fields": ai_boundary_semantics,
+            }
+        )
+    if emergency_delegation_semantics:
+        candidate_rules.append(
+            {
+                "rule_type": "emergency_delegation_semantics",
+                "summary": "Emergency delegated authority is temporary and requires governance renewal.",
+                "fields": emergency_delegation_semantics,
+            }
+        )
     for term in evidence_terms:
         candidate_rules.append(
             {
                 "rule_type": "required_evidence",
-                "summary": f"Policy text references {term.replace('_', ' ')} evidence.",
+                "summary": f"Policy text references {_evidence_label(term)}.",
                 "fields": {"evidence_term": term},
             }
         )
@@ -244,6 +268,11 @@ def extract_governance_semantics(
 
 
 def _extract_protected_resource(text: str) -> str:
+    lower = text.lower()
+    if "autonomous operational systems" in lower:
+        return "Autonomous Operational Systems"
+    if "ai-assisted workflow" in lower or "ai-assisted workflows" in lower:
+        return "AI-Assisted Workflows"
     patterns = [
         r"^(?P<value>[A-Z][A-Za-z0-9 &-]+?(?:System|Service|Platform|API|Workflow|Process))\s+",
         r"(?:governs?|protects?|applies to|for)\s+(?:the\s+)?(?P<value>[A-Z][A-Za-z0-9 &-]+?(?:System|Service|Platform|API|Workflow|Process))\b",
@@ -253,6 +282,11 @@ def _extract_protected_resource(text: str) -> str:
 
 
 def _extract_governed_action(text: str) -> str:
+    lower = text.lower()
+    if "ai-assisted workflow" in lower and "modifying" in lower:
+        return "AI-assisted operational modification"
+    if "resumed ai workflows" in lower:
+        return "resume AI workflow"
     patterns = [
         r"(?:action|operation)\s*:\s*(?P<value>[^.\n]+)",
         r"\b(?P<value>transfers?)\s+above\b",
@@ -271,7 +305,26 @@ def _extract_governed_action(text: str) -> str:
     }.get(value, value)
 
 
+def _extract_governed_action_targets(text: str) -> list[str]:
+    match = re.search(
+        r"capable of modifying (?P<value>[^.]+?) must execute",
+        text,
+        re.IGNORECASE,
+    )
+    if not match:
+        return []
+    raw = match.group("value").replace(" or ", ", ")
+    return [
+        _slug(part.strip()).replace("-", "_")
+        for part in raw.split(",")
+        if part.strip()
+    ]
+
+
 def _extract_role(text: str) -> str:
+    roles = _extract_approval_roles(text)
+    if roles:
+        return roles[0]
     patterns = [
         r"(?:approved by|approval by|requires? approval from|requires? review by)\s+(?:the\s+)?(?P<value>[A-Za-z0-9 -]+?)(?:\.|,|;|\s+for|\s+when|\s+before|\s+with|\s+and|$)",
         r"(?:approver role|approval role)\s*:\s*(?P<value>[^.\n]+)",
@@ -279,7 +332,28 @@ def _extract_role(text: str) -> str:
     return _slug(_first_match(text, patterns))
 
 
-def _extract_approval_count(text: str) -> int | None:
+def _extract_approval_roles(text: str) -> list[str]:
+    match = re.search(
+        r"approval from both (?P<first>[A-Za-z0-9 -]+?) and (?P<second>[A-Za-z0-9 -]+?)(?:\.|,|;|$)",
+        text,
+        re.IGNORECASE,
+    )
+    if match:
+        return [_slug(match.group("first")), _slug(match.group("second"))]
+    role = _slug(
+        _first_match(
+            text,
+            [
+                r"(?:approved by|approval by|requires? approval from|requires? review by)\s+(?:the\s+)?(?P<value>[A-Za-z0-9 -]+?)(?:\.|,|;|\s+for|\s+when|\s+before|\s+with|\s+and|$)",
+            ],
+        )
+    )
+    return [role] if role else []
+
+
+def _extract_approval_count(text: str, approval_roles: list[str] | None = None) -> int | None:
+    if approval_roles and len(approval_roles) > 1:
+        return len(approval_roles)
     numeric = re.search(r"(?P<count>\d+)\s+(?:independent\s+)?approvals?", text, re.IGNORECASE)
     if numeric:
         return int(numeric.group("count"))
@@ -341,20 +415,29 @@ def _extract_state_snapshot_semantics(
     revocation_invalidates: bool,
 ) -> dict[str, Any]:
     lower = text.lower()
-    if not (continuity_revalidation or revocation_invalidates or _contains_any(lower, ["current governance state", "current policy version", "snapshot"])):
+    if not (continuity_revalidation or revocation_invalidates or _contains_any(lower, ["current governance state", "current policy version", "snapshot", "snapshot hash", "active governance posture"])):
         return {}
-    return {
+    subject = _extract_snapshot_subject(lower)
+    comparison = "original_snapshot_hash_must_match_active_governance_posture" if "original governance snapshot hash" in lower else "snapshot_hash_must_match_active_state_hash"
+    snapshot = {
         "schema_version": "state_posture_snapshot_semantics.v1",
         "snapshot_required": True,
         "snapshot_hash_algorithm": "sha256",
-        "snapshot_subject": _extract_snapshot_subject(lower),
-        "resume_comparison": "snapshot_hash_must_match_active_state_hash",
+        "snapshot_subject": subject,
+        "resume_comparison": comparison,
         "drift_result": "continuity_drift_detected",
         "runtime_enforced_by": "Guard/Cloud",
     }
+    if "pause pending governance review" in lower:
+        snapshot["drift_behavior"] = "pause_pending_governance_review"
+    return snapshot
 
 
 def _extract_snapshot_subject(lower: str) -> str:
+    if "original governance snapshot hash" in lower:
+        return "original_governance_snapshot_hash"
+    if "active governance posture" in lower:
+        return "active_governance_posture"
     if _contains_any(lower, ["active governance state", "current governance state"]):
         return "active_governance_state"
     if "current policy version" in lower or "policy version" in lower:
@@ -368,9 +451,9 @@ def _extract_execution_context_semantics(text: str) -> dict[str, Any]:
     lower = text.lower()
     context = ""
     boundary = "unspecified"
-    if _contains_any(lower, ["queued deployment", "queued execution", "queued transfer", "queued "]):
+    if _contains_any(lower, ["queued or asynchronous", "queued execution", "queued transfer", "queued deployment", "queued "]):
         context = "queued_async"
-        boundary = "external_worker"
+        boundary = "external_orchestration_system" if _contains_any(lower, ["external orchestration", "remote workers", "cloud-managed automation"]) else "external_worker"
     elif _contains_any(lower, ["scheduled transfer", "scheduled execution", "scheduled deployment"]):
         context = "scheduled_execution"
         boundary = "scheduler"
@@ -402,7 +485,7 @@ def _extract_execution_context_semantics(text: str) -> dict[str, Any]:
         return {}
     resumable = context == "resumed_workflow" or _contains_any(lower, ["resume", "resumed", "may resume later"])
     temporal = context in {"queued_async", "scheduled_execution", "external_system_execution", "cloud_attested_execution"}
-    replay = context not in {"local_interactive"}
+    replay = context not in {"local_interactive"} or _contains_any(lower, ["replay-attested", "cryptographically linked replay evidence"])
     return {
         "schema_version": "execution_context_semantics.v1",
         "execution_context": context,
@@ -430,17 +513,20 @@ def _extract_governance_actor(
     governed_action: str,
     continuity_revalidation: bool,
 ) -> dict[str, Any]:
+    lower = text.lower()
     actor_id = role or _identity_actor_from_text(text)
     if not actor_id:
-        return {}
-    lower = text.lower()
+        if "human approval" in lower or "human acknowledgment" in lower:
+            actor_id = "human-operator"
+        else:
+            return {}
     return {
         "schema_version": "governance_actor.v1",
         "actor_id": actor_id,
         "actor_type": _actor_type(actor_id, lower),
         "authority_scope": [_authority_scope(governed_action)],
         "delegation_allowed": _delegation_posture(lower) == "allowed_with_boundary",
-        "attestation_required": _contains_any(lower, ["attested operator", "attested actor", "attested reviewer", "identity attestation"]),
+        "attestation_required": _contains_any(lower, ["attested operator", "attested actor", "attested reviewer", "identity attestation", "attested human acknowledgment"]),
         "identity_continuity_required": continuity_revalidation or _contains_any(lower, ["identity continuity", "same operator", "same approver"]),
     }
 
@@ -464,18 +550,18 @@ def _extract_approval_chain_semantics(text: str, role: str, approval_count: int 
     lower = text.lower()
     if not (role or approval_count or "approval" in lower or "reviewer" in lower or "dual control" in lower):
         return {}
-    independence = _contains_any(lower, ["independent reviewer", "independent approval", "independent approvals", "cannot self-approve", "self approve", "dual control", "separation of duties", "originate and approve"])
+    independence = _contains_any(lower, ["independent reviewer", "independent approval", "independent approvals", "independent human approval", "cannot self-approve", "self approve", "dual control", "separation of duties", "originate and approve", "same actor may not satisfy both"])
     return {
         "schema_version": "approval_chain_semantics.v1",
         "required_approval_count": approval_count,
-        "required_roles": [role] if role else [],
+        "required_roles": _extract_approval_roles(text) or ([role] if role else []),
         "independence_required": independence,
-        "self_approval_prohibited": _contains_any(lower, ["cannot self-approve", "self approve", "separation of duties", "originate and approve"]),
+        "self_approval_prohibited": _contains_any(lower, ["cannot self-approve", "self approve", "separation of duties", "originate and approve", "same actor may not satisfy both"]),
         "independent_actor_refs": [role] if independence and role and "independent" not in role else [],
         "delegation_posture": _delegation_posture(lower),
-        "attestation_required": _contains_any(lower, ["attested operator", "attested actor", "attested reviewer", "identity attestation"]),
-        "human_in_loop_required": _contains_any(lower, ["human-in-the-loop", "human in the loop", "human approval"]),
-        "ai_recommendation_posture": "recommendation_only" if "ai-generated recommendation" in lower else "not_present",
+        "attestation_required": _contains_any(lower, ["attested operator", "attested actor", "attested reviewer", "identity attestation", "attested human acknowledgment"]),
+        "human_in_loop_required": _contains_any(lower, ["human-in-the-loop", "human in the loop", "human approval", "human acknowledgment"]),
+        "ai_recommendation_posture": "advisory_only" if _contains_any(lower, ["ai-generated recommendation", "ai-generated operational recommendations", "advisory governance inputs"]) else "not_present",
     }
 
 
@@ -498,6 +584,52 @@ def _extract_identity_continuity_semantics(
         else "review_required",
         "runtime_enforced_by": "Guard/Cloud",
     }
+
+
+def _extract_ai_boundary_semantics(text: str) -> dict[str, Any]:
+    lower = text.lower()
+    if not _contains_any(lower, ["ai-generated", "ai-assisted", "ai agent", "autonomous operational systems"]):
+        return {}
+    return {
+        "schema_version": "ai_boundary_semantics.v1",
+        "recommendation_posture": "advisory_only"
+        if _contains_any(lower, ["advisory governance inputs", "do not independently authorize execution"])
+        else "operator_review_required",
+        "independent_authorization_prohibited": _contains_any(lower, ["do not independently authorize execution", "no ai agent may independently approve"]),
+        "prohibited_authority_actions": _ai_prohibited_authority_actions(lower),
+        "human_acknowledgment_required": "attested human acknowledgment" in lower,
+        "runtime_enforced_by": "Guard/Cloud",
+    }
+
+
+def _ai_prohibited_authority_actions(lower: str) -> list[str]:
+    if "no ai agent may independently" not in lower:
+        return []
+    return [
+        action
+        for action in ["approve", "attest", "supersede", "revoke", "publish"]
+        if action in lower or f"{action}s" in lower
+    ]
+
+
+def _extract_emergency_delegation_semantics(text: str) -> dict[str, Any]:
+    lower = text.lower()
+    if not _contains_any(lower, ["delegated emergency override authority", "emergency delegation"]):
+        return {}
+    hours = _extract_validity_hours(text)
+    return {
+        "schema_version": "emergency_delegation_semantics.v1",
+        "delegation_posture": "temporary_emergency_override",
+        "authorized_action": "ai_assisted_remediation",
+        "incident_required": "declared operational incidents" in lower,
+        "validity_window": f"PT{hours}H" if hours is not None else "unspecified",
+        "renewal_requirement": "governance_review",
+    }
+
+
+def _extract_validity_hours(text: str) -> int | None:
+    match = re.search(r"(?:expires?|valid)\s+(?:for|after)?\s*(?P<hours>\d+)\s+hours?", text, re.IGNORECASE)
+    return int(match.group("hours")) if match else None
 
 
 def _identity_actor_from_text(text: str) -> str:
@@ -588,11 +720,19 @@ def _extract_evidence_terms(lower: str) -> list[str]:
         ("approval evidence", "approval_evidence"),
         ("decision trace", "decision_trace"),
         ("replay", "replay"),
+        ("replay-attested", "replay_attestation"),
+        ("cryptographically linked replay evidence", "cryptographically_linked_replay_evidence"),
         ("receipt", "publication_receipt"),
+        ("attested human acknowledgment", "attested_human_acknowledgment"),
     ]:
         if needle in lower:
             terms.append(term)
     return terms
+
+
+def _evidence_label(term: str) -> str:
+    label = term.replace("_", " ")
+    return label if "evidence" in label or "acknowledgment" in label else f"{label} evidence"
 
 
 def _ambiguities(text: str, candidate: dict[str, Any]) -> list[dict[str, str]]:
@@ -669,6 +809,8 @@ def _semantic_provenance(text: str, candidate: dict[str, Any]) -> list[dict[str,
         ("delegation_posture", (candidate.get("approval_chain_semantics") or {}).get("delegation_posture"), ["delegated authority", "delegation"]),
         ("attestation_requirement", (candidate.get("approval_chain_semantics") or {}).get("attestation_required"), ["attested operator", "attested actor", "attested reviewer", "identity attestation"]),
         ("identity_continuity", (candidate.get("identity_continuity_semantics") or {}).get("identity_continuity_required"), ["identity continuity", "same operator", "same approver", "resume"]),
+        ("ai_boundary", (candidate.get("ai_boundary_semantics") or {}).get("recommendation_posture"), ["ai-generated", "ai-assisted", "advisory governance inputs"]),
+        ("emergency_delegation", (candidate.get("emergency_delegation_semantics") or {}).get("validity_window"), ["delegated emergency override", "emergency delegation", "expires after"]),
     ]
     for field, value, needles in provenance_specs:
         if value in ("", None, {}, []):
