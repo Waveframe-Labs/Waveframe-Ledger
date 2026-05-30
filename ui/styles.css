@@ -652,12 +652,40 @@ h3 {
   gap: 12px;
 }
 
-.extraction-review article {
+.extraction-review article,
+.extraction-panel {
   min-width: 0;
   padding: 14px;
   border: 1px solid var(--line);
   border-radius: 7px;
   background: #fbfaf7;
+}
+
+.extraction-panel summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+.extraction-panel summary::-webkit-details-marker {
+  display: none;
+}
+
+.extraction-panel summary::after {
+  content: "Open";
+  display: inline-flex;
+  width: max-content;
+  margin-top: 8px;
+  padding: 2px 7px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--brand-dark);
+  background: #fff;
+  font-size: 0.72rem;
+  font-weight: 850;
+}
+
+.extraction-panel[open] summary::after {
+  content: "Collapse";
 }
 
 .extraction-review h4 {
@@ -670,6 +698,7 @@ h3 {
 
 .capability-review-panel {
   grid-column: 1 / -1;
+  border-left: 4px solid var(--brand);
 }
 
 .capability-list {
@@ -978,6 +1007,23 @@ textarea {
 .primary-action {
   color: #fff;
   background: var(--brand);
+}
+
+.commit-boundary-action {
+  min-width: 292px;
+  border-color: #a93600;
+  box-shadow: 0 0 0 3px rgba(255, 90, 0, 0.14), var(--shadow);
+}
+
+.commit-boundary-action:not(:disabled)::after {
+  content: "Deterministic boundary";
+  display: block;
+  margin-top: -4px;
+  color: #ffe4d6;
+  font-size: 0.66rem;
+  font-weight: 850;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
 }
 
 .primary-action:hover {

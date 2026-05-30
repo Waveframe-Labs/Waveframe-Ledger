@@ -9,6 +9,8 @@ const extractPolicyButton = document.querySelector("#extract-policy-button");
 const useExtractionButton = document.querySelector("#use-extraction-button");
 const applyAllExtractionButton = document.querySelector("#apply-all-extraction-button");
 const openReconciliationButton = document.querySelector("#open-reconciliation-button");
+const manualFirstButton = document.querySelector("#manual-first-button");
+const manualAuthorityDefinition = document.querySelector("#manual-authority-definition");
 const policySourceText = document.querySelector("#policy-source-text");
 const draftSessionStatus = document.querySelector("#draft-session-status");
 let currentArtifacts = null;
@@ -239,6 +241,7 @@ function clearAuthoringFields() {
       field.value = "";
     }
   }
+  closeManualAuthorityDefinition();
 }
 
 function clearExtractionReview() {
@@ -408,6 +411,9 @@ function renderSemanticExtraction(extraction) {
   renderExtractionList("#extracted-missing", extraction.missing_information, "No undefined anchor fields detected.");
   renderProvenanceList("#semantic-provenance", extraction.semantic_provenance);
   renderReconciliationWorkflow("#reconciliation-workflow", extraction.ambiguities);
+  if (extraction.missing_information?.length) {
+    openManualAuthorityDefinition();
+  }
   $("#extraction-status").textContent = `${extraction.schema_version} requires operator confirmation. Source hash ${shortHash(extraction.source_hash)}.`;
 }
 
@@ -598,12 +604,27 @@ function openReconciliationReview() {
   if (!currentExtraction) return;
   const ambiguityCount = currentExtraction.ambiguities?.length || 0;
   const provenanceCount = currentExtraction.semantic_provenance?.length || 0;
+  document.querySelector("#reconciliation-workflow")?.closest("details")?.setAttribute("open", "");
   document.querySelector("#reconciliation-workflow")?.scrollIntoView({ behavior: "smooth", block: "center" });
-  $("#extraction-status").textContent = `Step 3 - Reconciliation Review: ${ambiguityCount} ambiguities and ${provenanceCount} provenance entries are ready for operator interpretation decisions.`;
+  $("#extraction-status").textContent = `Step 3 - Reconciliation Workspace: ${ambiguityCount} ambiguities and ${provenanceCount} provenance entries are ready for operator interpretation decisions.`;
   renderOperatorGuidance(
     "Resolve interpretation boundaries.",
     "Save interpretation decisions, then commit semantic interpretation before impact review.",
   );
+}
+
+function openManualAuthorityDefinition() {
+  manualAuthorityDefinition?.setAttribute("open", "");
+}
+
+function closeManualAuthorityDefinition() {
+  manualAuthorityDefinition?.removeAttribute("open");
+}
+
+function startManualFirstAuthoring() {
+  openManualAuthorityDefinition();
+  form.elements.protected_system?.focus();
+  draftSessionStatus.textContent = "Manual-first authoring opened. Fields remain empty until the operator writes authority semantics.";
 }
 
 function semanticExtrasFromCandidate(candidate) {
@@ -3128,6 +3149,7 @@ extractPolicyButton.addEventListener("click", extractPolicySemantics);
 useExtractionButton.addEventListener("click", commitSemanticInterpretation);
 applyAllExtractionButton?.addEventListener("click", commitSemanticInterpretation);
 openReconciliationButton.addEventListener("click", openReconciliationReview);
+manualFirstButton?.addEventListener("click", startManualFirstAuthoring);
 policySourceText.addEventListener("input", () => {
   policySourceDirty = true;
   currentExtraction = null;

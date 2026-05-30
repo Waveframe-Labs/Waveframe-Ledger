@@ -124,6 +124,9 @@ def test_new_working_session_is_empty_not_sample_authority_clone():
     assert "No committed authority draft" in body
     assert "Manual Authority Definition" in html
     assert "Advanced Manual Authoring" not in html
+    assert '<details id="manual-authority-definition" class="authoring-section governance-module">' in html
+    assert "Manual-first authoring" in html
+    assert "startManualFirstAuthoring" in source
     assert ">Corporate Treasury Transfer System transfers above" not in html
     assert 'value="Corporate Treasury Transfer System"' not in html
     assert 'value="transfer funds"' not in html
@@ -242,6 +245,7 @@ def test_authoring_ui_exposes_staged_pipeline_not_apply_buttons():
     assert "Extract Governance Meaning" in html
     assert "Reconcile Ambiguities" in html
     assert "Commit Semantic Interpretation" in html
+    assert "commit-boundary-action" in html
     assert "Generate Operational Impact" in html
     assert "Apply Deterministic Fields" not in html
     assert "Apply All Candidate Semantics" not in html
@@ -263,14 +267,25 @@ def test_extraction_ui_renders_capabilities_as_first_class_surface():
     assert "function capabilitySummaries" in source
 
 
+def test_extraction_gaps_open_manual_definition_without_prefilling_values():
+    source = APP_JS.read_text(encoding="utf-8")
+    body = _function_body(source, "renderSemanticExtraction")
+
+    assert "extraction.missing_information?.length" in body
+    assert "openManualAuthorityDefinition()" in body
+    assert "function closeManualAuthorityDefinition" in source
+
+
 def test_extraction_ui_surfaces_operator_resolution_workflow():
     html = (ROOT / "ui" / "index.html").read_text(encoding="utf-8")
     source = APP_JS.read_text(encoding="utf-8")
     body = _function_body(source, "renderSemanticExtraction")
 
     assert 'id="reconciliation-workflow"' in html
-    assert "Operator resolution workflow" in html
+    assert "Reconciliation Workspace" in html
+    assert "Operator resolution workflow" not in html
     assert "renderReconciliationWorkflow(\"#reconciliation-workflow\"" in body
+    assert "closest(\"details\")?.setAttribute(\"open\", \"\")" in source
     assert "Block publication" in source
     assert "Require signed authority timestamp" in source
     assert "Mark unresolved ambiguity" in source

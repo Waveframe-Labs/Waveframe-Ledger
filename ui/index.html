@@ -192,45 +192,45 @@
             <div class="action-row">
               <button id="extract-policy-button" class="secondary-action" type="button">Extract Governance Meaning</button>
               <button id="open-reconciliation-button" class="secondary-action" type="button" disabled>Reconcile Ambiguities</button>
-              <button id="use-extraction-button" class="primary-action" type="button" disabled>Commit Semantic Interpretation</button>
+              <button id="use-extraction-button" class="primary-action commit-boundary-action" type="button" disabled>Commit Semantic Interpretation</button>
               <button id="generate-button" class="primary-action" type="button" disabled>Generate Operational Impact</button>
+              <button id="manual-first-button" class="tertiary-action" type="button">Manual-first authoring</button>
             </div>
             <div id="extraction-review" class="extraction-review" aria-live="polite">
-              <article class="capability-review-panel">
-                <h4>Step 2 - Candidate Semantics</h4>
-                <p class="candidate-warning">Provisional. Not yet committed as authority meaning.</p>
+              <details class="extraction-panel capability-review-panel" open>
+                <summary>
+                  <h4>Step 2 - Candidate Semantics</h4>
+                  <p class="candidate-warning">Provisional. Not yet committed as authority meaning.</p>
+                </summary>
                 <div id="extracted-capabilities" class="capability-list"></div>
-              </article>
-              <article>
-                <h4>Extracted authority candidate</h4>
+              </details>
+              <details class="extraction-panel">
+                <summary><h4>Extracted authority candidate</h4></summary>
                 <dl id="extracted-authority" class="compact-dl"></dl>
-              </article>
-              <article>
-                <h4>Operational governance narrative</h4>
+              </details>
+              <details class="extraction-panel">
+                <summary><h4>Operational governance narrative</h4></summary>
                 <ul id="extracted-rules" class="operations-list"></ul>
-              </article>
-              <article>
-                <h4>Ambiguities</h4>
+              </details>
+              <details class="extraction-panel" open>
+                <summary><h4>Reconciliation Workspace</h4></summary>
                 <ul id="extracted-ambiguities" class="operations-list"></ul>
-              </article>
-              <article>
-                <h4>Interpretation boundaries</h4>
-                <ul id="extracted-missing" class="operations-list"></ul>
-              </article>
-              <article>
-                <h4>Semantic provenance</h4>
-                <ul id="semantic-provenance" class="operations-list"></ul>
-              </article>
-              <article>
-                <h4>Operator resolution workflow</h4>
                 <div id="reconciliation-workflow" class="resolution-workflow"></div>
-              </article>
+              </details>
+              <details class="extraction-panel">
+                <summary><h4>Interpretation boundaries</h4></summary>
+                <ul id="extracted-missing" class="operations-list"></ul>
+              </details>
+              <details class="extraction-panel">
+                <summary><h4>Semantic provenance</h4></summary>
+                <ul id="semantic-provenance" class="operations-list"></ul>
+              </details>
               <p id="extraction-status" class="quiet">Extraction has not run yet. Operator confirmation is required before an authority draft changes.</p>
             </div>
           </section>
 
           <form id="authority-form" class="authority-form">
-            <details class="authoring-section governance-module">
+            <details id="manual-authority-definition" class="authoring-section governance-module">
               <summary class="authoring-copy">
                 <h3>Manual Authority Definition</h3>
                 <p>Operator-authored semantic anchors. These fields stay empty until explicitly written or populated by a committed interpretation.</p>
