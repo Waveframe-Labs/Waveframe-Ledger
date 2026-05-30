@@ -291,6 +291,25 @@ def test_extraction_ui_surfaces_operator_resolution_workflow():
     assert "Mark unresolved ambiguity" in source
 
 
+def test_reconciliation_workspace_records_operator_decisions_and_blocks_unresolved_commit():
+    source = APP_JS.read_text(encoding="utf-8")
+    render_body = _function_body(source, "renderReconciliationWorkflow")
+    commit_gate = _function_body(source, "canCommitSemanticInterpretation")
+    commit_body = _function_body(source, "commitSemanticInterpretation")
+
+    assert "semantic_interpretation_decision.v1" in source
+    assert "semantic_unresolved_blocker.v1" in source
+    assert "interpretationAuditTrail" in source
+    assert "reconciliation-audit-trail" in render_body
+    assert "dataset.saveResolution" in render_body
+    assert "dataset.markUnresolved" in render_body
+    assert "Operator rationale is required" in source
+    assert "reconciliationIsComplete()" in commit_gate
+    assert "Resolve or explicitly clear all reconciliation blockers" in commit_body
+    assert "governance_semantic_reconciliation" in commit_body
+    assert "semantic_reconciliation_projection" in commit_body
+
+
 def test_continuity_posture_label_is_operational_not_alarmist():
     source = APP_JS.read_text(encoding="utf-8")
 

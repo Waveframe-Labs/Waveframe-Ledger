@@ -16,6 +16,10 @@ const draftSessionStatus = document.querySelector("#draft-session-status");
 let currentArtifacts = null;
 let pendingRegistration = null;
 let currentExtraction = null;
+let currentReconciliation = null;
+let interpretationDecisions = [];
+let unresolvedReconciliationBlocks = [];
+let interpretationAuditTrail = [];
 let currentSemanticExtras = {};
 let committedDraft = null;
 let authoringSessionDirty = false;
@@ -246,6 +250,7 @@ function clearAuthoringFields() {
 
 function clearExtractionReview() {
   currentExtraction = null;
+  resetReconciliationState();
   currentSemanticExtras = {};
   renderCapabilities("#extracted-capabilities", []);
   renderDefinitionValues("#extracted-authority", {
@@ -258,6 +263,13 @@ function clearExtractionReview() {
   renderProvenanceList("#semantic-provenance", []);
   renderReconciliationWorkflow("#reconciliation-workflow", []);
   $("#extraction-status").textContent = "Extraction has not run yet. Operator confirmation is required before an authority draft changes.";
+}
+
+function resetReconciliationState() {
+  currentReconciliation = null;
+  interpretationDecisions = [];
+  unresolvedReconciliationBlocks = [];
+  interpretationAuditTrail = [];
 }
 
 function clearOperationalImpact() {
@@ -347,6 +359,7 @@ async function extractPolicySemantics() {
       throw new Error(extraction.error || "Unable to extract governance meaning.");
     }
     currentExtraction = extraction;
+    resetReconciliationState();
     policySourceDirty = false;
     setSemanticState({
       draft_state: committedDraft ? "committed" : "uncommitted",
@@ -481,23 +494,71 @@ function renderReconciliationWorkflow(selector, ambiguities) {
     node.appendChild(empty);
     return;
   }
-  for (const ambiguity of list) {
+  for (const [index, ambiguity] of list.entries()) {
+    const normalized = semanticAmbiguity(ambiguity, index + 1);
+    const existingDecision = interpretationDecisions.find((decision) => decision.ambiguity_id === normalized.ambiguity_id);
+    const existingBlock = unresolvedReconciliationBlocks.find((block) => block.ambiguity_id === normalized.ambiguity_id);
     const item = document.createElement("div");
     item.className = "resolution-item";
+    item.dataset.ambiguityId = normalized.ambiguity_id;
     const title = document.createElement("strong");
-    title.textContent = formatLabel(ambiguity.ambiguity_type || ambiguity.type || "semantic ambiguity");
+    title.textContent = formatLabel(normalized.ambiguity_type);
     const summary = document.createElement("p");
-    summary.textContent = ambiguity.summary || ambiguity.text || "Operator interpretation is required.";
+    summary.textContent = normalized.summary || "Operator interpretation is required.";
     const choices = document.createElement("div");
     choices.className = "resolution-choices";
     for (const choice of resolutionChoicesForAmbiguity(ambiguity)) {
-      const label = document.createElement("span");
-      label.textContent = choice;
-      choices.appendChild(label);
+      const button = document.createElement("button");
+      button.type = "button";
+      button.dataset.resolutionChoice = choice;
+      button.className = choice === existingDecision?.selected_interpretation ? "selected" : "";
+      button.textContent = choice;
+      choices.appendChild(button);
     }
-    item.append(title, summary, choices);
+    const rationale = document.createElement("textarea");
+    rationale.rows = 2;
+    rationale.dataset.resolutionRationale = normalized.ambiguity_id;
+    rationale.placeholder = "Operator rationale for this interpretation";
+    rationale.value = existingDecision?.justification || existingBlock?.rationale || "";
+    const actions = document.createElement("div");
+    actions.className = "resolution-actions";
+    const save = document.createElement("button");
+    save.type = "button";
+    save.className = "tertiary-action";
+    save.dataset.saveResolution = normalized.ambiguity_id;
+    save.textContent = "Save interpretation decision";
+    const unresolved = document.createElement("button");
+    unresolved.type = "button";
+    unresolved.className = "tertiary-action";
+    unresolved.dataset.markUnresolved = normalized.ambiguity_id;
+    unresolved.textContent = "Mark unresolved blocker";
+    actions.append(save, unresolved);
+    const status = document.createElement("p");
+    status.className = "resolution-status";
+    status.textContent = existingDecision
+      ? `Resolved by ${existingDecision.operator}: ${existingDecision.selected_interpretation}`
+      : existingBlock
+        ? `Unresolved blocker: ${existingBlock.rationale || existingBlock.selected_interpretation}`
+        : "Decision required before semantic commitment.";
+    item.append(title, summary, choices, rationale, actions, status);
     node.appendChild(item);
   }
+  const audit = document.createElement("div");
+  audit.id = "reconciliation-audit-trail";
+  audit.className = "reconciliation-audit-trail";
+  const auditTitle = document.createElement("strong");
+  auditTitle.textContent = "Interpretation audit trail";
+  const auditList = document.createElement("ul");
+  const entries = interpretationAuditTrail.length
+    ? interpretationAuditTrail
+    : [{ action: "awaiting_operator_decisions", summary: "No interpretation decisions recorded yet." }];
+  for (const entry of entries) {
+    const line = document.createElement("li");
+    line.textContent = entry.summary || formatLabel(entry.action);
+    auditList.appendChild(line);
+  }
+  audit.append(auditTitle, auditList);
+  node.appendChild(audit);
 }
 
 function resolutionChoicesForAmbiguity(ambiguity) {
@@ -512,6 +573,184 @@ function resolutionChoicesForAmbiguity(ambiguity) {
     return ["Require independent actors", "Define reviewer roles", "Mark unresolved ambiguity"];
   }
   return ["Resolve interpretation", "Reject candidate meaning", "Mark unresolved ambiguity"];
+}
+
+function semanticAmbiguity(item, index = 1) {
+  return {
+    schema_version: "semantic_ambiguity.v1",
+    ambiguity_id: item.ambiguity_id || `ambiguity-${String(index).padStart(3, "0")}`,
+    ambiguity_type: item.ambiguity_type || item.type || "semantic_ambiguity",
+    text: item.text || item.summary || "",
+    summary: item.summary || item.text || "",
+    requires_operator_resolution: item.requires_operator_resolution !== false,
+  };
+}
+
+function requiredSemanticAmbiguities() {
+  return (currentExtraction?.ambiguities || [])
+    .map((item, index) => semanticAmbiguity(item, index + 1))
+    .filter((item) => item.requires_operator_resolution);
+}
+
+function decisionTypeForAmbiguity(ambiguity) {
+  const type = ambiguity.ambiguity_type || ambiguity.type || "";
+  if (type === "timestamp_source_unspecified") return "timestamp_source_definition";
+  if (type === "state_snapshot_subject_unspecified") return "state_snapshot_subject_definition";
+  if (type === "undefined_threshold") return "threshold_definition";
+  return "operator_semantic_interpretation";
+}
+
+function fieldForDecisionType(decisionType) {
+  return {
+    threshold_definition: "escalation_threshold",
+    timestamp_source_definition: "timestamp_source",
+    state_snapshot_subject_definition: "state_snapshot_subject",
+  }[decisionType] || decisionType;
+}
+
+function resolvedValueForChoice(ambiguity, choice) {
+  const decisionType = decisionTypeForAmbiguity(ambiguity);
+  if (decisionType === "timestamp_source_definition") {
+    if (choice === "Assume orchestrator timestamp") return "execution_payload";
+    if (choice === "Require signed authority timestamp") return "signed_oracle";
+  }
+  if (decisionType === "state_snapshot_subject_definition") {
+    if (choice === "Require active governance state snapshot") return "active_governance_state";
+    if (choice === "Require current policy version snapshot") return "current_policy_version";
+  }
+  if (decisionType === "threshold_definition") {
+    const match = String(choice).match(/\d[\d,]*/);
+    return match ? Number(match[0].replaceAll(",", "")) : choice;
+  }
+  return choice;
+}
+
+function isUnresolvedChoice(choice) {
+  return /unresolved|block publication/i.test(String(choice || ""));
+}
+
+function buildInterpretationDecision(ambiguity, choice, rationale) {
+  const decisionType = decisionTypeForAmbiguity(ambiguity);
+  const resolvedValue = resolvedValueForChoice(ambiguity, choice);
+  const field = fieldForDecisionType(decisionType);
+  const rejected = resolutionChoicesForAmbiguity(ambiguity).filter((candidate) => candidate !== choice);
+  const stablePayload = {
+    decision_type: decisionType,
+    field,
+    selected_interpretation: choice,
+    rejected_interpretations: rejected,
+    operator: "local-ledger-ui",
+    justification: rationale,
+  };
+  const hash = stableHash(stablePayload).replace("sha256:", "");
+  return {
+    schema_version: "semantic_interpretation_decision.v1",
+    decision_id: `decision-${hash.slice(0, 12)}`,
+    field,
+    selected_interpretation: choice,
+    rejected_interpretations: rejected,
+    decision_type: decisionType,
+    ambiguity_id: ambiguity.ambiguity_id,
+    resolved_value: resolvedValue,
+    rationale,
+    operator: "local-ledger-ui",
+    timestamp: stableDecisionTimestamp(hash),
+    justification: rationale,
+    decision_posture: "operator_reviewed",
+  };
+}
+
+function stableDecisionTimestamp(hash) {
+  const seconds = parseInt(hash.slice(0, 8), 16) % 60;
+  return `2026-01-01T00:00:${String(seconds).padStart(2, "0")}Z`;
+}
+
+function recordInterpretationAudit(action, summary, details = {}) {
+  const payload = { action, summary, details };
+  const hash = stableHash(payload).replace("sha256:", "");
+  interpretationAuditTrail.push({
+    schema_version: "semantic_interpretation_audit_event.v1",
+    event_id: `interpretation-audit-${hash.slice(0, 12)}`,
+    action,
+    summary,
+    details,
+    timestamp: stableDecisionTimestamp(hash),
+  });
+}
+
+function buildGovernanceSemanticReconciliation() {
+  if (!currentExtraction) return null;
+  const ambiguities = requiredSemanticAmbiguities();
+  const resolvedIds = new Set(interpretationDecisions.map((decision) => decision.ambiguity_id));
+  const blockedIds = new Set(unresolvedReconciliationBlocks.map((block) => block.ambiguity_id));
+  const unresolved = ambiguities.filter((ambiguity) => !resolvedIds.has(ambiguity.ambiguity_id) || blockedIds.has(ambiguity.ambiguity_id));
+  const normalized = unresolved.length ? {} : normalizedAuthorityFromDecisions(currentExtraction.candidate_authority || {});
+  return {
+    schema_version: "governance_semantic_reconciliation.v1",
+    source_id: currentExtraction.source_id,
+    source_hash: currentExtraction.source_hash,
+    extraction_id: `extraction-${String(currentExtraction.source_hash || "").replace("sha256:", "").slice(0, 12)}`,
+    what_was_inferred: currentExtraction.candidate_rules || [],
+    ambiguities,
+    operator_interpretation_decisions: interpretationDecisions,
+    normalization_decisions: normalizationDecisions(),
+    rejected_candidates: unresolvedReconciliationBlocks,
+    semantic_conflicts: [],
+    unresolved_ambiguities: unresolved,
+    final_normalized_semantic_meaning: normalized,
+    interpretation_completeness_posture: unresolved.length ? "operator_required" : "complete",
+    interpretation_audit_trail: interpretationAuditTrail,
+  };
+}
+
+function normalizedAuthorityFromDecisions(candidate) {
+  const normalized = structuredClone(candidate || {});
+  for (const decision of interpretationDecisions) {
+    if (decision.decision_type === "threshold_definition") {
+      normalized.escalation_threshold = decision.resolved_value;
+      normalized.escalation_semantics = `Executions above $${Number(decision.resolved_value).toLocaleString()} require escalation review.`;
+    }
+    if (decision.decision_type === "timestamp_source_definition") {
+      const temporal = { ...(normalized.temporal_semantics || {}) };
+      temporal.schema_version = "temporal_authority_semantics.v1";
+      temporal.timestamp_source = decision.resolved_value;
+      temporal.runtime_enforced_by = "Guard/Cloud";
+      normalized.temporal_semantics = temporal;
+    }
+    if (decision.decision_type === "state_snapshot_subject_definition") {
+      const snapshot = { ...(normalized.state_snapshot_semantics || {}) };
+      snapshot.schema_version = "state_posture_snapshot_semantics.v1";
+      snapshot.snapshot_required = true;
+      snapshot.snapshot_hash_algorithm = "sha256";
+      snapshot.snapshot_subject = decision.resolved_value;
+      snapshot.resume_comparison = "snapshot_hash_must_match_active_state_hash";
+      snapshot.drift_result = "continuity_drift_detected";
+      snapshot.runtime_enforced_by = "Guard/Cloud";
+      normalized.state_snapshot_semantics = snapshot;
+    }
+  }
+  return normalized;
+}
+
+function normalizationDecisions() {
+  const labels = [];
+  for (const decision of interpretationDecisions) {
+    if (decision.decision_type === "threshold_definition") labels.push("threshold normalized from operator interpretation");
+    if (decision.decision_type === "timestamp_source_definition") labels.push("timestamp source normalized from operator interpretation");
+    if (decision.decision_type === "state_snapshot_subject_definition") labels.push("state snapshot subject normalized from operator interpretation");
+  }
+  return [...new Set(labels)];
+}
+
+function updateReconciliationState() {
+  currentReconciliation = buildGovernanceSemanticReconciliation();
+  syncPublicationActions();
+}
+
+function reconciliationIsComplete() {
+  if (!currentExtraction) return false;
+  const reconciliation = currentReconciliation || buildGovernanceSemanticReconciliation();
+  return reconciliation?.interpretation_completeness_posture === "complete";
 }
 
 function summarizeArray(values) {
@@ -553,9 +792,29 @@ function renderProvenanceList(selector, items) {
 }
 
 function commitSemanticInterpretation() {
-  if (!currentExtraction?.candidate_authority) return;
-  applyDraftToForm(currentExtraction.candidate_authority);
-  currentSemanticExtras = semanticExtrasFromCandidate(currentExtraction.candidate_authority);
+  currentReconciliation = currentReconciliation || buildGovernanceSemanticReconciliation();
+  if (!currentExtraction?.candidate_authority || !reconciliationIsComplete()) {
+    openReconciliationReview();
+    $("#extraction-status").textContent = "Resolve or explicitly clear all reconciliation blockers before committing semantic interpretation.";
+    return;
+  }
+  recordInterpretationAudit("semantic_interpretation_committed", "Semantic interpretation committed as deterministic draft meaning.");
+  currentReconciliation = buildGovernanceSemanticReconciliation();
+  const normalizedMeaning = currentReconciliation.final_normalized_semantic_meaning || currentExtraction.candidate_authority;
+  applyDraftToForm(normalizedMeaning);
+  currentSemanticExtras = {
+    ...semanticExtrasFromCandidate(normalizedMeaning),
+    governance_semantic_reconciliation: currentReconciliation,
+    semantic_reconciliation_projection: {
+      schema_version: "semantic_reconciliation_projection.v1",
+      source_id: currentReconciliation.source_id,
+      unresolved_ambiguities: currentReconciliation.unresolved_ambiguities,
+      operator_reviewed_interpretations: currentReconciliation.operator_interpretation_decisions,
+      conflicting_extracted_semantics: currentReconciliation.semantic_conflicts,
+      normalization_decisions: currentReconciliation.normalization_decisions,
+      interpretation_completeness_posture: currentReconciliation.interpretation_completeness_posture,
+    },
+  };
   currentArtifacts = null;
   pendingRegistration = null;
   policySourceDirty = false;
@@ -594,6 +853,7 @@ function commitSemanticInterpretation() {
     authorityRegistered: false,
   });
   $("#extraction-status").textContent = `Semantic interpretation committed. Fingerprint ${shortHash(committedDraftHash() || "draft:unavailable")}. Generate Operational Impact next.`;
+  renderReconciliationWorkflow("#reconciliation-workflow", currentExtraction.ambiguities);
   renderOperatorGuidance(
     "Semantic interpretation committed.",
     "Generate operational impact from the committed semantic interpretation before publication review.",
@@ -625,6 +885,92 @@ function startManualFirstAuthoring() {
   openManualAuthorityDefinition();
   form.elements.protected_system?.focus();
   draftSessionStatus.textContent = "Manual-first authoring opened. Fields remain empty until the operator writes authority semantics.";
+}
+
+function handleReconciliationInteraction(event) {
+  const choiceButton = event.target.closest("[data-resolution-choice]");
+  if (choiceButton) {
+    const item = choiceButton.closest(".resolution-item");
+    item?.querySelectorAll("[data-resolution-choice]").forEach((button) => button.classList.remove("selected"));
+    choiceButton.classList.add("selected");
+    item.dataset.selectedChoice = choiceButton.dataset.resolutionChoice;
+    return;
+  }
+
+  const saveButton = event.target.closest("[data-save-resolution]");
+  if (saveButton) {
+    saveInterpretationDecision(saveButton.dataset.saveResolution);
+    return;
+  }
+
+  const unresolvedButton = event.target.closest("[data-mark-unresolved]");
+  if (unresolvedButton) {
+    markInterpretationUnresolved(unresolvedButton.dataset.markUnresolved);
+  }
+}
+
+function saveInterpretationDecision(ambiguityId) {
+  const item = document.querySelector(`[data-ambiguity-id="${ambiguityId}"]`);
+  const ambiguity = requiredSemanticAmbiguities().find((candidate) => candidate.ambiguity_id === ambiguityId);
+  const choice = item?.dataset.selectedChoice || item?.querySelector("[data-resolution-choice].selected")?.dataset.resolutionChoice;
+  const rationale = item?.querySelector("[data-resolution-rationale]")?.value?.trim() || "";
+  const status = item?.querySelector(".resolution-status");
+  if (!ambiguity || !choice) {
+    if (status) status.textContent = "Select an interpretation before saving the decision.";
+    return;
+  }
+  if (!rationale) {
+    if (status) status.textContent = "Operator rationale is required before saving the decision.";
+    return;
+  }
+  if (isUnresolvedChoice(choice)) {
+    markInterpretationUnresolved(ambiguityId, choice, rationale);
+    return;
+  }
+  const decision = buildInterpretationDecision(ambiguity, choice, rationale);
+  interpretationDecisions = [
+    ...interpretationDecisions.filter((item) => item.ambiguity_id !== ambiguityId),
+    decision,
+  ];
+  unresolvedReconciliationBlocks = unresolvedReconciliationBlocks.filter((item) => item.ambiguity_id !== ambiguityId);
+  recordInterpretationAudit(
+    "interpretation_decision_saved",
+    `${formatLabel(ambiguity.ambiguity_type)} resolved as ${choice}.`,
+    { ambiguity_id: ambiguityId, decision_id: decision.decision_id },
+  );
+  updateReconciliationState();
+  renderReconciliationWorkflow("#reconciliation-workflow", currentExtraction.ambiguities);
+}
+
+function markInterpretationUnresolved(ambiguityId, selectedInterpretation = "Mark unresolved ambiguity", rationale = "") {
+  const ambiguity = requiredSemanticAmbiguities().find((candidate) => candidate.ambiguity_id === ambiguityId);
+  const item = document.querySelector(`[data-ambiguity-id="${ambiguityId}"]`);
+  const enteredRationale = rationale || item?.querySelector("[data-resolution-rationale]")?.value?.trim() || "";
+  const status = item?.querySelector(".resolution-status");
+  if (!ambiguity) return;
+  if (!enteredRationale) {
+    if (status) status.textContent = "Operator rationale is required before marking an ambiguity unresolved.";
+    return;
+  }
+  unresolvedReconciliationBlocks = [
+    ...unresolvedReconciliationBlocks.filter((block) => block.ambiguity_id !== ambiguityId),
+    {
+      schema_version: "semantic_unresolved_blocker.v1",
+      ambiguity_id: ambiguityId,
+      ambiguity_type: ambiguity.ambiguity_type,
+      selected_interpretation: selectedInterpretation,
+      rationale: enteredRationale,
+      operator: "local-ledger-ui",
+    },
+  ];
+  interpretationDecisions = interpretationDecisions.filter((decision) => decision.ambiguity_id !== ambiguityId);
+  recordInterpretationAudit(
+    "interpretation_marked_unresolved",
+    `${formatLabel(ambiguity.ambiguity_type)} remains an unresolved blocker.`,
+    { ambiguity_id: ambiguityId },
+  );
+  updateReconciliationState();
+  renderReconciliationWorkflow("#reconciliation-workflow", currentExtraction.ambiguities);
 }
 
 function semanticExtrasFromCandidate(candidate) {
@@ -780,7 +1126,11 @@ function canExtractSemantics() {
 }
 
 function canCommitSemanticInterpretation() {
-  return Boolean(currentExtraction?.candidate_authority && semanticStateMachine.semantic_state !== "committed");
+  return Boolean(
+    currentExtraction?.candidate_authority
+      && semanticStateMachine.semantic_state !== "committed"
+      && reconciliationIsComplete(),
+  );
 }
 
 function canReconcileAmbiguities() {
@@ -3150,9 +3500,11 @@ useExtractionButton.addEventListener("click", commitSemanticInterpretation);
 applyAllExtractionButton?.addEventListener("click", commitSemanticInterpretation);
 openReconciliationButton.addEventListener("click", openReconciliationReview);
 manualFirstButton?.addEventListener("click", startManualFirstAuthoring);
+document.querySelector("#reconciliation-workflow")?.addEventListener("click", handleReconciliationInteraction);
 policySourceText.addEventListener("input", () => {
   policySourceDirty = true;
   currentExtraction = null;
+  resetReconciliationState();
   useExtractionButton.disabled = true;
   if (applyAllExtractionButton) applyAllExtractionButton.disabled = true;
   openReconciliationButton.disabled = true;
