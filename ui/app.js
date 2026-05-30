@@ -1621,7 +1621,7 @@ function coherenceTitle(posture) {
     healthy: "Registry Healthy",
     stale: "State Stale",
     invalidated: "State Invalidated",
-    continuity_risk: "Continuity Risk",
+    continuity_risk: "Continuity Controls Active",
     replay_risk: "Replay Risk",
     authority_conflict: "Authority Conflict",
   }[posture] || formatLabel(posture);
@@ -1630,7 +1630,7 @@ function coherenceTitle(posture) {
 function coherenceSummary({ posture, continuityRisks, replayRisks, authorityConflicts, staleProjections }) {
   if (posture === "healthy") return "Registry coherence is valid across lifecycle, replay, continuity, and state freshness.";
   if (authorityConflicts) return `${authorityConflicts} authority conflict${authorityConflicts === 1 ? "" : "s"} require lifecycle reconciliation.`;
-  if (continuityRisks) return `${continuityRisks} continuity risk${continuityRisks === 1 ? "" : "s"} present in local authority lineage.`;
+  if (continuityRisks) return `${continuityRisks} continuity-sensitive authority posture${continuityRisks === 1 ? "" : "s"} present in local authority lineage.`;
   if (replayRisks) return `${replayRisks} replay posture${replayRisks === 1 ? "" : "s"} missing receipt-backed continuity.`;
   return `${staleProjections} governance view${staleProjections === 1 ? "" : "s"} stale or invalidated relative to current workflow state.`;
 }
@@ -1892,7 +1892,7 @@ function renderCoherenceBanner(selector, coherence) {
   metrics.className = "coherence-metrics";
   metrics.append(
     coherenceMetric("Replay Continuity", coherence.counts.replay_degradation ? "Degraded" : "Stable", coherence.counts.replay_degradation ? "replay_risk" : "healthy"),
-    coherenceMetric("Continuity Risk", coherence.counts.continuity_risk, coherence.counts.continuity_risk ? "continuity_risk" : "healthy"),
+    coherenceMetric("Continuity Controls", coherence.counts.continuity_risk, coherence.counts.continuity_risk ? "continuity_risk" : "healthy"),
     coherenceMetric("Authority Conflicts", coherence.counts.authority_conflict, coherence.counts.authority_conflict ? "authority_conflict" : "healthy"),
     coherenceMetric("State Validity", coherence.counts.stale_projections ? `${coherence.counts.stale_projections} stale` : "Valid", coherence.counts.stale_projections ? "stale" : "healthy"),
   );
@@ -2358,7 +2358,7 @@ function renderRegistryDetailSummary(detail, entry) {
   metrics.append(
     registryDetailMetric("Lifecycle", formatLabel(entry.status), latestLifecycleText(entry)),
     registryDetailMetric("Replay", replayReadinessLabel(summary.replay_readiness), summary.replay_readiness?.receipt_present ? "Receipt evidence present" : "Receipt evidence pending"),
-    registryDetailMetric("Continuity", entry.continuity_posture || "review recommended", coherence.severity === "continuity_risk" ? "Continuity review advised" : "Continuity posture recorded"),
+    registryDetailMetric("Continuity", entry.continuity_posture || "review recommended", coherence.severity === "continuity_risk" ? "Continuity controls active" : "Continuity posture recorded"),
     registryDetailMetric("Coherence", coherence.label, freshnessLabel(coherence.freshness[0] || {})),
   );
   const scope = registryScopeStrip(coherence.causality);
@@ -2502,7 +2502,7 @@ function continuityCausalityPanel(causality) {
   const reasonLabel = document.createElement("strong");
   reasonLabel.textContent = "Reason";
   const reasonText = document.createElement("span");
-  reasonText.textContent = causality?.reason || "No continuity risk is indicated by the current local registry state.";
+  reasonText.textContent = causality?.reason || "No continuity-sensitive posture is indicated by the current local registry state.";
   reason.append(reasonLabel, reasonText);
   const impact = document.createElement("p");
   impact.className = "causality-impact";

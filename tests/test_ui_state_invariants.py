@@ -291,6 +291,15 @@ def test_extraction_ui_surfaces_operator_resolution_workflow():
     assert "Mark unresolved ambiguity" in source
 
 
+def test_continuity_posture_label_is_operational_not_alarmist():
+    source = APP_JS.read_text(encoding="utf-8")
+
+    assert 'continuity_risk: "Continuity Controls Active"' in source
+    assert 'coherenceMetric("Continuity Controls"' in source
+    assert '"Continuity Risk"' not in source
+    assert "continuity risk" not in source.lower()
+
+
 def test_escalation_authoring_is_text_driven_not_single_threshold_field():
     html = (ROOT / "ui" / "index.html").read_text(encoding="utf-8")
     source = APP_JS.read_text(encoding="utf-8")
