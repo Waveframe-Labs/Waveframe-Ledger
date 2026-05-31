@@ -1212,6 +1212,67 @@ textarea {
   border-left: 3px solid var(--brand);
 }
 
+.semantic-diff-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.semantic-diff-summary {
+  display: grid;
+  gap: 10px;
+}
+
+.semantic-diff-header,
+.semantic-change-classes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.diff-severity,
+.semantic-change-classes span {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #fbfaf7;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 850;
+}
+
+.diff-severity.high-impact,
+.diff-severity.breaking-governance-change {
+  border-color: #ffb18d;
+  background: #fff1ea;
+  color: var(--brand-dark);
+}
+
+.semantic-change-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.semantic-change-list li {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #fbfaf7;
+}
+
+.semantic-change-list strong,
+.semantic-change-list span {
+  overflow-wrap: anywhere;
+}
+
 .outcome-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

@@ -330,6 +330,41 @@ def test_escalation_authoring_is_text_driven_not_single_threshold_field():
     assert "data.get(\"escalation_semantics\")" in source
 
 
+def test_change_review_renders_semantic_authority_diff_artifact():
+    html = (ROOT / "ui" / "index.html").read_text(encoding="utf-8")
+    source = APP_JS.read_text(encoding="utf-8")
+    body = _function_body(source, "renderChangeReview")
+
+    assert "semantic_authority_diff.v1" in html
+    assert 'id="change-semantic-diff"' in html
+    assert 'id="change-guard-compatibility"' in html
+    assert 'id="change-replay-continuity"' in html
+    assert "refreshChangeReviewSemanticDiff(payload)" in body
+    assert 'fetch("/api/semantic-diff"' in source
+
+
+def test_registry_detail_surfaces_semantic_change_and_guard_impact():
+    source = APP_JS.read_text(encoding="utf-8")
+    body = _function_body(source, "renderRegistryDetailSummary")
+
+    assert "What Changed Since Previous Version" in body
+    assert "semantic_diff_summary" in source
+    assert "guard_compatibility_projection" in source
+    assert "replay_revalidation_required" in source
+
+
+def test_supersede_attaches_semantic_diff_summary_without_guard_or_cloud_calls():
+    source = APP_JS.read_text(encoding="utf-8")
+    block = _action_block(source, "supersede")
+
+    assert "fetchSemanticAuthorityDiff" in block
+    assert "semanticDiffRegistrySummary" in block
+    assert "semantic_diff_summary" in block
+    assert "semantic_authority_diff" in block
+    assert "waveframe_guard" not in source
+    assert "Cloud" not in block
+
+
 def _function_body(source: str, function_name: str) -> str:
     marker = f"function {function_name}"
     start = source.index(marker)

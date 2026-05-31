@@ -16,6 +16,7 @@ from governance_ledger.local_registry.projection import (
 )
 from governance_ledger.local_registry.projections.operational import build_authority_operational_summary
 from governance_ledger.semantics.diagnostics import build_governance_quality_diagnostics
+from governance_ledger.semantics.diffing import build_semantic_authority_diff
 from governance_ledger.semantics.extraction import extract_governance_semantics
 from governance_ledger.semantics.packets import build_governance_review_packet
 from governance_ledger.semantics.preview import build_governance_impact_preview
@@ -84,6 +85,19 @@ class LedgerUIHandler(BaseHTTPRequestHandler):
                 self._write_json({"error": str(exc)}, status=400)
             except Exception as exc:  # pragma: no cover - defensive HTTP boundary
                 self._write_json({"error": f"Unable to build publication receipt: {exc}"}, status=500)
+            return
+        if parsed.path == "/api/semantic-diff":
+            try:
+                payload = self._read_json_body()
+                previous_authority = payload.get("previous_authority")
+                current_authority = payload.get("current_authority")
+                if not isinstance(previous_authority, dict) or not isinstance(current_authority, dict):
+                    raise ValueError("Semantic diff requires previous_authority and current_authority objects.")
+                self._write_json(build_semantic_authority_diff(previous_authority, current_authority))
+            except ValueError as exc:
+                self._write_json({"error": str(exc)}, status=400)
+            except Exception as exc:  # pragma: no cover - defensive HTTP boundary
+                self._write_json({"error": f"Unable to build semantic authority diff: {exc}"}, status=500)
             return
         if parsed.path != "/api/compose":
             self._write_json({"error": "not found"}, status=404)

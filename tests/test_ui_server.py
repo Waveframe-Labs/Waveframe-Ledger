@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from governance_ledger.semantics.publication import build_publication_receipt
+from governance_ledger.semantics.diffing import build_semantic_authority_diff
 from governance_ledger.ui_server import build_publication_receipt_response, build_ui_diagnostics, compose_authority_publication
 
 
@@ -110,6 +111,37 @@ def test_ui_server_composes_artifacts_from_authoring_fields():
         "attestation_requirement_gap",
     ]
     assert {diagnostic["blocks_publication"] for diagnostic in result["diagnostics"]} == {False}
+
+
+def test_ui_server_semantic_diff_artifact_is_ledger_generated():
+    previous = compose_authority_publication(
+        {
+            "protected_system": "Corporate Treasury Transfer System",
+            "governed_action": "transfer funds",
+            "contract_id": "treasury-policy",
+            "contract_version": "2.1.0",
+            "approver_role": "treasury-governance",
+            "approval_count": "1",
+        }
+    )
+    current = compose_authority_publication(
+        {
+            "protected_system": "Corporate Treasury Transfer System",
+            "governed_action": "transfer funds",
+            "contract_id": "treasury-policy",
+            "contract_version": "2.2.0",
+            "approver_role": "treasury-governance",
+            "approval_count": "2",
+        }
+    )
+
+    diff = build_semantic_authority_diff(previous["authority_contract"], current["authority_contract"])
+
+    assert diff["schema_version"] == "semantic_authority_diff.v1"
+    assert diff["previous_authority_ref"] == "treasury-policy@2.1.0"
+    assert diff["current_authority_ref"] == "treasury-policy@2.2.0"
+    assert "Human approval requirements increased." in diff["operational_impact_narratives"]
+    assert diff["guard_compatibility_projection"]["schema_version"] == "guard_compatibility_projection.v1"
 
 
 def test_ui_server_emits_guidance_diagnostic_for_default_mutation_target():

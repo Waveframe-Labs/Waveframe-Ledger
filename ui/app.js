@@ -21,6 +21,8 @@ let interpretationDecisions = [];
 let unresolvedReconciliationBlocks = [];
 let interpretationAuditTrail = [];
 let currentSemanticExtras = {};
+let currentSemanticAuthorityDiff = null;
+let semanticDiffRequestToken = 0;
 let committedDraft = null;
 let authoringSessionDirty = false;
 let policySourceDirty = false;
@@ -273,6 +275,7 @@ function resetReconciliationState() {
 }
 
 function clearOperationalImpact() {
+  currentSemanticAuthorityDiff = null;
   $("#preview-summary").textContent = "No committed semantic interpretation yet. Commit semantics before generating operational impact.";
   renderList("#preview-enforcement", []);
   renderList("#preview-consequences", []);
@@ -303,6 +306,7 @@ function startNewDraft() {
   currentArtifacts = null;
   pendingRegistration = null;
   currentExtraction = null;
+  currentSemanticAuthorityDiff = null;
   currentSemanticExtras = {};
   committedDraft = null;
   authoringSessionDirty = false;
@@ -835,6 +839,7 @@ function commitSemanticInterpretation() {
     invalidated_projections: [
       "governance_impact_preview.v1",
       "authority_diff_impact.v1",
+      "semantic_authority_diff.v1",
       "authority_workspace_projection.v1",
       "authority_operational_summary.v1",
       "publication_readiness",
@@ -1758,6 +1763,7 @@ function markDraftInvalidated() {
 function invalidateSemanticLineage(reason) {
   const now = new Date().toISOString();
   currentArtifacts = null;
+  currentSemanticAuthorityDiff = null;
   pendingRegistration = null;
   setSemanticState({
     draft_state: "dirty",
@@ -2665,9 +2671,15 @@ function renderBundleDetail(entry, mode = "summary") {
       ? JSON.stringify(entry.publication_receipt, null, 2)
       : "No publication_receipt.v1 artifact is attached to this registry entry.";
   } else if (mode === "diff") {
-    body.textContent = entry.artifacts?.authority_diff_impact
-      ? JSON.stringify(entry.artifacts.authority_diff_impact, null, 2)
-      : "No authority_diff_impact.v1 artifact is attached to this bundle.";
+    body.textContent = JSON.stringify(
+      {
+        semantic_authority_diff: entry.artifacts?.semantic_authority_diff || entry.semantic_authority_diff || null,
+        semantic_diff_summary: entry.semantic_diff_summary || null,
+        authority_diff_impact: entry.artifacts?.authority_diff_impact || null,
+      },
+      null,
+      2,
+    );
   } else {
     body.textContent = JSON.stringify(
       {
@@ -2790,10 +2802,15 @@ function renderRegistryDetailSummary(detail, entry) {
   }
 
   const graph = renderRelationshipGraph(summary.relationship_graph);
+  const semanticDiffShell = document.createElement("div");
+  semanticDiffShell.className = "registry-semantic-diff-summary";
+  semanticDiffShell.dataset.semanticDiffSummaryFor = entry.authority_ref;
+  semanticDiffShell.appendChild(semanticDiffSummaryView(entry.semantic_diff_summary || entry.artifacts?.semantic_authority_diff || null));
   const blocks = document.createElement("div");
   blocks.className = "registry-detail-blocks";
   blocks.append(
     registryDetailBlock("Identity", identitySummary(entry, summary)),
+    registryDetailBlock("What Changed Since Previous Version", semanticDiffShell, "wide"),
     registryDetailBlock("Why This Posture Exists", causality, "wide"),
     registryDetailBlock("Lifecycle", timeline, "wide"),
     registryDetailBlock("Continuity", freshnessTimeline, "wide"),
@@ -2811,6 +2828,7 @@ function renderRegistryDetailSummary(detail, entry) {
     blocks,
   );
   detail.appendChild(shell);
+  refreshRegistryDetailSemanticDiff(entry);
 }
 
 function registryDetailBlock(title, content, variant = "") {
@@ -3032,6 +3050,262 @@ function registryEntrySummary(entry) {
   };
 }
 
+function authorityArtifactFromEntry(entry) {
+  if (!entry) return null;
+  return entry.artifacts?.authority_contract
+    || entry.bundle?.authority_artifact
+    || entry.bundle?.authority_contract
+    || entry.bundle?.contract
+    || null;
+}
+
+function authorityArtifactFromPayload(payload) {
+  if (!payload) return null;
+  return payload.authority_contract
+    || payload.authority_bundle?.authority_artifact
+    || payload.authority_bundle?.authority_contract
+    || payload.authority_bundle?.contract
+    || null;
+}
+
+function previousRegistryEntryForAuthority(authorityRef, currentEntry = null, registry = loadBundleRegistry()) {
+  const family = authorityFamily(authorityRef);
+  if (currentEntry?.supersedes) {
+    const explicit = registry.authorities.find((entry) => entry.authority_ref === currentEntry.supersedes);
+    if (explicit) return explicit;
+  }
+  const targetVersion = versionSortValue(authorityVersionFromRef(authorityRef));
+  const candidates = (registry.authorities || [])
+    .filter((entry) => entry.authority_ref !== authorityRef && authorityFamily(entry.authority_ref) === family)
+    .filter((entry) => versionSortValue(entry.authority_version || authorityVersionFromRef(entry.authority_ref)) <= targetVersion)
+    .sort((a, b) => versionSortValue(b.authority_version || authorityVersionFromRef(b.authority_ref)) - versionSortValue(a.authority_version || authorityVersionFromRef(a.authority_ref)));
+  return candidates[0] || null;
+}
+
+async function fetchSemanticAuthorityDiff(previousAuthority, currentAuthority) {
+  const response = await fetch("/api/semantic-diff", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      previous_authority: previousAuthority,
+      current_authority: currentAuthority,
+    }),
+  });
+  const payload = await response.json();
+  if (!response.ok) {
+    throw new Error(payload.error || "Unable to generate semantic authority diff.");
+  }
+  return payload;
+}
+
+function semanticDiffRegistrySummary(diff) {
+  if (!diff || diff.schema_version !== "semantic_authority_diff.v1") return null;
+  const changes = diff.semantic_changes || [];
+  const guard = diff.guard_compatibility_projection || {};
+  return {
+    schema_version: "semantic_diff_summary.v1",
+    previous_authority_ref: diff.previous_authority_ref,
+    current_authority_ref: diff.current_authority_ref,
+    change_count: changes.length,
+    change_classes: [...new Set(changes.map((change) => change.change_class).filter(Boolean))].sort(),
+    highest_severity: semanticDiffHighestSeverity(changes),
+    operational_impact: diff.operational_impact_narratives || [],
+    replay_revalidation_required: semanticDiffRequiresRevalidation(diff),
+    replay_compatibility_warnings: diff.replay_compatibility_warnings || [],
+    guard_compatibility_posture: guard.compatibility_posture || "no_new_guard_obligations",
+    guard_enforcement_changes: guard.new_enforcement_obligations || [],
+  };
+}
+
+function semanticDiffHighestSeverity(changes) {
+  const rank = {
+    informational: 1,
+    moderate: 2,
+    "high-impact": 3,
+    "breaking-governance-change": 4,
+  };
+  return (changes || []).reduce((current, change) => {
+    const severity = change.severity || "informational";
+    return (rank[severity] || 0) > (rank[current] || 0) ? severity : current;
+  }, "informational");
+}
+
+function semanticDiffRequiresRevalidation(diff) {
+  const changes = diff?.semantic_changes || [];
+  return changes.some((change) => (
+    change.change_class === "continuity_change"
+    || String(change.semantic_path || "").startsWith("continuity.")
+    || (change.replay_compatibility_warnings || []).some((warning) => String(warning).toLowerCase().includes("resumed execution"))
+  ));
+}
+
+function semanticDiffMatchesCurrentPayload(diff, payload) {
+  if (!diff || !payload?.authority_bundle) return false;
+  return diff.current_authority_ref === payload.authority_bundle.authority_ref;
+}
+
+function semanticDiffList(items, fallback) {
+  const list = document.createElement("ul");
+  list.className = "semantic-list";
+  const values = items?.length ? items : [fallback];
+  for (const value of values) {
+    const item = document.createElement("li");
+    item.textContent = value;
+    list.appendChild(item);
+  }
+  return list;
+}
+
+function semanticDiffSummaryView(diffOrSummary, options = {}) {
+  const diff = diffOrSummary?.schema_version === "semantic_authority_diff.v1" ? diffOrSummary : null;
+  const summary = diff ? semanticDiffRegistrySummary(diff) : diffOrSummary;
+  const panel = document.createElement("div");
+  panel.className = "semantic-diff-summary";
+  if (!summary) {
+    const empty = document.createElement("p");
+    empty.className = "quiet";
+    empty.textContent = options.emptyText || "No previous authority version is available for semantic comparison.";
+    panel.appendChild(empty);
+    return panel;
+  }
+  const header = document.createElement("div");
+  header.className = "semantic-diff-header";
+  const title = document.createElement("strong");
+  title.textContent = "What changed since previous version";
+  const chip = document.createElement("span");
+  chip.className = `diff-severity ${summary.highest_severity || "informational"}`;
+  chip.textContent = formatLabel(summary.highest_severity || "informational");
+  header.append(title, chip);
+  const refs = document.createElement("p");
+  refs.className = "quiet";
+  refs.textContent = `${summary.previous_authority_ref || "previous authority"} -> ${summary.current_authority_ref || "current authority"}`;
+  const classes = document.createElement("div");
+  classes.className = "semantic-change-classes";
+  for (const changeClass of summary.change_classes || []) {
+    const classChip = document.createElement("span");
+    classChip.textContent = formatLabel(changeClass);
+    classes.appendChild(classChip);
+  }
+  const impact = semanticDiffList(
+    summary.operational_impact,
+    summary.change_count ? "Semantic changes detected; no additional operational narrative was emitted." : "No operational semantic changes detected.",
+  );
+  panel.append(header, refs, classes, impact);
+  return panel;
+}
+
+function renderSemanticAuthorityDiff(node, diff, fallback = "No previous authority version is available for semantic comparison.") {
+  if (!node) return;
+  node.innerHTML = "";
+  if (!diff) {
+    const empty = document.createElement("p");
+    empty.className = "quiet";
+    empty.textContent = fallback;
+    node.appendChild(empty);
+    return;
+  }
+  const version = document.createElement("span");
+  version.className = "artifact-pill muted";
+  version.textContent = diff.schema_version;
+  const summary = semanticDiffSummaryView(diff);
+  const changes = document.createElement("ol");
+  changes.className = "semantic-change-list";
+  for (const change of diff.semantic_changes || []) {
+    const item = document.createElement("li");
+    const title = document.createElement("strong");
+    title.textContent = `${formatLabel(change.change_class)} · ${change.semantic_path}`;
+    const detail = document.createElement("span");
+    detail.textContent = (change.operational_impact || []).join(" ");
+    item.append(title, detail);
+    changes.appendChild(item);
+  }
+  if (!changes.children.length) {
+    const item = document.createElement("li");
+    item.textContent = "No operational semantic change detected between these authority meanings.";
+    changes.appendChild(item);
+  }
+  node.append(version, summary, changes);
+}
+
+function renderSemanticDiffLists(diff) {
+  const replayNode = $("#change-replay-continuity");
+  const guardNode = $("#change-guard-compatibility");
+  if (replayNode) {
+    renderList(
+      "#change-replay-continuity",
+      diff
+        ? [
+            semanticDiffRequiresRevalidation(diff)
+              ? "Existing resumed workflows should require governance revalidation against the new authority posture."
+              : "No resumed-workflow revalidation change was derived from this semantic diff.",
+            ...(diff.replay_compatibility_warnings || []),
+          ]
+        : ["Replay continuity impact appears after a previous authority version is available."],
+    );
+  }
+  if (guardNode) {
+    const guard = diff?.guard_compatibility_projection || {};
+    renderList(
+      "#change-guard-compatibility",
+      diff
+        ? (guard.new_enforcement_obligations?.length
+            ? guard.new_enforcement_obligations
+            : ["No new Guard enforcement obligations are derived. Ledger does not call Guard."])
+        : ["Guard compatibility projection appears after semantic diff generation."],
+    );
+  }
+}
+
+async function refreshChangeReviewSemanticDiff(payload = currentArtifacts) {
+  const node = $("#change-semantic-diff");
+  if (!payload?.authority_bundle || !node) return;
+  const token = ++semanticDiffRequestToken;
+  const currentAuthority = authorityArtifactFromPayload(payload);
+  const registryEntry = findRegistryEntry(payload.authority_bundle.authority_ref);
+  const previousEntry = previousRegistryEntryForAuthority(payload.authority_bundle.authority_ref, registryEntry);
+  const previousAuthority = authorityArtifactFromEntry(previousEntry);
+  if (!previousAuthority || !currentAuthority) {
+    currentSemanticAuthorityDiff = null;
+    renderSemanticAuthorityDiff(node, null);
+    renderSemanticDiffLists(null);
+    return;
+  }
+  renderSemanticAuthorityDiff(node, null, "Generating semantic_authority_diff.v1 from Ledger semantic modules...");
+  try {
+    const diff = await fetchSemanticAuthorityDiff(previousAuthority, currentAuthority);
+    if (token !== semanticDiffRequestToken) return;
+    currentSemanticAuthorityDiff = diff;
+    payload.semantic_authority_diff = diff;
+    renderSemanticAuthorityDiff(node, diff);
+    renderSemanticDiffLists(diff);
+  } catch (error) {
+    if (token !== semanticDiffRequestToken) return;
+    renderSemanticAuthorityDiff(node, null, error.message);
+    renderSemanticDiffLists(null);
+  }
+}
+
+async function refreshRegistryDetailSemanticDiff(entry) {
+  const target = document.querySelector(`[data-semantic-diff-summary-for="${entry.authority_ref}"]`);
+  if (!target) return;
+  const currentAuthority = authorityArtifactFromEntry(entry);
+  const previousEntry = previousRegistryEntryForAuthority(entry.authority_ref, entry);
+  const previousAuthority = authorityArtifactFromEntry(previousEntry);
+  if (!currentAuthority || !previousAuthority) {
+    target.replaceChildren(semanticDiffSummaryView(entry.semantic_diff_summary || null));
+    return;
+  }
+  try {
+    const diff = await fetchSemanticAuthorityDiff(previousAuthority, currentAuthority);
+    target.replaceChildren(semanticDiffSummaryView(diff));
+  } catch (error) {
+    const empty = document.createElement("p");
+    empty.className = "quiet";
+    empty.textContent = error.message;
+    target.replaceChildren(empty);
+  }
+}
+
 function findRegistryEntry(authorityRef) {
   return loadBundleRegistry().authorities.find((entry) => entry.authority_ref === authorityRef) || null;
 }
@@ -3046,7 +3320,7 @@ function updateRegistryEntry(authorityRef, updater) {
   return registry.authorities.find((entry) => entry.authority_ref === authorityRef) || null;
 }
 
-function handleRegistryAction(event) {
+async function handleRegistryAction(event) {
   const button = event.target.closest("[data-registry-action]");
   if (!button) return;
   const entry = findRegistryEntry(button.dataset.authorityRef);
@@ -3072,19 +3346,40 @@ function handleRegistryAction(event) {
   } else if (action === "supersede") {
     const successor = currentArtifacts?.authority_bundle?.authority_ref;
     const supersededBy = successor && successor !== entry.authority_ref ? successor : "pending successor";
+    let semanticDiff = null;
+    if (successor && successor !== entry.authority_ref) {
+      const previousAuthority = authorityArtifactFromEntry(entry);
+      const currentAuthority = authorityArtifactFromPayload(currentArtifacts);
+      if (previousAuthority && currentAuthority) {
+        try {
+          semanticDiff = await fetchSemanticAuthorityDiff(previousAuthority, currentAuthority);
+        } catch {
+          semanticDiff = null;
+        }
+      }
+    }
+    const semanticDiffSummary = semanticDiffRegistrySummary(semanticDiff);
     const updated = updateRegistryEntry(entry.authority_ref, (item) => ({
       ...item,
       status: "superseded",
       updated_at: new Date().toISOString(),
       superseded_by: item.superseded_by || supersededBy,
+      semantic_diff_summary: semanticDiffSummary || item.semantic_diff_summary || null,
+      semantic_authority_diff: semanticDiff || item.semantic_authority_diff || null,
       lifecycle_events: appendLifecycleOnce(
         registryLifecycleEvents(item),
         "superseded",
         new Date().toISOString(),
         { bundle_hash: item.latest_bundle_hash || item.contract_hash },
-        `Superseded by ${item.superseded_by || supersededBy}.`,
+        semanticDiffSummary?.operational_impact?.length
+          ? `Superseded by ${item.superseded_by || supersededBy}. ${semanticDiffSummary.operational_impact[0]}`
+          : `Superseded by ${item.superseded_by || supersededBy}.`,
         item.authority_ref,
       ),
+      artifacts: {
+        ...(item.artifacts || {}),
+        semantic_authority_diff: semanticDiff || item.artifacts?.semantic_authority_diff || null,
+      },
     }));
     renderOperatorGuidance(
       "Authority marked superseded.",
@@ -3254,12 +3549,14 @@ function registerAuthorityLocally() {
   showPage("bundles");
 }
 
-function renderChangeReview(payload, options = {}) {
+function renderChangeReview(payload, options) {
+  options = options || {};
   const status = $("#change-review-status");
   const narrative = $("#change-narrative");
   const operational = $("#change-operational");
   const continuity = $("#change-continuity");
   const replay = $("#change-replay");
+  const semanticDiff = $("#change-semantic-diff");
   const executionContext = $("#change-execution-context");
   const lineage = $("#change-lineage");
   if (!status || !narrative || !operational || !continuity || !replay || !executionContext || !lineage) return;
@@ -3271,6 +3568,8 @@ function renderChangeReview(payload, options = {}) {
     operational.textContent = "Review impact to generate the current authority posture.";
     continuity.textContent = "Registered lineage will show supersession path, resumed execution impact, and replay continuity obligations here.";
     renderReplayPosture(replay, null, null);
+    renderSemanticAuthorityDiff(semanticDiff, null, "No semantic_authority_diff.v1 artifact has been generated for this authority pair.");
+    renderSemanticDiffLists(null);
     renderExecutionContext("#change-execution-context", null);
     appendLineageEmpty(lineage);
     return;
@@ -3291,8 +3590,12 @@ function renderChangeReview(payload, options = {}) {
   continuity.textContent = firstText(bundle.continuity_implications)
     || "No continuity implication has been derived yet. Review continuity posture before publication.";
   renderReplayPosture(replay, bundle, registryEntry);
+  const activeSemanticDiff = payload.semantic_authority_diff || (semanticDiffMatchesCurrentPayload(currentSemanticAuthorityDiff, payload) ? currentSemanticAuthorityDiff : null);
+  renderSemanticAuthorityDiff(semanticDiff, activeSemanticDiff);
+  renderSemanticDiffLists(activeSemanticDiff);
   renderExecutionContext("#change-execution-context", preview.execution_context);
   renderLineageChain(lineage, registryEntry, bundle);
+  refreshChangeReviewSemanticDiff(payload);
 }
 
 function appendLineageEmpty(node) {
