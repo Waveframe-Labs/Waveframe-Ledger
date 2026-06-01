@@ -10,6 +10,7 @@ const useExtractionButton = document.querySelector("#use-extraction-button");
 const applyAllExtractionButton = document.querySelector("#apply-all-extraction-button");
 const openReconciliationButton = document.querySelector("#open-reconciliation-button");
 const manualFirstButton = document.querySelector("#manual-first-button");
+const populateCommittedDraftButton = document.querySelector("#populate-committed-draft-button");
 const manualAuthorityDefinition = document.querySelector("#manual-authority-definition");
 const policySourceText = document.querySelector("#policy-source-text");
 const draftSessionStatus = document.querySelector("#draft-session-status");
@@ -200,18 +201,10 @@ function restoreDraftSession() {
     invalidation_reason: authoringSessionDirty ? "working_authoring_changes" : "restored_committed_draft",
   });
   currentSemanticExtras = semanticExtrasFromCandidate(session.draft || {});
-  for (const [key, value] of Object.entries(session.draft || {})) {
-    const field = form.elements[key];
-    if (!field) continue;
-    if (field.type === "checkbox") {
-      field.checked = Boolean(value);
-    } else {
-      field.value = value ?? "";
-    }
-  }
+  clearAuthoringFields();
   draftSessionStatus.textContent = authoringSessionDirty
-    ? `Unsaved draft changes restored from working session ${new Date(session.updated_at).toLocaleTimeString()}`
-    : `draft_authority_session.v1 restored ${new Date(session.updated_at).toLocaleTimeString()}`;
+    ? `Working session state restored ${new Date(session.updated_at).toLocaleTimeString()}. Manual fields remain empty until explicitly populated.`
+    : `Committed draft state restored ${new Date(session.updated_at).toLocaleTimeString()}. Manual fields remain empty until explicitly populated.`;
   updateWorkflowState({ draftReady: Boolean(committedDraft) });
 }
 
@@ -247,8 +240,21 @@ function clearAuthoringFields() {
     } else {
       field.value = "";
     }
+    setFieldProvenance(field.name, "Manual");
   }
   closeManualAuthorityDefinition();
+}
+
+function setFieldProvenance(fieldName, provenance) {
+  const chip = document.querySelector(`[data-provenance-for="${fieldName}"]`);
+  if (!chip) return;
+  chip.textContent = provenance;
+  chip.dataset.provenance = provenance.toLowerCase().replaceAll(" ", "-");
+}
+
+function markManualFieldProvenance(event) {
+  const field = event.target;
+  if (field?.name) setFieldProvenance(field.name, "Manual");
 }
 
 function clearExtractionReview() {
@@ -588,6 +594,7 @@ function renderReconciliationWorkflow(selector, ambiguities) {
   }
   for (const [index, ambiguity] of list.entries()) {
     const normalized = semanticAmbiguity(ambiguity, index + 1);
+    const tier = ambiguityTier(normalized);
     const existingDecision = interpretationDecisions.find((decision) => decision.ambiguity_id === normalized.ambiguity_id);
     const existingBlock = unresolvedReconciliationBlocks.find((block) => block.ambiguity_id === normalized.ambiguity_id);
     const item = document.createElement("div");
@@ -596,10 +603,10 @@ function renderReconciliationWorkflow(selector, ambiguities) {
     const title = document.createElement("strong");
     title.textContent = formatLabel(normalized.ambiguity_type);
     const severity = document.createElement("span");
-    severity.className = `ambiguity-severity ${ambiguitySeverity(normalized)}`;
-    severity.textContent = formatLabel(ambiguitySeverity(normalized));
+    severity.className = `ambiguity-severity ${tier}`;
+    severity.textContent = formatLabel(tier);
     const summary = document.createElement("p");
-    summary.textContent = normalized.summary || "Operator interpretation is required.";
+    summary.textContent = reconciliationTierSummary(tier, normalized.summary || "Operator interpretation is required.");
     const comparison = interpretationComparisonPanel(ambiguity, existingDecision);
     const choices = document.createElement("div");
     choices.className = "resolution-choices";
@@ -614,15 +621,26 @@ function renderReconciliationWorkflow(selector, ambiguities) {
     const rationale = document.createElement("textarea");
     rationale.rows = 2;
     rationale.dataset.resolutionRationale = normalized.ambiguity_id;
-    rationale.placeholder = "Operator rationale for this interpretation";
+    rationale.placeholder = tier === "informational" ? "Optional rationale" : "Operator rationale for this interpretation";
     rationale.value = existingDecision?.justification || existingBlock?.rationale || "";
+    let attestation = null;
+    if (tier === "high-impact") {
+      attestation = document.createElement("label");
+      attestation.className = "resolution-attestation";
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.dataset.resolutionAttestation = normalized.ambiguity_id;
+      const span = document.createElement("span");
+      span.textContent = "I attest this interpretation changes operational governance meaning.";
+      attestation.append(checkbox, span);
+    }
     const actions = document.createElement("div");
     actions.className = "resolution-actions";
     const save = document.createElement("button");
     save.type = "button";
     save.className = "tertiary-action";
     save.dataset.saveResolution = normalized.ambiguity_id;
-    save.textContent = "Save interpretation decision";
+    save.textContent = tier === "informational" ? "Quick acknowledge" : "Save interpretation decision";
     const unresolved = document.createElement("button");
     unresolved.type = "button";
     unresolved.className = "tertiary-action";
@@ -637,7 +655,13 @@ function renderReconciliationWorkflow(selector, ambiguities) {
         ? `Unresolved blocker: ${existingBlock.rationale || existingBlock.selected_interpretation}`
         : "Decision required before semantic commitment.";
     const history = decisionRevisionHistory(normalized.ambiguity_id);
-    item.append(title, severity, summary, comparison, choices, rationale, actions, status, history);
+    if (tier === "blocking") {
+      save.disabled = true;
+      status.textContent = "Blocking ambiguity. Resolve policy language before semantic commitment.";
+    }
+    item.append(title, severity, summary, comparison, choices, rationale);
+    if (attestation) item.appendChild(attestation);
+    item.append(actions, status, history);
     node.appendChild(item);
   }
   const divergence = reconciliationDivergencePanel();
@@ -660,11 +684,21 @@ function renderReconciliationWorkflow(selector, ambiguities) {
   node.appendChild(audit);
 }
 
-function ambiguitySeverity(ambiguity) {
+function ambiguityTier(ambiguity) {
   const type = ambiguity.ambiguity_type || "";
-  if (["timestamp_source_unspecified", "state_snapshot_subject_unspecified"].includes(type)) return "high-impact";
-  if (["approval_independence_ambiguity", "undefined_threshold"].includes(type)) return "moderate";
+  if (["contradictory_approval_semantics", "mutually_exclusive_lifecycle_behavior", "unresolved_governed_action"].includes(type)) return "blocking";
+  if (["approval_independence_ambiguity", "undefined_threshold", "scope_expansion_ambiguity", "replay_invalidation_ambiguity"].includes(type)) return "high-impact";
   return "informational";
+}
+
+function ambiguitySeverity(ambiguity) {
+  return ambiguityTier(ambiguity);
+}
+
+function reconciliationTierSummary(tier, summary) {
+  if (tier === "informational") return `${summary} Quick acknowledgement is allowed; rationale is optional.`;
+  if (tier === "high-impact") return `${summary} Explicit interpretation, rationale, and operator attestation are required.`;
+  return `${summary} This blocks semantic commitment until the source policy or governed action is clarified.`;
 }
 
 function interpretationComparisonPanel(ambiguity, existingDecision) {
@@ -690,11 +724,13 @@ function interpretationComparisonPanel(ambiguity, existingDecision) {
 function interpretationOptionMeaning(ambiguity, choice) {
   const type = ambiguity.ambiguity_type || ambiguity.type || "";
   if (/unresolved|block publication/i.test(choice)) return "Keeps semantic commitment blocked until an operator resolves the ambiguity.";
-  if (type === "timestamp_source_unspecified") return "Defines which timestamp source Ledger expects runtime evidence to bind against.";
-  if (type === "state_snapshot_subject_unspecified") return "Defines which governance state snapshot resumed workflows must compare.";
-  if (type === "approval_independence_ambiguity") return "Defines whether approval evidence must prove independent actors or named reviewer roles.";
-  if (type === "undefined_threshold") return "Normalizes vague threshold language into deterministic escalation semantics.";
-  return "Records an operator interpretation for deterministic semantic normalization.";
+  if (type === "timestamp_source_unspecified") return "Runtime replay evidence may bind against orchestration or signed authority timestamps.";
+  if (type === "state_snapshot_subject_unspecified") return "Paused workflows remain resumable only when the selected governance snapshot still matches.";
+  if (type === "approval_independence_ambiguity") return "Execution becomes admissible only when approval evidence satisfies the selected independence boundary.";
+  if (type === "undefined_threshold") return "Executions crossing the selected threshold enter escalation review before publication meaning is trusted.";
+  if (type === "scope_expansion_ambiguity") return "Additional governed targets become part of the authority surface and require continuity review.";
+  if (type === "replay_invalidation_ambiguity") return "Existing replay evidence may need revalidation before resumed workflows continue.";
+  return "The selected interpretation becomes deterministic governance meaning after semantic commitment.";
 }
 
 function decisionRevisionHistory(ambiguityId) {
@@ -758,6 +794,10 @@ function requiredSemanticAmbiguities() {
   return (currentExtraction?.ambiguities || [])
     .map((item, index) => semanticAmbiguity(item, index + 1))
     .filter((item) => item.requires_operator_resolution);
+}
+
+function blockingSemanticAmbiguities() {
+  return requiredSemanticAmbiguities().filter((ambiguity) => ambiguityTier(ambiguity) === "blocking");
 }
 
 function decisionTypeForAmbiguity(ambiguity) {
@@ -849,9 +889,10 @@ function recordInterpretationAudit(action, summary, details = {}) {
 function buildGovernanceSemanticReconciliation() {
   if (!currentExtraction) return null;
   const ambiguities = requiredSemanticAmbiguities();
+  const blockingIds = new Set(blockingSemanticAmbiguities().map((ambiguity) => ambiguity.ambiguity_id));
   const resolvedIds = new Set(interpretationDecisions.map((decision) => decision.ambiguity_id));
   const blockedIds = new Set(unresolvedReconciliationBlocks.map((block) => block.ambiguity_id));
-  const unresolved = ambiguities.filter((ambiguity) => !resolvedIds.has(ambiguity.ambiguity_id) || blockedIds.has(ambiguity.ambiguity_id));
+  const unresolved = ambiguities.filter((ambiguity) => blockingIds.has(ambiguity.ambiguity_id) || !resolvedIds.has(ambiguity.ambiguity_id) || blockedIds.has(ambiguity.ambiguity_id));
   const normalized = unresolved.length ? {} : normalizedAuthorityFromDecisions(currentExtraction.candidate_authority || {});
   return {
     schema_version: "governance_semantic_reconciliation.v1",
@@ -866,7 +907,7 @@ function buildGovernanceSemanticReconciliation() {
     semantic_conflicts: [],
     unresolved_ambiguities: unresolved,
     final_normalized_semantic_meaning: normalized,
-    interpretation_completeness_posture: unresolved.length ? "operator_required" : "complete",
+    interpretation_completeness_posture: blockingIds.size ? "blocked" : unresolved.length ? "operator_required" : "complete",
     interpretation_audit_trail: interpretationAuditTrail,
   };
 }
@@ -969,7 +1010,7 @@ function commitSemanticInterpretation() {
   recordInterpretationAudit("semantic_interpretation_committed", "Semantic interpretation committed as deterministic draft meaning.");
   currentReconciliation = buildGovernanceSemanticReconciliation();
   const normalizedMeaning = currentReconciliation.final_normalized_semantic_meaning || currentExtraction.candidate_authority;
-  applyDraftToForm(normalizedMeaning);
+  applyDraftToForm(normalizedMeaning, "Committed");
   currentSemanticExtras = {
     ...semanticExtrasFromCandidate(normalizedMeaning),
     governance_semantic_reconciliation: currentReconciliation,
@@ -1043,11 +1084,17 @@ function openReconciliationReview() {
 }
 
 function openManualAuthorityDefinition() {
-  manualAuthorityDefinition?.setAttribute("open", "");
+  setManualAuthorityExpanded(true);
 }
 
 function closeManualAuthorityDefinition() {
-  manualAuthorityDefinition?.removeAttribute("open");
+  setManualAuthorityExpanded(false);
+}
+
+function setManualAuthorityExpanded(isExpanded) {
+  if (!manualAuthorityDefinition) return;
+  manualAuthorityDefinition.toggleAttribute("open", Boolean(isExpanded));
+  manualAuthorityDefinition.dataset.expanded = String(Boolean(isExpanded));
 }
 
 function startManualFirstAuthoring() {
@@ -1084,20 +1131,30 @@ function saveInterpretationDecision(ambiguityId) {
   const ambiguity = requiredSemanticAmbiguities().find((candidate) => candidate.ambiguity_id === ambiguityId);
   const choice = item?.dataset.selectedChoice || item?.querySelector("[data-resolution-choice].selected")?.dataset.resolutionChoice;
   const rationale = item?.querySelector("[data-resolution-rationale]")?.value?.trim() || "";
+  const tier = ambiguity ? ambiguityTier(ambiguity) : "informational";
+  const attested = Boolean(item?.querySelector("[data-resolution-attestation]")?.checked);
   const status = item?.querySelector(".resolution-status");
   if (!ambiguity || !choice) {
     if (status) status.textContent = "Select an interpretation before saving the decision.";
     return;
   }
-  if (!rationale) {
+  if (tier === "high-impact" && !rationale) {
     if (status) status.textContent = "Operator rationale is required before saving the decision.";
+    return;
+  }
+  if (tier === "high-impact" && !attested) {
+    if (status) status.textContent = "Operator attestation is required before saving this high-impact interpretation.";
+    return;
+  }
+  if (tier === "blocking") {
+    if (status) status.textContent = "Blocking ambiguity cannot be committed from reconciliation. Clarify the source policy first.";
     return;
   }
   if (isUnresolvedChoice(choice)) {
     markInterpretationUnresolved(ambiguityId, choice, rationale);
     return;
   }
-  const decision = buildInterpretationDecision(ambiguity, choice, rationale);
+  const decision = buildInterpretationDecision(ambiguity, choice, rationale || "Acknowledged informational interpretation.");
   interpretationDecisions = [
     ...interpretationDecisions.filter((item) => item.ambiguity_id !== ambiguityId),
     decision,
@@ -1117,8 +1174,9 @@ function markInterpretationUnresolved(ambiguityId, selectedInterpretation = "Mar
   const item = document.querySelector(`[data-ambiguity-id="${ambiguityId}"]`);
   const enteredRationale = rationale || item?.querySelector("[data-resolution-rationale]")?.value?.trim() || "";
   const status = item?.querySelector(".resolution-status");
+  const tier = ambiguity ? ambiguityTier(ambiguity) : "informational";
   if (!ambiguity) return;
-  if (!enteredRationale) {
+  if (tier !== "informational" && !enteredRationale) {
     if (status) status.textContent = "Operator rationale is required before marking an ambiguity unresolved.";
     return;
   }
@@ -1129,7 +1187,7 @@ function markInterpretationUnresolved(ambiguityId, selectedInterpretation = "Mar
       ambiguity_id: ambiguityId,
       ambiguity_type: ambiguity.ambiguity_type,
       selected_interpretation: selectedInterpretation,
-      rationale: enteredRationale,
+      rationale: enteredRationale || "Acknowledged as unresolved informational ambiguity.",
       operator: "local-ledger-ui",
     },
   ];
@@ -1161,7 +1219,7 @@ function semanticExtrasFromCandidate(candidate) {
   return extras;
 }
 
-function applyDraftToForm(candidate) {
+function applyDraftToForm(candidate, provenance = "Committed") {
   for (const [key, value] of Object.entries(candidate || {})) {
     const field = form.elements[key];
     if (!field || value === null || value === undefined || value === "") continue;
@@ -1170,7 +1228,19 @@ function applyDraftToForm(candidate) {
     } else {
       field.value = value;
     }
+    setFieldProvenance(key, provenance);
   }
+}
+
+function populateManualFieldsFromCommittedDraft() {
+  if (!committedDraft) {
+    draftSessionStatus.textContent = "No committed interpretation is available to populate manual fields.";
+    return;
+  }
+  openManualAuthorityDefinition();
+  applyDraftToForm(committedDraft, "Committed");
+  authoringSessionDirty = false;
+  draftSessionStatus.textContent = "Manual fields populated from committed interpretation.";
 }
 
 async function generateArtifacts(options = {}) {
@@ -4081,6 +4151,7 @@ useExtractionButton.addEventListener("click", commitSemanticInterpretation);
 applyAllExtractionButton?.addEventListener("click", commitSemanticInterpretation);
 openReconciliationButton.addEventListener("click", openReconciliationReview);
 manualFirstButton?.addEventListener("click", startManualFirstAuthoring);
+populateCommittedDraftButton?.addEventListener("click", populateManualFieldsFromCommittedDraft);
 document.querySelector("#reconciliation-workflow")?.addEventListener("click", handleReconciliationInteraction);
 policySourceText.addEventListener("input", () => {
   policySourceDirty = true;
@@ -4103,7 +4174,8 @@ policySourceText.addEventListener("input", () => {
     authorityRegistered: false,
   });
 });
-form.addEventListener("input", () => {
+form.addEventListener("input", (event) => {
+  markManualFieldProvenance(event);
   saveWorkingAuthoringSession();
   pendingRegistration = null;
   workflowTimestamps.reviewed = null;
@@ -4118,7 +4190,8 @@ form.addEventListener("input", () => {
     authorityRegistered: false,
   });
 });
-form.addEventListener("change", () => {
+form.addEventListener("change", (event) => {
+  markManualFieldProvenance(event);
   saveWorkingAuthoringSession();
   pendingRegistration = null;
   workflowTimestamps.reviewed = null;

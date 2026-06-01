@@ -306,7 +306,7 @@ def test_reconciliation_workspace_records_operator_decisions_and_blocks_unresolv
     assert "reconciliation-audit-trail" in render_body
     assert "dataset.saveResolution" in render_body
     assert "dataset.markUnresolved" in render_body
-    assert "ambiguitySeverity" in render_body
+    assert "ambiguityTier" in render_body
     assert "interpretationComparisonPanel" in render_body
     assert "decisionRevisionHistory" in render_body
     assert "reconciliationDivergencePanel" in render_body
@@ -326,6 +326,37 @@ def test_manual_authoring_declares_manual_first_and_extraction_assisted_modes():
     assert "Manual-first authority definition opened" in body
     assert "Extraction remains optional" in body
     assert "Extraction-assisted overrides must be explicitly committed" in body
+
+
+def test_reconciliation_tiers_lower_informational_friction_and_gate_high_impact():
+    source = APP_JS.read_text(encoding="utf-8")
+    tier_body = _function_body(source, "ambiguityTier")
+    save_body = _function_body(source, "saveInterpretationDecision")
+
+    assert '"timestamp_source_unspecified", "state_snapshot_subject_unspecified"' not in tier_body
+    assert "approval_independence_ambiguity" in tier_body
+    assert "undefined_threshold" in tier_body
+    assert "contradictory_approval_semantics" in tier_body
+    assert 'tier === "informational" ? "Quick acknowledge"' in source
+    assert 'tier === "informational" ? "Optional rationale"' in source
+    assert 'tier === "high-impact" && !rationale' in save_body
+    assert 'tier === "high-impact" && !attested' in save_body
+
+
+def test_manual_fields_have_explicit_provenance_and_no_restore_hydration():
+    html = (ROOT / "ui" / "index.html").read_text(encoding="utf-8")
+    source = APP_JS.read_text(encoding="utf-8")
+    restore_body = _function_body(source, "restoreDraftSession")
+
+    assert 'data-provenance-for="contract_version"' in html
+    assert 'id="populate-committed-draft-button"' in html
+    summary_start = html.index('<summary class="authoring-copy">')
+    summary_end = html.index("</summary>", summary_start)
+    assert 'id="populate-committed-draft-button"' not in html[summary_start:summary_end]
+    assert "setFieldProvenance" in source
+    assert "populateManualFieldsFromCommittedDraft" in source
+    assert "applyDraftToForm(committedDraft, \"Committed\")" in source
+    assert "Manual fields remain empty until explicitly populated" in restore_body
 
 
 def test_continuity_posture_label_is_operational_not_alarmist():

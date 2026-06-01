@@ -237,29 +237,35 @@
                 <h3>Manual Authority Definition</h3>
                 <p>Operator-authored semantic anchors for manual-first or extraction-assisted drafting. These fields stay empty until explicitly written or populated by a committed interpretation.</p>
               </summary>
+              <button id="populate-committed-draft-button" class="tertiary-action" type="button">Populate from committed interpretation</button>
               <div class="form-grid">
                 <label>
                   <span>What operational system is governed?</span>
+                  <span class="field-provenance" data-provenance-for="protected_system">Manual</span>
                   <input name="protected_system" placeholder="e.g. Corporate Treasury Transfer System" />
                   <small>This anchors the authority to a protected operational resource.</small>
                 </label>
                 <label>
                   <span>What action is being controlled?</span>
+                  <span class="field-provenance" data-provenance-for="governed_action">Manual</span>
                   <input name="governed_action" placeholder="e.g. transfer funds" />
                   <small>Ledger uses this to frame governed outcomes and mutation scope.</small>
                 </label>
                 <label>
                   <span>Authority reference</span>
+                  <span class="field-provenance" data-provenance-for="contract_id">Manual</span>
                   <input name="contract_id" placeholder="e.g. treasury-policy" />
                   <small>Stable authority identity for publication and replay binding.</small>
                 </label>
                 <label>
                   <span>Authority version</span>
+                  <span class="field-provenance" data-provenance-for="contract_version">Manual</span>
                   <input name="contract_version" placeholder="e.g. 2.1.0" />
                   <small>Version changes create a new governance posture.</small>
                 </label>
                 <label class="wide">
                   <span>Which operational mutation targets are governed?</span>
+                  <span class="field-provenance" data-provenance-for="mutation_targets">Manual</span>
                   <input name="mutation_targets" placeholder="e.g. bank_api.transfer_funds" />
                   <small>Mutation targets identify the operational actions this authority is meant to constrain.</small>
                 </label>
@@ -274,21 +280,25 @@
               <div class="form-grid">
                 <label>
                   <span>Who is authorized to approve execution?</span>
+                  <span class="field-provenance" data-provenance-for="approver_role">Manual</span>
                   <input name="approver_role" placeholder="e.g. treasury-governance" />
                   <small>Named authority roles avoid ambiguous approval semantics.</small>
                 </label>
                 <label>
                   <span>How many independent approvals are required before execution is admissible?</span>
+                  <span class="field-provenance" data-provenance-for="approval_count">Manual</span>
                   <input name="approval_count" type="number" min="1" placeholder="e.g. 2" />
                   <small>Independent approval count clarifies review strength before execution.</small>
                 </label>
                 <label>
                   <span>How long is admissibility valid after approval?</span>
+                  <span class="field-provenance" data-provenance-for="validity_days">Manual</span>
                   <input name="validity_days" type="number" min="1" placeholder="e.g. 30" />
                   <small>Validity windows prevent stale approvals from authorizing later execution.</small>
                 </label>
                 <label>
                   <span>Governance category</span>
+                  <span class="field-provenance" data-provenance-for="governance_category">Manual</span>
                   <select name="governance_category">
                     <option value="">Select category</option>
                     <option>Financial</option>
@@ -318,6 +328,7 @@
               <div class="form-grid">
                 <label class="wide">
                   <span>Describe escalation expectations and governance intervention conditions.</span>
+                  <span class="field-provenance" data-provenance-for="escalation_semantics">Manual</span>
                   <textarea name="escalation_semantics" rows="6" placeholder="e.g. Transfers above $250,000 require treasury governance review."></textarea>
                   <small>Include review triggers, approval obligations, deployment controls, credential escalation requirements, or operational conditions requiring governance intervention.</small>
                   <div class="semantic-helper-chips" aria-label="Escalation semantic helpers">
@@ -341,11 +352,13 @@
                 <legend>Continuity guarantees</legend>
                 <label class="check-row">
                   <input name="continuity_revalidation" type="checkbox" />
+                  <span class="field-provenance" data-provenance-for="continuity_revalidation">Manual</span>
                   <span>Should resumed workflows require revalidation if governance posture changes before execution completes?</span>
                   <small>Continuity revalidation prevents long-running workflows from executing under outdated governance posture.</small>
                 </label>
                 <label class="check-row">
                   <input name="revocation_invalidates_resume" type="checkbox" />
+                  <span class="field-provenance" data-provenance-for="revocation_invalidates_resume">Manual</span>
                   <span>Should revoked authorities invalidate resumed execution continuity?</span>
                   <small>Revocation invalidation prevents paused work from continuing under authority that no longer exists.</small>
                 </label>
