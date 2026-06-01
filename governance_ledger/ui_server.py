@@ -18,6 +18,7 @@ from governance_ledger.local_registry.projections.operational import build_autho
 from governance_ledger.semantics.diagnostics import build_governance_quality_diagnostics
 from governance_ledger.semantics.diffing import build_semantic_authority_diff
 from governance_ledger.semantics.extraction import extract_governance_semantics
+from governance_ledger.semantics.lifecycle_enforcement import build_semantic_lifecycle_enforcement_projection
 from governance_ledger.semantics.packets import build_governance_review_packet
 from governance_ledger.semantics.preview import build_governance_impact_preview
 from governance_ledger.semantics.publication import build_authority_bundle, build_publication_receipt
@@ -98,6 +99,18 @@ class LedgerUIHandler(BaseHTTPRequestHandler):
                 self._write_json({"error": str(exc)}, status=400)
             except Exception as exc:  # pragma: no cover - defensive HTTP boundary
                 self._write_json({"error": f"Unable to build semantic authority diff: {exc}"}, status=500)
+            return
+        if parsed.path == "/api/semantic-lifecycle-enforcement":
+            try:
+                payload = self._read_json_body()
+                semantic_diff = payload.get("semantic_authority_diff")
+                if not isinstance(semantic_diff, dict):
+                    raise ValueError("Lifecycle enforcement projection requires semantic_authority_diff.")
+                self._write_json(build_semantic_lifecycle_enforcement_projection(semantic_diff))
+            except ValueError as exc:
+                self._write_json({"error": str(exc)}, status=400)
+            except Exception as exc:  # pragma: no cover - defensive HTTP boundary
+                self._write_json({"error": f"Unable to build semantic lifecycle enforcement projection: {exc}"}, status=500)
             return
         if parsed.path != "/api/compose":
             self._write_json({"error": "not found"}, status=404)

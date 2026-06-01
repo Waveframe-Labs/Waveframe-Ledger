@@ -339,8 +339,11 @@ def test_change_review_renders_semantic_authority_diff_artifact():
     assert 'id="change-semantic-diff"' in html
     assert 'id="change-guard-compatibility"' in html
     assert 'id="change-replay-continuity"' in html
+    assert 'id="change-admissibility-projection"' in html
+    assert 'id="change-unsafe-now"' in html
     assert "refreshChangeReviewSemanticDiff(payload)" in body
     assert 'fetch("/api/semantic-diff"' in source
+    assert 'fetch("/api/semantic-lifecycle-enforcement"' in source
 
 
 def test_registry_detail_surfaces_semantic_change_and_guard_impact():
@@ -351,6 +354,21 @@ def test_registry_detail_surfaces_semantic_change_and_guard_impact():
     assert "semantic_diff_summary" in source
     assert "guard_compatibility_projection" in source
     assert "replay_revalidation_required" in source
+    assert "Lifecycle Enforcement Consequences" in body
+    assert "lifecycleEnforcementSummaryView" in source
+
+
+def test_change_review_surfaces_lifecycle_enforcement_chain():
+    html = (ROOT / "ui" / "index.html").read_text(encoding="utf-8")
+    source = APP_JS.read_text(encoding="utf-8")
+    render_body = _function_body(source, "renderSemanticDiffLists")
+
+    assert "What becomes unsafe now?" in html
+    assert "Execution admissibility projection" in html
+    assert "semantic_lifecycle_enforcement_projection.v1" in source
+    assert "Replay continuity posture" in render_body
+    assert "Projection only. Runtime admissibility remains Guard/Cloud-owned." in render_body
+    assert "Unsafe-governance observations" in render_body
 
 
 def test_supersede_attaches_semantic_diff_summary_without_guard_or_cloud_calls():
@@ -361,6 +379,7 @@ def test_supersede_attaches_semantic_diff_summary_without_guard_or_cloud_calls()
     assert "semanticDiffRegistrySummary" in block
     assert "semantic_diff_summary" in block
     assert "semantic_authority_diff" in block
+    assert "semantic_lifecycle_enforcement_projection" in block
     assert "waveframe_guard" not in source
     assert "Cloud" not in block
 

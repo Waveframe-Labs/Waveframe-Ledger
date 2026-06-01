@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from governance_ledger.semantics.publication import build_publication_receipt
 from governance_ledger.semantics.diffing import build_semantic_authority_diff
+from governance_ledger.semantics.lifecycle_enforcement import build_semantic_lifecycle_enforcement_projection
 from governance_ledger.ui_server import build_publication_receipt_response, build_ui_diagnostics, compose_authority_publication
 
 
@@ -142,6 +143,38 @@ def test_ui_server_semantic_diff_artifact_is_ledger_generated():
     assert diff["current_authority_ref"] == "treasury-policy@2.2.0"
     assert "Human approval requirements increased." in diff["operational_impact_narratives"]
     assert diff["guard_compatibility_projection"]["schema_version"] == "guard_compatibility_projection.v1"
+
+
+def test_ui_server_lifecycle_enforcement_projection_is_diff_derived():
+    previous = compose_authority_publication(
+        {
+            "protected_system": "Corporate Treasury Transfer System",
+            "governed_action": "transfer funds",
+            "contract_id": "treasury-policy",
+            "contract_version": "2.1.0",
+            "approver_role": "treasury-governance",
+            "approval_count": "1",
+        }
+    )
+    current = compose_authority_publication(
+        {
+            "protected_system": "Corporate Treasury Transfer System",
+            "governed_action": "transfer funds",
+            "contract_id": "treasury-policy",
+            "contract_version": "2.2.0",
+            "approver_role": "treasury-governance",
+            "approval_count": "2",
+            "continuity_revalidation": True,
+        }
+    )
+
+    diff = build_semantic_authority_diff(previous["authority_contract"], current["authority_contract"])
+    projection = build_semantic_lifecycle_enforcement_projection(diff)
+
+    assert projection["schema_version"] == "semantic_lifecycle_enforcement_projection.v1"
+    assert projection["source_diff_schema_version"] == "semantic_authority_diff.v1"
+    assert projection["execution_admissibility_projection"]["schema_version"] == "execution_admissibility_projection.v1"
+    assert "does_not_execute_guard" in projection["non_goals"]
 
 
 def test_ui_server_emits_guidance_diagnostic_for_default_mutation_target():
