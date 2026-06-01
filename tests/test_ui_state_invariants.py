@@ -259,12 +259,15 @@ def test_extraction_ui_renders_capabilities_as_first_class_surface():
     body = _function_body(source, "renderSemanticExtraction")
 
     assert 'id="extracted-capabilities"' in html
-    assert "Candidate Semantics" in html
+    assert "Capability Explorer" in html
     assert "renderCapabilities(\"#extracted-capabilities\"" in body
     assert "Governed targets" in body
     assert "Governed operations" in body
     assert "Mutation classes" in body
     assert "function capabilitySummaries" in source
+    assert "capabilityRequirementGroups" in source
+    assert "capabilityRelationshipStrip" in source
+    assert "This capability requires" in source
 
 
 def test_extraction_gaps_open_manual_definition_without_prefilling_values():
@@ -303,11 +306,26 @@ def test_reconciliation_workspace_records_operator_decisions_and_blocks_unresolv
     assert "reconciliation-audit-trail" in render_body
     assert "dataset.saveResolution" in render_body
     assert "dataset.markUnresolved" in render_body
+    assert "ambiguitySeverity" in render_body
+    assert "interpretationComparisonPanel" in render_body
+    assert "decisionRevisionHistory" in render_body
+    assert "reconciliationDivergencePanel" in render_body
     assert "Operator rationale is required" in source
     assert "reconciliationIsComplete()" in commit_gate
     assert "Resolve or explicitly clear all reconciliation blockers" in commit_body
     assert "governance_semantic_reconciliation" in commit_body
     assert "semantic_reconciliation_projection" in commit_body
+
+
+def test_manual_authoring_declares_manual_first_and_extraction_assisted_modes():
+    html = (ROOT / "ui" / "index.html").read_text(encoding="utf-8")
+    source = APP_JS.read_text(encoding="utf-8")
+    body = _function_body(source, "startManualFirstAuthoring")
+
+    assert "manual-first or extraction-assisted drafting" in html
+    assert "Manual-first authority definition opened" in body
+    assert "Extraction remains optional" in body
+    assert "Extraction-assisted overrides must be explicitly committed" in body
 
 
 def test_continuity_posture_label_is_operational_not_alarmist():

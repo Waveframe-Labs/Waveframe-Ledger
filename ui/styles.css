@@ -716,6 +716,14 @@ h3 {
   background: #fff;
 }
 
+.capability-card summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: start;
+  cursor: pointer;
+}
+
 .capability-card h5 {
   margin: 0 0 4px;
   font-size: 1rem;
@@ -739,6 +747,57 @@ h3 {
   font-size: 0.88rem;
 }
 
+.capability-impact {
+  margin: 8px 0 10px;
+  color: var(--muted);
+}
+
+.capability-relationship-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.capability-relationship-strip div,
+.capability-requirement-group {
+  min-width: 0;
+  padding: 9px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #fbfaf7;
+}
+
+.capability-relationship-strip span,
+.capability-requirement-group strong {
+  display: block;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.capability-relationship-strip strong {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.capability-requirement-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.capability-requirement-group ul {
+  display: grid;
+  gap: 4px;
+  margin: 7px 0 0;
+  padding-left: 16px;
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
 .resolution-workflow {
   display: grid;
   gap: 10px;
@@ -755,6 +814,62 @@ h3 {
   margin: 4px 0 8px;
   color: var(--muted);
   font-size: 0.88rem;
+}
+
+.ambiguity-severity {
+  display: inline-flex;
+  width: fit-content;
+  margin: 6px 0;
+  padding: 4px 7px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  background: #fbfaf7;
+  font-size: 0.72rem;
+  font-weight: 850;
+}
+
+.ambiguity-severity.high-impact {
+  border-color: #ffb18d;
+  color: var(--brand-dark);
+  background: #fff1ea;
+}
+
+.interpretation-comparison,
+.decision-revision-history,
+.semantic-divergence-panel {
+  margin: 8px 0;
+  padding: 9px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #fbfaf7;
+}
+
+.interpretation-comparison ul,
+.decision-revision-history ul {
+  display: grid;
+  gap: 6px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.interpretation-comparison li {
+  display: grid;
+  gap: 3px;
+  padding: 7px;
+  border-left: 3px solid #d9d2c8;
+}
+
+.interpretation-comparison li.selected {
+  border-left-color: var(--brand);
+  background: #fff7f2;
+}
+
+.interpretation-comparison small,
+.decision-revision-history li,
+.semantic-divergence-panel p {
+  color: var(--muted);
 }
 
 .resolution-choices {

@@ -450,13 +450,25 @@ function renderCapabilities(selector, capabilities) {
     return;
   }
   for (const capability of list) {
-    const article = document.createElement("article");
+    const article = document.createElement("details");
     article.className = "capability-card";
+    article.open = list.length === 1;
+    const summary = document.createElement("summary");
     const heading = document.createElement("h5");
     heading.textContent = formatLabel(capability.action || capability.capability_id);
     const type = document.createElement("span");
     type.className = "capability-type";
     type.textContent = formatLabel(capability.action_type);
+    summary.append(heading, type);
+    const impact = document.createElement("p");
+    impact.className = "capability-impact";
+    impact.textContent = capabilityImpactSummary(capability);
+    const relationships = capabilityRelationshipStrip(capability);
+    const groups = document.createElement("div");
+    groups.className = "capability-requirement-grid";
+    for (const [label, values] of Object.entries(capabilityRequirementGroups(capability))) {
+      groups.appendChild(capabilityRequirementGroup(label, values));
+    }
     const bullets = document.createElement("ul");
     bullets.className = "capability-bullets";
     for (const summary of capabilitySummaries(capability)) {
@@ -464,9 +476,82 @@ function renderCapabilities(selector, capabilities) {
       item.textContent = summary;
       bullets.appendChild(item);
     }
-    article.append(heading, type, bullets);
+    article.append(summary, impact, relationships, groups, bullets);
     node.appendChild(article);
   }
+}
+
+function capabilityImpactSummary(capability) {
+  const action = formatLabel(capability.action || capability.capability_id || "Capability");
+  const requirementCount = (capability.requirements || []).length
+    + (capability.evidence_requirements || []).length
+    + (capability.continuity_semantics ? 1 : 0)
+    + (capability.identity_requirements ? 1 : 0);
+  return `${action} is a provisional governed capability with ${requirementCount || "no explicit"} extracted requirement${requirementCount === 1 ? "" : "s"}.`;
+}
+
+function capabilityRelationshipStrip(capability) {
+  const strip = document.createElement("div");
+  strip.className = "capability-relationship-strip";
+  const continuity = capability.continuity_semantics || {};
+  const execution = capability.execution_constraints || {};
+  const identity = capability.identity_requirements?.approval_chain_semantics || {};
+  const evidence = capability.evidence_requirements || [];
+  const relationships = {
+    Continuity: continuity.revalidation_required || continuity.revocation_invalidates_resume ? "controls active" : "not specified",
+    Replay: evidence.length ? `${evidence.length} evidence requirement${evidence.length === 1 ? "" : "s"}` : "not specified",
+    Identity: identity.independence_required || identity.self_approval_prohibited ? "approval boundary" : "not specified",
+    Execution: execution.execution_context || execution.execution_boundary || "authority default",
+  };
+  for (const [label, value] of Object.entries(relationships)) {
+    const item = document.createElement("div");
+    const span = document.createElement("span");
+    span.textContent = label;
+    const strong = document.createElement("strong");
+    strong.textContent = String(value);
+    item.append(span, strong);
+    strip.appendChild(item);
+  }
+  return strip;
+}
+
+function capabilityRequirementGroups(capability) {
+  const continuity = capability.continuity_semantics || {};
+  const snapshot = continuity.state_snapshot_semantics || {};
+  const execution = capability.execution_constraints || {};
+  const identity = capability.identity_requirements?.approval_chain_semantics || {};
+  return {
+    "This capability requires": (capability.requirements || []).map((item) => item.summary || item.requirement_type).filter(Boolean),
+    "Evidence obligations": (capability.evidence_requirements || []).map((item) => item.summary || item.evidence_type).filter(Boolean),
+    "Continuity controls": [
+      continuity.revalidation_required ? "Continuity validation before resumed execution." : "",
+      continuity.revocation_invalidates_resume ? "Revoked authority invalidates resumed execution." : "",
+      snapshot.snapshot_required ? "Snapshot hash comparison against active governance posture." : "",
+    ].filter(Boolean),
+    "Execution and identity": [
+      execution.execution_context ? `Execution context: ${formatLabel(execution.execution_context)}.` : "",
+      execution.execution_boundary ? `Execution boundary: ${formatLabel(execution.execution_boundary)}.` : "",
+      identity.independence_required ? "Independent approval responsibilities required." : "",
+      identity.self_approval_prohibited ? "Self approval prohibited." : "",
+      identity.ai_recommendation_posture === "advisory_only" ? "AI recommendation boundary is advisory only." : "",
+    ].filter(Boolean),
+  };
+}
+
+function capabilityRequirementGroup(label, values) {
+  const group = document.createElement("section");
+  group.className = "capability-requirement-group";
+  const heading = document.createElement("strong");
+  heading.textContent = label;
+  const list = document.createElement("ul");
+  const items = values.length ? values : ["Not explicitly defined by deterministic extraction."];
+  for (const value of items) {
+    const item = document.createElement("li");
+    item.textContent = value;
+    list.appendChild(item);
+  }
+  group.append(heading, list);
+  return group;
 }
 
 function capabilitySummaries(capability) {
@@ -510,8 +595,12 @@ function renderReconciliationWorkflow(selector, ambiguities) {
     item.dataset.ambiguityId = normalized.ambiguity_id;
     const title = document.createElement("strong");
     title.textContent = formatLabel(normalized.ambiguity_type);
+    const severity = document.createElement("span");
+    severity.className = `ambiguity-severity ${ambiguitySeverity(normalized)}`;
+    severity.textContent = formatLabel(ambiguitySeverity(normalized));
     const summary = document.createElement("p");
     summary.textContent = normalized.summary || "Operator interpretation is required.";
+    const comparison = interpretationComparisonPanel(ambiguity, existingDecision);
     const choices = document.createElement("div");
     choices.className = "resolution-choices";
     for (const choice of resolutionChoicesForAmbiguity(ambiguity)) {
@@ -547,9 +636,12 @@ function renderReconciliationWorkflow(selector, ambiguities) {
       : existingBlock
         ? `Unresolved blocker: ${existingBlock.rationale || existingBlock.selected_interpretation}`
         : "Decision required before semantic commitment.";
-    item.append(title, summary, choices, rationale, actions, status);
+    const history = decisionRevisionHistory(normalized.ambiguity_id);
+    item.append(title, severity, summary, comparison, choices, rationale, actions, status, history);
     node.appendChild(item);
   }
+  const divergence = reconciliationDivergencePanel();
+  node.appendChild(divergence);
   const audit = document.createElement("div");
   audit.id = "reconciliation-audit-trail";
   audit.className = "reconciliation-audit-trail";
@@ -566,6 +658,75 @@ function renderReconciliationWorkflow(selector, ambiguities) {
   }
   audit.append(auditTitle, auditList);
   node.appendChild(audit);
+}
+
+function ambiguitySeverity(ambiguity) {
+  const type = ambiguity.ambiguity_type || "";
+  if (["timestamp_source_unspecified", "state_snapshot_subject_unspecified"].includes(type)) return "high-impact";
+  if (["approval_independence_ambiguity", "undefined_threshold"].includes(type)) return "moderate";
+  return "informational";
+}
+
+function interpretationComparisonPanel(ambiguity, existingDecision) {
+  const panel = document.createElement("div");
+  panel.className = "interpretation-comparison";
+  const heading = document.createElement("strong");
+  heading.textContent = "Interpretation options";
+  const list = document.createElement("ul");
+  for (const choice of resolutionChoicesForAmbiguity(ambiguity)) {
+    const item = document.createElement("li");
+    const label = document.createElement("span");
+    label.textContent = choice;
+    const meaning = document.createElement("small");
+    meaning.textContent = interpretationOptionMeaning(ambiguity, choice);
+    item.classList.toggle("selected", choice === existingDecision?.selected_interpretation);
+    item.append(label, meaning);
+    list.appendChild(item);
+  }
+  panel.append(heading, list);
+  return panel;
+}
+
+function interpretationOptionMeaning(ambiguity, choice) {
+  const type = ambiguity.ambiguity_type || ambiguity.type || "";
+  if (/unresolved|block publication/i.test(choice)) return "Keeps semantic commitment blocked until an operator resolves the ambiguity.";
+  if (type === "timestamp_source_unspecified") return "Defines which timestamp source Ledger expects runtime evidence to bind against.";
+  if (type === "state_snapshot_subject_unspecified") return "Defines which governance state snapshot resumed workflows must compare.";
+  if (type === "approval_independence_ambiguity") return "Defines whether approval evidence must prove independent actors or named reviewer roles.";
+  if (type === "undefined_threshold") return "Normalizes vague threshold language into deterministic escalation semantics.";
+  return "Records an operator interpretation for deterministic semantic normalization.";
+}
+
+function decisionRevisionHistory(ambiguityId) {
+  const panel = document.createElement("div");
+  panel.className = "decision-revision-history";
+  const title = document.createElement("strong");
+  title.textContent = "Decision revision history";
+  const list = document.createElement("ul");
+  const entries = interpretationAuditTrail.filter((entry) => entry.details?.ambiguity_id === ambiguityId);
+  const values = entries.length ? entries : [{ summary: "No decision revisions recorded for this ambiguity." }];
+  for (const entry of values) {
+    const item = document.createElement("li");
+    item.textContent = entry.summary || formatLabel(entry.action);
+    list.appendChild(item);
+  }
+  panel.append(title, list);
+  return panel;
+}
+
+function reconciliationDivergencePanel() {
+  const panel = document.createElement("div");
+  panel.className = "semantic-divergence-panel";
+  const title = document.createElement("strong");
+  title.textContent = "Semantic divergence check";
+  const text = document.createElement("p");
+  const resolved = interpretationDecisions.length;
+  const unresolved = unresolvedReconciliationBlocks.length;
+  text.textContent = resolved || unresolved
+    ? `${resolved} operator interpretation${resolved === 1 ? "" : "s"} and ${unresolved} unresolved blocker${unresolved === 1 ? "" : "s"} are recorded for this extraction.`
+    : "No operator interpretation drift is present because no decisions have been recorded yet.";
+  panel.append(title, text);
+  return panel;
 }
 
 function resolutionChoicesForAmbiguity(ambiguity) {
@@ -892,7 +1053,8 @@ function closeManualAuthorityDefinition() {
 function startManualFirstAuthoring() {
   openManualAuthorityDefinition();
   form.elements.protected_system?.focus();
-  draftSessionStatus.textContent = "Manual-first authoring opened. Fields remain empty until the operator writes authority semantics.";
+  draftSessionStatus.textContent = "Manual-first authority definition opened. Extraction remains optional; manual fields are operator-authored semantic anchors.";
+  $("#extraction-status").textContent = "Manual-first mode: write semantic anchors directly, then commit the draft before operational impact review. Extraction-assisted overrides must be explicitly committed.";
 }
 
 function handleReconciliationInteraction(event) {

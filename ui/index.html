@@ -199,9 +199,10 @@
             <div id="extraction-review" class="extraction-review" aria-live="polite">
               <details class="extraction-panel capability-review-panel" open>
                 <summary>
-                  <h4>Step 2 - Candidate Semantics</h4>
+                  <h4>Step 2 - Capability Explorer</h4>
                   <p class="candidate-warning">Provisional. Not yet committed as authority meaning.</p>
                 </summary>
+                <p class="explain-text">Capabilities group the extracted governance meaning by operational action: what is controlled, what evidence is required, what continuity posture applies, and which identity constraints bind execution.</p>
                 <div id="extracted-capabilities" class="capability-list"></div>
               </details>
               <details class="extraction-panel">
@@ -214,6 +215,7 @@
               </details>
               <details class="extraction-panel" open>
                 <summary><h4>Reconciliation Workspace</h4></summary>
+                <p class="explain-text">Resolve interpretation choices before the semantic commit boundary. Decisions are recorded with rationale and revision history.</p>
                 <ul id="extracted-ambiguities" class="operations-list"></ul>
                 <div id="reconciliation-workflow" class="resolution-workflow"></div>
               </details>
@@ -233,7 +235,7 @@
             <details id="manual-authority-definition" class="authoring-section governance-module">
               <summary class="authoring-copy">
                 <h3>Manual Authority Definition</h3>
-                <p>Operator-authored semantic anchors. These fields stay empty until explicitly written or populated by a committed interpretation.</p>
+                <p>Operator-authored semantic anchors for manual-first or extraction-assisted drafting. These fields stay empty until explicitly written or populated by a committed interpretation.</p>
               </summary>
               <div class="form-grid">
                 <label>
