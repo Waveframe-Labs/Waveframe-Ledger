@@ -478,6 +478,7 @@ function renderSemanticExtraction(extraction) {
     openManualAuthorityDefinition();
   }
   $("#extraction-status").textContent = `${extraction.schema_version} requires operator confirmation. Source hash ${shortHash(extraction.source_hash)}.`;
+  renderAuthoringWorkflowNav();
 }
 
 function renderCapabilities(selector, capabilities) {
@@ -1649,6 +1650,61 @@ function renderWorkflowState() {
   }
 }
 
+function renderAuthoringWorkflowNav() {
+  const nav = $("#authoring-workflow-nav");
+  if (!nav) return;
+  const reconciliationPosture = reconciliationWorkflowPosture();
+  const stages = [
+    ["draft", Boolean(policySourceText?.value?.trim()) || Boolean(committedDraft), "Ready", "Current"],
+    ["extraction", Boolean(currentExtraction), "Extracted", "Pending"],
+    ["reconciliation", reconciliationPosture.complete, reconciliationPosture.label, reconciliationPosture.blocked ? "Blocked" : "Pending"],
+    ["committed", semanticStateMachine.semantic_state === "committed" || semanticStateMachine.semantic_state === "valid", "Committed", "Pending"],
+    ["compiled", semanticStateMachine.compiler_state === "compiled" && Boolean(currentCompiledAuthorityContract), "Compiled", semanticStateMachine.compiler_state === "invalidated" ? "Invalid" : "Pending"],
+    ["impact review", workflowState.impactReviewed, "Reviewed", canGenerateOperationalImpact() ? "Ready" : "Pending"],
+    ["publication", workflowState.bundleExported || workflowState.authorityRegistered, workflowState.authorityRegistered ? "Registered" : workflowState.bundleExported ? "Exported" : "Ready", canExportBundle() ? "Ready" : "Blocked"],
+  ];
+  const currentIndex = stages.findIndex(([_, complete, __, pending]) => !complete || pending === "Ready" || pending === "Blocked");
+  nav.querySelectorAll("button").forEach((button, index) => {
+    const [_, complete, completeLabel, pendingLabel] = stages[index] || [];
+    const isComplete = Boolean(complete);
+    const label = isComplete ? completeLabel : pendingLabel;
+    button.querySelector("strong").textContent = label;
+    button.classList.toggle("complete", isComplete);
+    button.classList.toggle("current", index === currentIndex);
+    button.classList.toggle("blocked", !isComplete && label === "Blocked");
+  });
+}
+
+function handleAuthoringWorkflowNavigation(event) {
+  const button = event.target.closest("[data-workflow-jump], [data-workflow-page]");
+  if (!button) return;
+  if (button.dataset.workflowPage) {
+    showPage(button.dataset.workflowPage);
+    return;
+  }
+  const target = document.querySelector(`#${button.dataset.workflowJump}`);
+  if (target) {
+    target.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+}
+
+function reconciliationWorkflowPosture() {
+  if (!currentExtraction) return { complete: false, label: "Pending", blocked: false };
+  const reconciliation = currentReconciliation || buildGovernanceSemanticReconciliation();
+  const unresolved = reconciliation.unresolved_ambiguities?.length || 0;
+  const blockers = unresolvedReconciliationBlocks.length;
+  if (reconciliation.interpretation_completeness_posture === "complete") {
+    return { complete: true, label: "Resolved", blocked: false };
+  }
+  if (reconciliation.interpretation_completeness_posture === "blocked" || blockers) {
+    return { complete: false, label: `${blockers || unresolved} blocker${(blockers || unresolved) === 1 ? "" : "s"}`, blocked: true };
+  }
+  if (unresolved) {
+    return { complete: false, label: `${unresolved} unresolved`, blocked: false };
+  }
+  return { complete: false, label: "Review", blocked: false };
+}
+
 function syncPublicationActions() {
   const hasArtifacts = Boolean(currentArtifacts);
   const reviewAvailable = canGenerateOperationalImpact();
@@ -1661,6 +1717,7 @@ function syncPublicationActions() {
   publicationReviewButton.disabled = reviewBusy || !reviewAvailable || workflowState.impactReviewed;
   exportButton.disabled = !canExportBundle(hasArtifacts);
   registerButton.disabled = !canRegisterAuthority();
+  renderAuthoringWorkflowNav();
 }
 
 function canExtractSemantics() {
@@ -4591,6 +4648,7 @@ openReconciliationButton.addEventListener("click", openReconciliationReview);
 manualFirstButton?.addEventListener("click", startManualFirstAuthoring);
 populateCommittedDraftButton?.addEventListener("click", populateManualFieldsFromCommittedDraft);
 document.querySelector("#reconciliation-workflow")?.addEventListener("click", handleReconciliationInteraction);
+document.querySelector("#authoring-workflow-nav")?.addEventListener("click", handleAuthoringWorkflowNavigation);
 policySourceText.addEventListener("input", () => {
   policySourceDirty = true;
   currentExtraction = null;

@@ -146,6 +146,15 @@
               <button id="new-draft-button" class="secondary-action" type="button">New Working Session</button>
             </div>
           </div>
+          <nav id="authoring-workflow-nav" class="authoring-workflow-nav" aria-label="Authority authoring workflow">
+            <button type="button" data-workflow-jump="policy-source-text"><span>Draft</span><strong>Pending</strong></button>
+            <button type="button" data-workflow-jump="extraction-review"><span>Extraction</span><strong>Pending</strong></button>
+            <button type="button" data-workflow-jump="reconciliation-workflow"><span>Reconciliation</span><strong>Pending</strong></button>
+            <button type="button" data-workflow-jump="use-extraction-button"><span>Committed</span><strong>Pending</strong></button>
+            <button type="button" data-workflow-jump="compiled-contract-boundary"><span>Compiled</span><strong>Pending</strong></button>
+            <button type="button" data-workflow-page="preview"><span>Impact Review</span><strong>Pending</strong></button>
+            <button type="button" data-workflow-page="publication"><span>Publication</span><strong>Blocked</strong></button>
+          </nav>
 
           <section class="policy-ingestion-panel" aria-label="Policy ingestion">
             <div class="policy-ingestion-copy">

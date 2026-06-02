@@ -663,6 +663,81 @@ h3 {
   box-shadow: var(--shadow);
 }
 
+.authoring-workflow-nav {
+  position: sticky;
+  top: 78px;
+  z-index: 15;
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+  margin: -8px 0 16px;
+  padding: 7px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(250, 249, 246, 0.96);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(10px);
+}
+
+.authoring-workflow-nav button {
+  min-width: 0;
+  min-height: 42px;
+  display: grid;
+  align-content: center;
+  gap: 1px;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--muted);
+  background: var(--panel);
+  cursor: pointer;
+  text-align: left;
+}
+
+.authoring-workflow-nav button:hover,
+.authoring-workflow-nav button:focus-visible {
+  border-color: #efb28e;
+  background: #fff7f1;
+  outline: none;
+}
+
+.authoring-workflow-nav span {
+  overflow: hidden;
+  color: #73787e;
+  font-size: 0.62rem;
+  font-weight: 850;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.authoring-workflow-nav strong {
+  overflow: hidden;
+  color: inherit;
+  font-size: 0.75rem;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.authoring-workflow-nav button.complete {
+  color: var(--green);
+  border-color: #c9d6cb;
+  background: #f6faf6;
+}
+
+.authoring-workflow-nav button.current {
+  color: var(--brand-dark);
+  border-color: #ffb48b;
+  background: #fff1e9;
+}
+
+.authoring-workflow-nav button.blocked {
+  color: var(--red);
+  border-color: #e2b7b3;
+  background: #fff5f3;
+}
+
 .policy-ingestion-copy {
   display: grid;
   gap: 6px;
@@ -2671,6 +2746,11 @@ textarea {
     align-items: stretch;
     flex-direction: column;
   }
+
+  .authoring-workflow-nav {
+    top: 0;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 560px) {
@@ -2702,6 +2782,10 @@ textarea {
   }
 
   .hash-list {
+    grid-template-columns: 1fr;
+  }
+
+  .authoring-workflow-nav {
     grid-template-columns: 1fr;
   }
 

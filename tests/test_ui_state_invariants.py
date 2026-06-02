@@ -610,6 +610,45 @@ def test_ui_severity_semantics_are_documented():
     assert "These labels do not represent Guard admissibility decisions" in doc
 
 
+def test_create_authority_has_persistent_workflow_navigator():
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    css = STYLES_CSS.read_text(encoding="utf-8")
+    source = APP_JS.read_text(encoding="utf-8")
+    nav_body = _function_body(source, "renderAuthoringWorkflowNav")
+    navigation_body = _function_body(source, "handleAuthoringWorkflowNavigation")
+    sync_body = _function_body(source, "syncPublicationActions")
+
+    assert 'id="authoring-workflow-nav"' in html
+    for label in (
+        "Draft",
+        "Extraction",
+        "Reconciliation",
+        "Committed",
+        "Compiled",
+        "Impact Review",
+        "Publication",
+    ):
+        assert f"<span>{label}</span>" in html
+
+    assert 'data-workflow-jump="policy-source-text"' in html
+    assert 'data-workflow-jump="extraction-review"' in html
+    assert 'data-workflow-jump="reconciliation-workflow"' in html
+    assert 'data-workflow-jump="compiled-contract-boundary"' in html
+    assert 'data-workflow-page="preview"' in html
+    assert 'data-workflow-page="publication"' in html
+    assert ".authoring-workflow-nav" in css
+    assert "position: sticky" in css
+    assert "grid-template-columns: repeat(7, minmax(0, 1fr))" in css
+    assert "grid-template-columns: repeat(2, minmax(0, 1fr))" in css
+    assert "renderAuthoringWorkflowNav()" in sync_body
+    assert "reconciliationWorkflowPosture()" in nav_body
+    assert "canGenerateOperationalImpact()" in nav_body
+    assert "canExportBundle()" in nav_body
+    assert "showPage(button.dataset.workflowPage)" in navigation_body
+    assert "scrollIntoView({ behavior: \"smooth\", block: \"center\" })" in navigation_body
+    assert 'document.querySelector("#authoring-workflow-nav")?.addEventListener("click", handleAuthoringWorkflowNavigation)' in source
+
+
 def _function_body(source: str, function_name: str) -> str:
     marker = f"function {function_name}"
     start = source.index(marker)
