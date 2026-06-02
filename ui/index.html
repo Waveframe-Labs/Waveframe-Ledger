@@ -4,20 +4,18 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Governance Ledger</title>
-    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32x32.png" />
+    <link rel="icon" href="/assets/branding/favicon.ico" sizes="any" />
+    <link rel="icon" type="image/png" sizes="96x96" href="/assets/branding/favicon-96x96.png" />
+    <link rel="apple-touch-icon" href="/assets/branding/apple-touch-icon.png" />
+    <link rel="manifest" href="/assets/branding/site.webmanifest" />
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
     <div class="app-shell">
       <aside class="sidebar" aria-label="Ledger navigation">
         <div class="brand">
-          <div class="brand-mark" aria-hidden="true">
-            <img src="/assets/favicon-32x32.png" alt="" />
-          </div>
-          <div>
-            <div class="brand-name">Waveframe Ledger</div>
-            <div class="brand-subtitle">Authority Workspace</div>
-          </div>
+          <img class="brand-logo" src="/assets/branding/canon_wf_logo_extended.png" alt="Waveframe Labs" />
+          <div class="brand-product">Ledger Authority Workspace</div>
         </div>
         <nav class="nav-list">
           <a href="#overview" class="nav-link active" data-page-link="overview">Overview</a>
@@ -33,8 +31,11 @@
       <main class="workspace">
         <header class="authority-context" aria-label="Current authority context">
           <div class="authority-context-main">
-            <span class="section-kicker">Current authority</span>
-            <strong id="context-authority-ref">No committed authority draft</strong>
+            <img class="context-mark" src="/assets/branding/canon_wf_logo_mark_transparent.png" alt="" aria-hidden="true" />
+            <div>
+              <span class="section-kicker">Current authority</span>
+              <strong id="context-authority-ref">No committed authority draft</strong>
+            </div>
           </div>
           <div class="authority-context-state" aria-label="Authority lifecycle state">
             <span id="context-draft-state" class="context-chip active">Draft</span>

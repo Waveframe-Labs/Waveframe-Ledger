@@ -4,6 +4,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 APP_JS = ROOT / "ui" / "app.js"
+INDEX_HTML = ROOT / "ui" / "index.html"
+STYLES_CSS = ROOT / "ui" / "styles.css"
+README = ROOT / "README.md"
 
 
 def test_opening_registry_semantic_preview_preserves_draft_workflow_state():
@@ -510,6 +513,27 @@ def test_supersede_attaches_semantic_diff_summary_without_guard_or_cloud_calls()
     assert "semantic_lifecycle_enforcement_projection" in block
     assert "waveframe_guard" not in source
     assert "Cloud" not in block
+
+
+def test_ui_uses_canonical_waveframe_branding_assets():
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    css = STYLES_CSS.read_text(encoding="utf-8")
+    manifest = (ROOT / "ui" / "assets" / "branding" / "site.webmanifest").read_text(encoding="utf-8")
+    readme = README.read_text(encoding="utf-8")
+
+    assert "/assets/branding/canon_wf_logo_extended.png" in html
+    assert "/assets/branding/canon_wf_logo_mark_transparent.png" in html
+    assert "/assets/branding/favicon.ico" in html
+    assert "/assets/branding/favicon-96x96.png" in html
+    assert "/assets/branding/apple-touch-icon.png" in html
+    assert "/assets/branding/site.webmanifest" in html
+    assert "/assets/favicon-32x32.png" not in html
+    assert "brand-logo" in css
+    assert "context-mark" in css
+    assert "Waveframe Ledger" in manifest
+    assert "/assets/branding/web-app-manifest-192x192.png" in manifest
+    assert "/assets/branding/web-app-manifest-512x512.png" in manifest
+    assert "ui/assets/branding/canon_wf_logo_extended.png" in readme
 
 
 def _function_body(source: str, function_name: str) -> str:

@@ -51,49 +51,35 @@ select {
   position: sticky;
   top: 0;
   height: 100vh;
-  padding: 24px 20px;
+  padding: 28px 20px;
   border-right: 1px solid #050505;
   background: var(--rail);
 }
 
 .brand {
-  display: flex;
-  gap: 14px;
-  align-items: center;
-  margin-bottom: 34px;
-  padding: 16px;
-  border: 1px solid #080808;
-  border-radius: 4px;
-  background: #050505;
-}
-
-.brand-mark {
-  width: 58px;
-  height: 58px;
   display: grid;
-  place-items: center;
-  border: 1px solid #24201d;
-  border-radius: 8px;
-  background: #000;
-  overflow: hidden;
+  gap: 12px;
+  margin-bottom: 42px;
+  padding: 20px 18px;
+  border: 1px solid #1d1714;
+  border-radius: 7px;
+  background: #050505;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 18px 36px rgba(0, 0, 0, 0.24);
 }
 
-.brand-mark img {
-  width: 38px;
-  height: 38px;
+.brand-logo {
+  display: block;
+  width: 100%;
+  max-width: 224px;
+  height: auto;
   object-fit: contain;
 }
 
-.brand-name {
-  color: #f7f5f2;
-  font-weight: 850;
-  letter-spacing: 0.01em;
-}
-
-.brand-subtitle {
+.brand-product {
   color: var(--brand);
-  font-size: 0.88rem;
+  font-size: 0.8rem;
   font-weight: 750;
+  letter-spacing: 0.04em;
 }
 
 .nav-list {
@@ -143,11 +129,21 @@ select {
 
 .authority-context-main {
   display: grid;
-  gap: 3px;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 11px;
+  align-items: center;
 }
 
 .authority-context-main strong {
+  display: block;
+  line-height: 1.22;
   overflow-wrap: anywhere;
+}
+
+.context-mark {
+  width: 34px;
+  height: 34px;
+  object-fit: contain;
 }
 
 .authority-context-state {
@@ -485,7 +481,7 @@ h3 {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  margin-bottom: 22px;
+  margin-bottom: 26px;
 }
 
 .section-intent {
@@ -616,9 +612,9 @@ h3 {
 
 .policy-ingestion-panel {
   display: grid;
-  gap: 14px;
-  margin-bottom: 16px;
-  padding: 18px;
+  gap: 18px;
+  margin-bottom: 20px;
+  padding: 22px;
   border: 1px solid var(--line);
   border-left: 4px solid var(--brand);
   border-radius: 8px;
@@ -1213,15 +1209,16 @@ textarea {
 }
 
 .commit-boundary-action {
-  min-width: 292px;
+  min-width: 306px;
+  min-height: 50px;
   border-color: #a93600;
-  box-shadow: 0 0 0 3px rgba(255, 90, 0, 0.14), var(--shadow);
+  box-shadow: 0 0 0 3px rgba(255, 90, 0, 0.16), 0 12px 26px rgba(201, 72, 6, 0.16);
 }
 
 .commit-boundary-action:not(:disabled)::after {
   content: "Deterministic boundary";
   display: block;
-  margin-top: -4px;
+  margin-top: -2px;
   color: #ffe4d6;
   font-size: 0.66rem;
   font-weight: 850;
