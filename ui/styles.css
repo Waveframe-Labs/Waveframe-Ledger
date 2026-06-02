@@ -1384,6 +1384,13 @@ textarea {
   gap: 10px;
 }
 
+.guard-behavior-changes {
+  display: grid;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
 .semantic-diff-header,
 .semantic-change-classes {
   display: flex;

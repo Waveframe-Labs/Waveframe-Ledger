@@ -51,11 +51,13 @@ def test_export_requires_explicit_impact_review():
     source = APP_JS.read_text(encoding="utf-8")
     body = _function_body(source, "exportBundle")
 
+    compile_guard = body.index("if (!currentCompiledAuthorityContract")
     guard = body.index("if (!workflowState.impactReviewed)")
     receipt = body.index("const receipt = await buildPublicationReceipt")
     state_update = body.index("updateWorkflowState({")
 
-    assert guard < receipt < state_update
+    assert compile_guard < guard < receipt < state_update
+    assert "compiled_contract_required" in body
     assert "showPage(\"diagnostics\")" in body[guard:receipt]
     assert "bundleExported: true" in body
     assert "receiptGenerated: true" in body
@@ -198,6 +200,21 @@ def test_compiler_boundary_is_visible_between_semantic_commit_and_operational_im
     assert 'semanticStateMachine.compiler_state === "compiled"' in capability_body
 
 
+def test_publication_bundle_is_upgraded_with_compiled_contract_before_export():
+    source = APP_JS.read_text(encoding="utf-8")
+    upgrade_body = _function_body(source, "upgradeAuthorityBundleWithCompilerArtifacts")
+    generate_body = source[source.index("async function generateArtifacts") : source.index("function setBusy")]
+    export_body = _function_body(source, "exportBundle")
+
+    assert "semantic_commit_bundle" in upgrade_body
+    assert "compiled_authority_contract" in upgrade_body
+    assert "semantic_commit_hash" in upgrade_body
+    assert "compiled_contract_hash" in upgrade_body
+    assert "compiled_authority_contract.v1" in upgrade_body
+    assert "payload.authority_bundle = upgradeAuthorityBundleWithCompilerArtifacts(payload.authority_bundle)" in generate_body
+    assert "currentArtifacts.authority_bundle = upgradeAuthorityBundleWithCompilerArtifacts" in export_body
+
+
 def test_policy_source_changes_invalidate_semantic_lineage_before_impact_review():
     source = APP_JS.read_text(encoding="utf-8")
     block = _event_listener_block(source, 'policySourceText.addEventListener("input"')
@@ -255,6 +272,47 @@ def test_ui_uses_action_level_capability_gates():
     assert "openReconciliationButton.disabled = !canReconcileAmbiguities()" in sync_body
     assert "exportButton.disabled = !canExportBundle(hasArtifacts)" in sync_body
     assert "registerButton.disabled = !canRegisterAuthority()" in sync_body
+
+
+def test_registry_stores_compiled_contract_lineage():
+    source = APP_JS.read_text(encoding="utf-8")
+    publish_body = _function_body(source, "publishCurrentBundleToRegistry")
+    detail_body = _function_body(source, "renderRegistryDetailSummary")
+
+    assert "compiled_contract_hash" in publish_body
+    assert "semantic_commit_hash" in publish_body
+    assert "compiler_version" in publish_body
+    assert "compiled_authority_contract: currentArtifacts.compiled_authority_contract" in publish_body
+    assert "Compiled Contract Lineage" in detail_body
+    assert "Guard compatibility" in detail_body
+
+
+def test_change_review_prefers_compiled_contracts_and_shows_guard_behavior_changes():
+    source = APP_JS.read_text(encoding="utf-8")
+    payload_body = _function_body(source, "authorityArtifactFromPayload")
+    entry_body = _function_body(source, "authorityArtifactFromEntry")
+
+    assert "payload.compiled_authority_contract" in payload_body
+    assert "payload.authority_bundle?.compiled_authority_contract" in payload_body
+    assert "entry.artifacts?.compiled_authority_contract" in entry_body
+    assert "entry.bundle?.compiled_authority_contract" in entry_body
+    assert "Guard behavior changes" in source
+    assert "guard_enforcement_changes" in source
+
+
+def test_publication_review_surfaces_compiled_authority_contract():
+    html = (ROOT / "ui" / "index.html").read_text(encoding="utf-8")
+    source = APP_JS.read_text(encoding="utf-8")
+    body = _function_body(source, "renderCompiledContractPanel")
+
+    assert 'id="compiled-contract-panel"' in html
+    assert "Compiled Authority Contract" in html
+    assert "Capability count" in body
+    assert "Admissibility constraints" in body
+    assert "Replay obligations" in body
+    assert "Continuity requirements" in body
+    assert "Guard compatibility posture" in body
+    assert "Compiled contract hash" in body
 
 
 def test_authoring_ui_exposes_staged_pipeline_not_apply_buttons():

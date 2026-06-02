@@ -38,6 +38,10 @@ def test_authority_bundle_composes_publishable_governance_object():
     assert bundle["authority_ref"] == "finance-policy@0.2.0"
     assert bundle["contract_hash"] == "sha256:authority-0.2.0-100000"
     assert bundle["authority_contract"] == authority
+    assert bundle["semantic_commit_bundle"] is None
+    assert bundle["compiled_authority_contract"] is None
+    assert bundle["semantic_commit_hash"] is None
+    assert bundle["compiled_contract_hash"] is None
     assert bundle["publication_manifest"] == manifest
     assert bundle["governance_impact_preview"] == preview
     assert bundle["authority_diff_impact"] == diff
@@ -86,7 +90,39 @@ def test_authority_bundle_supports_optional_diff_and_review_packets():
     assert bundle["review_packets"] == []
     assert bundle["immutable_inputs"]["diff_hash"] is None
     assert bundle["immutable_inputs"]["review_packet_hashes"] == []
+    assert bundle["immutable_inputs"]["semantic_commit_hash"] is None
+    assert bundle["immutable_inputs"]["compiled_contract_hash"] is None
     assert bundle["schema_compatibility"]["compatible"] is True
+
+
+def test_authority_bundle_includes_semantic_commit_and_compiled_contract():
+    authority = _authority_contract()
+    semantic_commit = _semantic_commit_bundle(authority)
+    compiled = _compiled_authority_contract(authority, semantic_commit)
+
+    bundle = build_authority_bundle(
+        authority_contract=authority,
+        publication_manifest=_publication_manifest(authority),
+        governance_impact_preview=build_governance_impact_preview(authority),
+        semantic_commit_bundle=semantic_commit,
+        compiled_authority_contract=compiled,
+    )
+
+    assert bundle["semantic_commit_bundle"] == semantic_commit
+    assert bundle["compiled_authority_contract"] == compiled
+    assert bundle["semantic_commit_hash"] == semantic_commit["semantic_commit_hash"]
+    assert bundle["compiled_contract_hash"] == compiled["contract_hash"]
+    assert bundle["immutable_inputs"]["semantic_commit_hash"] == semantic_commit["semantic_commit_hash"]
+    assert bundle["immutable_inputs"]["compiled_contract_hash"] == compiled["contract_hash"]
+    assert {
+        "artifact_type": "semantic_commit_bundle.v1",
+        "artifact_hash": semantic_commit["semantic_commit_hash"],
+    } in bundle["semantic_artifacts"]
+    assert {
+        "artifact_type": "compiled_authority_contract.v1",
+        "artifact_hash": compiled["contract_hash"],
+    } in bundle["semantic_artifacts"]
+    assert bundle["schema_compatibility"]["artifacts"]["compiled_authority_contract"] == "compiled_authority_contract.v1"
 
 
 def test_authority_bundle_derives_publication_id_for_legacy_manifest():
@@ -285,6 +321,32 @@ def _authority_contract(*, threshold: int = 250000, version: str = "0.1.0") -> d
             "compilation_report_hash": "sha256:report",
             "review_id": "review-finance-policy",
         },
+    }
+
+
+def _semantic_commit_bundle(authority: dict) -> dict:
+    return {
+        "schema_version": "semantic_commit_bundle.v1",
+        "semantic_commit_id": f"semantic-commit-{authority['contract_version']}",
+        "semantic_commit_hash": f"sha256:semantic-{authority['contract_version']}".replace(".", ""),
+        "committed_semantic_meaning": authority,
+    }
+
+
+def _compiled_authority_contract(authority: dict, semantic_commit: dict) -> dict:
+    return {
+        "schema_version": "compiled_authority_contract.v1",
+        "authority_ref": f"{authority['contract_id']}@{authority['contract_version']}",
+        "contract_id": authority["contract_id"],
+        "contract_version": authority["contract_version"],
+        "compiled_from": {
+            "schema_version": "semantic_commit_bundle.v1",
+            "semantic_commit_hash": semantic_commit["semantic_commit_hash"],
+        },
+        "capability_scope": [],
+        "replay_obligations": [],
+        "continuity_requirements": {},
+        "contract_hash": f"sha256:compiled-{authority['contract_version']}".replace(".", ""),
     }
 
 

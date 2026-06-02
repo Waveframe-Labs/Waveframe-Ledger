@@ -108,6 +108,13 @@ function stableHash(value) {
   return `draft:${(hash >>> 0).toString(16).padStart(8, "0")}`;
 }
 
+async function sha256CanonicalHash(value) {
+  const bytes = new TextEncoder().encode(canonicalJson(value));
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  const hex = [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+  return `sha256:${hex}`;
+}
+
 function committedDraftHash() {
   return committedDraft ? stableHash(committedDraft) : null;
 }
@@ -313,6 +320,7 @@ function clearOperationalImpact() {
   renderExecutionContext("#change-execution-context", null);
   renderChangeReview(null);
   renderPublicationProjection(null);
+  renderCompiledContractPanel(null);
   $("#bundle-meaning").textContent = "No bundle generated yet.";
   renderList("#publication-consequences", []);
   $("#manifest-json").textContent = "No publication manifest generated yet.";
@@ -1270,20 +1278,68 @@ function populateManualFieldsFromCommittedDraft() {
   draftSessionStatus.textContent = "Manual fields populated from committed interpretation.";
 }
 
-function buildSemanticCommitBundleForUi() {
+function compiledContractHash() {
+  return currentCompiledAuthorityContract?.contract_hash || null;
+}
+
+function semanticCommitHash() {
+  return currentSemanticCommitBundle?.semantic_commit_hash || currentSemanticCommitBundle?.bundle_hash || null;
+}
+
+function upgradeAuthorityBundleWithCompilerArtifacts(bundle) {
+  if (!bundle || !currentSemanticCommitBundle || !currentCompiledAuthorityContract) return bundle;
+  const semanticHash = semanticCommitHash();
+  const compiledHash = compiledContractHash();
+  const semanticArtifacts = [...(bundle.semantic_artifacts || [])];
+  if (semanticHash && !semanticArtifacts.some((artifact) => artifact.artifact_type === "semantic_commit_bundle.v1")) {
+    semanticArtifacts.push({ artifact_type: "semantic_commit_bundle.v1", artifact_hash: semanticHash });
+  }
+  if (compiledHash && !semanticArtifacts.some((artifact) => artifact.artifact_type === "compiled_authority_contract.v1")) {
+    semanticArtifacts.push({ artifact_type: "compiled_authority_contract.v1", artifact_hash: compiledHash });
+  }
+  return {
+    ...bundle,
+    semantic_commit_bundle: currentSemanticCommitBundle,
+    compiled_authority_contract: currentCompiledAuthorityContract,
+    semantic_commit_hash: semanticHash,
+    compiled_contract_hash: compiledHash,
+    semantic_artifacts: semanticArtifacts,
+    immutable_inputs: {
+      ...(bundle.immutable_inputs || {}),
+      semantic_commit_hash: semanticHash,
+      compiled_contract_hash: compiledHash,
+    },
+    schema_compatibility: {
+      ...(bundle.schema_compatibility || {}),
+      artifacts: {
+        ...((bundle.schema_compatibility || {}).artifacts || {}),
+        semantic_commit_bundle: "semantic_commit_bundle.v1",
+        compiled_authority_contract: "compiled_authority_contract.v1",
+      },
+      expected: {
+        ...((bundle.schema_compatibility || {}).expected || {}),
+        semantic_commit_bundle: "semantic_commit_bundle.v1",
+        compiled_authority_contract: "compiled_authority_contract.v1",
+      },
+      compatible: (bundle.schema_compatibility || {}).compatible !== false,
+    },
+  };
+}
+
+async function buildSemanticCommitBundleForUi() {
   if (!currentReconciliation || currentReconciliation.interpretation_completeness_posture !== "complete") {
     throw new Error("Semantic reconciliation must be complete before compilation.");
   }
   if (!committedDraft) {
     throw new Error("Committed semantic meaning is required before compilation.");
   }
-  const semanticHash = stableHash(committedDraft);
-  return {
+  const semanticHash = await sha256CanonicalHash(committedDraft);
+  const bundle = {
     schema_version: "semantic_commit_bundle.v1",
     source_id: currentReconciliation.source_id,
     source_hash: currentReconciliation.source_hash,
     extraction_id: currentReconciliation.extraction_id,
-    semantic_commit_id: `semantic-commit-${semanticHash.replace("draft:", "")}`,
+    semantic_commit_id: `semantic-commit-${semanticHash.replace("sha256:", "").slice(0, 12)}`,
     semantic_commit_hash: semanticHash,
     committed_at: new Date().toISOString(),
     committed_by: "local-ledger-ui",
@@ -1326,11 +1382,9 @@ function buildSemanticCommitBundleForUi() {
       "does_not_call_guard",
       "does_not_determine_runtime_admissibility",
     ],
-    bundle_hash: stableHash({
-      semantic_hash: semanticHash,
-      decisions: currentReconciliation.operator_interpretation_decisions || [],
-    }),
   };
+  bundle.bundle_hash = await sha256CanonicalHash(bundle);
+  return bundle;
 }
 
 async function compileAuthorityContract() {
@@ -1344,7 +1398,7 @@ async function compileAuthorityContract() {
   compileAuthorityButton.disabled = true;
   compileAuthorityButton.textContent = "Compiling Contract...";
   try {
-    const semanticCommitBundle = buildSemanticCommitBundleForUi();
+    const semanticCommitBundle = await buildSemanticCommitBundleForUi();
     const response = await fetch("/api/compile-authority", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -1410,6 +1464,7 @@ async function generateArtifacts(options = {}) {
     payload.ui_draft_hash = draftHash;
     payload.semantic_commit_bundle = currentSemanticCommitBundle;
     payload.compiled_authority_contract = currentCompiledAuthorityContract;
+    payload.authority_bundle = upgradeAuthorityBundleWithCompilerArtifacts(payload.authority_bundle);
     currentArtifacts = payload;
     pendingRegistration = null;
     if (isReview) {
@@ -1699,6 +1754,7 @@ function renderArtifacts(payload, options = {}) {
   $("#lineage-posture").textContent = bundle.lineage.source_hash && bundle.lineage.compilation_report_hash
     ? "Source and compilation lineage are present for authority publication."
     : "Lineage is incomplete; review source and compilation provenance before export.";
+  renderCompiledContractPanel(payload.compiled_authority_contract || bundle.compiled_authority_contract || null);
   renderList("#publication-consequences", bundle.operational_implications);
   renderDefinitionList("#immutable-inputs", bundle.immutable_inputs);
   renderDefinitionList("#lineage-list", bundle.lineage);
@@ -1760,6 +1816,35 @@ function renderPublicationProjection(projection) {
   $("#release-continuity").textContent = projection?.continuity_posture || "Pending impact review.";
   $("#release-lifecycle").textContent = projection?.lifecycle_effect || "Pending impact review.";
   $("#release-registration").textContent = projection?.registry_posture || "Bundle not exported.";
+}
+
+function renderCompiledContractPanel(compiled) {
+  const node = $("#compiled-contract-panel");
+  if (!node) return;
+  if (!compiled) {
+    renderDefinitionValuesInto(node, {
+      "Compile status": "Compile Authority Contract before publication export.",
+      "Guard compatibility": "pending compiled contract",
+    });
+    return;
+  }
+  const capabilities = Array.isArray(compiled.capability_scope) ? compiled.capability_scope : [];
+  const admissibilityCount = capabilities.reduce(
+    (total, capability) => total + ((capability.admissibility_constraints || []).length),
+    0,
+  );
+  const replayCount = Array.isArray(compiled.replay_obligations) ? compiled.replay_obligations.length : 0;
+  const continuity = compiled.continuity_requirements || {};
+  renderDefinitionValuesInto(node, {
+    "Capability count": String(capabilities.length),
+    "Admissibility constraints": String(admissibilityCount),
+    "Replay obligations": String(replayCount),
+    "Continuity requirements": continuity.revalidation_required || continuity.state_snapshot_required
+      ? "revalidation or snapshot controls active"
+      : "no compiled continuity controls",
+    "Guard compatibility posture": "deterministic representation ready for Guard/Cloud enforcement",
+    "Compiled contract hash": compiled.contract_hash || "not available",
+  });
 }
 
 function renderExecutionContext(selector, executionContext) {
@@ -2001,6 +2086,8 @@ function publishCurrentBundleToRegistry(receipt, publicationNotes) {
       bundle_hash: receipt?.bundle_hash || bundle.contract_hash,
       receipt_hash: receipt?.receipt_hash || null,
       manifest_hash: receipt?.manifest_hash || bundle.immutable_inputs.manifest_hash || null,
+      semantic_commit_hash: bundle.semantic_commit_hash || bundle.immutable_inputs.semantic_commit_hash || null,
+      compiled_contract_hash: bundle.compiled_contract_hash || bundle.immutable_inputs.compiled_contract_hash || null,
     },
     "Authority registered locally with authority_bundle.v1 and publication_receipt.v1.",
   );
@@ -2023,6 +2110,9 @@ function publishCurrentBundleToRegistry(receipt, publicationNotes) {
     escalation_threshold: projection.escalation_threshold || "not defined",
     semantic_integrity_posture: projection.semantic_integrity_posture || "requires review",
     contract_hash: bundle.contract_hash,
+    semantic_commit_hash: bundle.semantic_commit_hash || bundle.immutable_inputs.semantic_commit_hash || null,
+    compiled_contract_hash: bundle.compiled_contract_hash || bundle.immutable_inputs.compiled_contract_hash || null,
+    compiler_version: currentCompiledAuthorityContract?.determinism?.output_schema || "compiled_authority_contract.v1",
     latest_bundle_hash: receipt?.bundle_hash || bundle.contract_hash,
     latest_receipt_hash: receipt?.receipt_hash || null,
     lifecycle_event_ids: registeredLifecycle.map((event) => event.event_id),
@@ -2043,6 +2133,8 @@ function publishCurrentBundleToRegistry(receipt, publicationNotes) {
       authority_bundle: bundle,
       publication_receipt: receipt,
       authority_registry_projection: projection,
+      semantic_commit_bundle: currentArtifacts.semantic_commit_bundle || bundle.semantic_commit_bundle || null,
+      compiled_authority_contract: currentArtifacts.compiled_authority_contract || bundle.compiled_authority_contract || null,
       authority_workspace_projection: currentArtifacts.authority_workspace_projection,
       authority_operational_summary: currentArtifacts.authority_operational_summary,
       diagnostics: currentArtifacts.diagnostics || [],
@@ -3060,6 +3152,11 @@ function renderBundleDetail(entry, mode = "summary") {
         entry: registryEntrySummary(entry),
         lifecycle_events: registryLifecycleEvents(entry),
         lineage: entry.lineage,
+        compiled_contract_lineage: {
+          compiled_contract_hash: entry.compiled_contract_hash,
+          semantic_commit_hash: entry.semantic_commit_hash,
+          compiler_version: entry.compiler_version,
+        },
         immutable_inputs: entry.immutable_inputs,
         diagnostic_rollup: entry.diagnostic_summary,
       },
@@ -3088,6 +3185,11 @@ function renderBundleDetail(entry, mode = "summary") {
         lifecycle_events: registryLifecycleEvents(entry),
         publication_receipt: entry.publication_receipt || null,
         diagnostic_rollup: entry.diagnostic_summary || null,
+        compiled_contract_lineage: {
+          compiled_contract_hash: entry.compiled_contract_hash,
+          semantic_commit_hash: entry.semantic_commit_hash,
+          compiler_version: entry.compiler_version,
+        },
         bundle: entry.bundle,
       },
       null,
@@ -3163,6 +3265,15 @@ function renderRegistryDetailSummary(detail, entry) {
     Manifest: summary.replay_readiness?.manifest_aligned ? "aligned" : "incomplete",
   });
 
+  const compiledLineage = document.createElement("dl");
+  compiledLineage.className = "compact-dl";
+  renderDefinitionValuesInto(compiledLineage, {
+    "Compiled contract hash": entry.compiled_contract_hash || entry.bundle?.compiled_contract_hash || "not recorded",
+    "Semantic commit hash": entry.semantic_commit_hash || entry.bundle?.semantic_commit_hash || "not recorded",
+    "Compiler version": entry.compiler_version || "compiled_authority_contract.v1",
+    "Guard compatibility": entry.compiled_contract_hash ? "compiled representation available" : "compiled representation missing",
+  });
+
   const drift = document.createElement("ul");
   drift.className = "operations-list";
   const driftItems = summary.drift_summary?.length ? summary.drift_summary : [{ drift_type: "No continuity drift detected", summary: "No lineage drift currently requires attention." }];
@@ -3220,6 +3331,7 @@ function renderRegistryDetailSummary(detail, entry) {
     registryDetailBlock("Why This Posture Exists", causality, "wide"),
     registryDetailBlock("Lifecycle", timeline, "wide"),
     registryDetailBlock("Continuity", freshnessTimeline, "wide"),
+    registryDetailBlock("Compiled Contract Lineage", compiledLineage, "wide"),
     registryDetailBlock("Replay", replay),
     registryDetailBlock("Drift", drift),
     registryDetailBlock("Governance Meaning", meaning),
@@ -3458,7 +3570,9 @@ function registryEntrySummary(entry) {
 
 function authorityArtifactFromEntry(entry) {
   if (!entry) return null;
-  return entry.artifacts?.authority_contract
+  return entry.artifacts?.compiled_authority_contract
+    || entry.bundle?.compiled_authority_contract
+    || entry.artifacts?.authority_contract
     || entry.bundle?.authority_artifact
     || entry.bundle?.authority_contract
     || entry.bundle?.contract
@@ -3467,7 +3581,9 @@ function authorityArtifactFromEntry(entry) {
 
 function authorityArtifactFromPayload(payload) {
   if (!payload) return null;
-  return payload.authority_contract
+  return payload.compiled_authority_contract
+    || payload.authority_bundle?.compiled_authority_contract
+    || payload.authority_contract
     || payload.authority_bundle?.authority_artifact
     || payload.authority_bundle?.authority_contract
     || payload.authority_bundle?.contract
@@ -3618,7 +3734,20 @@ function semanticDiffSummaryView(diffOrSummary, options = {}) {
     summary.operational_impact,
     summary.change_count ? "Semantic changes detected; no additional operational narrative was emitted." : "No operational semantic changes detected.",
   );
-  panel.append(header, refs, classes, impact);
+  const guard = document.createElement("div");
+  guard.className = "guard-behavior-changes";
+  const guardTitle = document.createElement("strong");
+  guardTitle.textContent = "Guard behavior changes";
+  guard.append(
+    guardTitle,
+    semanticDiffList(
+      summary.guard_enforcement_changes,
+      summary.guard_compatibility_posture === "no_new_guard_obligations"
+        ? "No new deterministic Guard enforcement obligations are projected."
+        : `Guard compatibility posture: ${formatLabel(summary.guard_compatibility_posture)}`,
+    ),
+  );
+  panel.append(header, refs, classes, impact, guard);
   return panel;
 }
 
@@ -3933,6 +4062,21 @@ function buildOutcomeExplorer(preview, bundle) {
 
 async function exportBundle() {
   if (!currentArtifacts) return;
+  currentArtifacts.authority_bundle = upgradeAuthorityBundleWithCompilerArtifacts(currentArtifacts.authority_bundle);
+  if (!currentCompiledAuthorityContract || !currentArtifacts.authority_bundle?.compiled_contract_hash) {
+    renderDiagnostics([
+      {
+        severity: "warning",
+        code: "compiled_contract_required",
+        title: "Compile authority contract before exporting.",
+        domain: "publication",
+        text: "Export requires compiled_authority_contract.v1 so publication evidence binds to deterministic runtime representation.",
+        recommendation: "Compile Authority Contract, generate operational impact, then export the authority bundle.",
+      },
+    ]);
+    showPage("diagnostics");
+    return;
+  }
   if (!workflowState.impactReviewed) {
     renderDiagnostics([
       {

@@ -9,7 +9,11 @@
     "publication_id",
     "authority_ref",
     "contract_hash",
+    "semantic_commit_hash",
+    "compiled_contract_hash",
     "authority_contract",
+    "semantic_commit_bundle",
+    "compiled_authority_contract",
     "publication_manifest",
     "governance_impact_preview",
     "authority_diff_impact",
@@ -41,8 +45,22 @@
       "type": "string",
       "minLength": 1
     },
+    "semantic_commit_hash": {
+      "type": ["string", "null"],
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "compiled_contract_hash": {
+      "type": ["string", "null"],
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
     "authority_contract": {
       "type": "object"
+    },
+    "semantic_commit_bundle": {
+      "type": ["object", "null"]
+    },
+    "compiled_authority_contract": {
+      "type": ["object", "null"]
     },
     "publication_manifest": {
       "type": "object"
@@ -69,7 +87,9 @@
           "artifact_type": {
             "enum": [
               "governance_impact_preview.v1",
-              "authority_diff_impact.v1"
+              "authority_diff_impact.v1",
+              "semantic_commit_bundle.v1",
+              "compiled_authority_contract.v1"
             ]
           },
           "artifact_hash": {
@@ -153,7 +173,9 @@
         "manifest_hash",
         "preview_hash",
         "diff_hash",
-        "review_packet_hashes"
+        "review_packet_hashes",
+        "semantic_commit_hash",
+        "compiled_contract_hash"
       ],
       "properties": {
         "authority_hash": {
@@ -178,6 +200,14 @@
             "type": "string",
             "pattern": "^sha256:[a-f0-9]{64}$"
           }
+        },
+        "semantic_commit_hash": {
+          "type": ["string", "null"],
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "compiled_contract_hash": {
+          "type": ["string", "null"],
+          "pattern": "^sha256:[a-f0-9]{64}$"
         }
       }
     },

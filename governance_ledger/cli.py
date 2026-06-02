@@ -133,6 +133,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     authority_bundle_parser.add_argument("--preview", required=True)
     authority_bundle_parser.add_argument("--diff")
     authority_bundle_parser.add_argument("--review-packet", action="append", default=[])
+    authority_bundle_parser.add_argument("--semantic-commit")
+    authority_bundle_parser.add_argument("--compiled-contract")
     authority_bundle_parser.add_argument("--output")
     authority_bundle_parser.add_argument("--json", action="store_true")
 
@@ -281,6 +283,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 _read_json_arg(packet_path) or {}
                 for packet_path in args.review_packet
             ],
+            semantic_commit_bundle=_read_json_arg(args.semantic_commit),
+            compiled_authority_contract=_read_json_arg(args.compiled_contract),
         )
         if args.output:
             Path(args.output).write_text(

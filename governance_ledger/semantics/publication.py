@@ -34,6 +34,8 @@ def build_authority_bundle(
     governance_impact_preview: dict[str, Any],
     authority_diff_impact: dict[str, Any] | None = None,
     governance_review_packets: list[dict[str, Any]] | None = None,
+    semantic_commit_bundle: dict[str, Any] | None = None,
+    compiled_authority_contract: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Return authority_bundle.v1 from published governance artifacts."""
     authority = copy.deepcopy(authority_contract)
@@ -41,12 +43,16 @@ def build_authority_bundle(
     preview = copy.deepcopy(governance_impact_preview)
     diff = copy.deepcopy(authority_diff_impact) if authority_diff_impact is not None else None
     packets = copy.deepcopy(governance_review_packets) if governance_review_packets is not None else []
+    semantic_commit = copy.deepcopy(semantic_commit_bundle) if semantic_commit_bundle is not None else None
+    compiled_contract = copy.deepcopy(compiled_authority_contract) if compiled_authority_contract is not None else None
 
     authority_ref = _authority_ref(authority)
     contract_hash = _contract_hash(authority)
+    semantic_commit_hash = _semantic_commit_hash(semantic_commit)
+    compiled_contract_hash = _compiled_contract_hash(compiled_contract)
     publication_id = _publication_id(manifest, authority_ref, contract_hash)
-    immutable_inputs = _immutable_inputs(authority, manifest, preview, diff, packets)
-    semantic_artifacts = _semantic_artifacts(preview, diff)
+    immutable_inputs = _immutable_inputs(authority, manifest, preview, diff, packets, semantic_commit, compiled_contract)
+    semantic_artifacts = _semantic_artifacts(preview, diff, semantic_commit, compiled_contract)
     review_packets = _review_packets(packets)
 
     return {
@@ -54,7 +60,11 @@ def build_authority_bundle(
         "publication_id": publication_id,
         "authority_ref": authority_ref,
         "contract_hash": contract_hash,
+        "semantic_commit_hash": semantic_commit_hash,
+        "compiled_contract_hash": compiled_contract_hash,
         "authority_contract": authority,
+        "semantic_commit_bundle": semantic_commit,
+        "compiled_authority_contract": compiled_contract,
         "publication_manifest": manifest,
         "governance_impact_preview": preview,
         "authority_diff_impact": diff,
@@ -63,7 +73,7 @@ def build_authority_bundle(
         "review_packets": review_packets,
         "lineage": _lineage(authority, manifest),
         "provenance": _provenance(manifest),
-        "schema_compatibility": _schema_compatibility(authority, manifest, preview, diff, packets),
+        "schema_compatibility": _schema_compatibility(authority, manifest, preview, diff, packets, semantic_commit, compiled_contract),
         "publication_meaning": _publication_meaning(authority_ref, preview, diff, review_packets),
         "operational_implications": _operational_implications(preview, diff, packets),
         "continuity_implications": _continuity_implications(preview, diff, packets),
@@ -122,6 +132,8 @@ def build_publication_receipt(
         "manifest_hash": immutable_inputs.get("manifest_hash") or _artifact_hash(manifest),
         "semantic_artifact_hashes": _semantic_artifact_hashes(semantic_artifacts, immutable_inputs),
         "review_packet_hashes": list(immutable_inputs.get("review_packet_hashes") or []),
+        "semantic_commit_hash": bundle.get("semantic_commit_hash") or immutable_inputs.get("semantic_commit_hash"),
+        "compiled_contract_hash": bundle.get("compiled_contract_hash") or immutable_inputs.get("compiled_contract_hash"),
         "lineage_continuity": _lineage_continuity(bundle),
         "compatibility_posture": _compatibility_posture(schema_compatibility),
         "readiness_confirmations": _readiness_confirmations(confirmations),
@@ -132,6 +144,8 @@ def build_publication_receipt(
             "manifest_hash": immutable_inputs.get("manifest_hash"),
             "preview_hash": immutable_inputs.get("preview_hash"),
             "diff_hash": immutable_inputs.get("diff_hash"),
+            "semantic_commit_hash": immutable_inputs.get("semantic_commit_hash"),
+            "compiled_contract_hash": immutable_inputs.get("compiled_contract_hash"),
             "bundle_hash": _artifact_hash(bundle),
         },
         "non_goals": [
@@ -185,6 +199,8 @@ def _immutable_inputs(
     preview: dict[str, Any],
     diff: dict[str, Any] | None,
     packets: list[dict[str, Any]],
+    semantic_commit: dict[str, Any] | None,
+    compiled_contract: dict[str, Any] | None,
 ) -> dict[str, Any]:
     return {
         "authority_hash": _contract_hash(authority),
@@ -192,12 +208,16 @@ def _immutable_inputs(
         "preview_hash": _artifact_hash(preview),
         "diff_hash": _artifact_hash(diff) if diff is not None else None,
         "review_packet_hashes": [_artifact_hash(packet) for packet in packets],
+        "semantic_commit_hash": _semantic_commit_hash(semantic_commit),
+        "compiled_contract_hash": _compiled_contract_hash(compiled_contract),
     }
 
 
 def _semantic_artifacts(
     preview: dict[str, Any],
     diff: dict[str, Any] | None,
+    semantic_commit: dict[str, Any] | None,
+    compiled_contract: dict[str, Any] | None,
 ) -> list[dict[str, Any]]:
     artifacts = [
         {
@@ -210,6 +230,20 @@ def _semantic_artifacts(
             {
                 "artifact_type": AUTHORITY_DIFF_IMPACT_V1,
                 "artifact_hash": _artifact_hash(diff),
+            }
+        )
+    if semantic_commit is not None:
+        artifacts.append(
+            {
+                "artifact_type": "semantic_commit_bundle.v1",
+                "artifact_hash": _semantic_commit_hash(semantic_commit),
+            }
+        )
+    if compiled_contract is not None:
+        artifacts.append(
+            {
+                "artifact_type": "compiled_authority_contract.v1",
+                "artifact_hash": _compiled_contract_hash(compiled_contract),
             }
         )
     return artifacts
@@ -255,6 +289,8 @@ def _schema_compatibility(
     preview: dict[str, Any],
     diff: dict[str, Any] | None,
     packets: list[dict[str, Any]],
+    semantic_commit: dict[str, Any] | None,
+    compiled_contract: dict[str, Any] | None,
 ) -> dict[str, Any]:
     artifacts = {
         "authority_contract": authority.get("schema_version") or "authority_contract.v1",
@@ -262,12 +298,16 @@ def _schema_compatibility(
         "governance_impact_preview": preview.get("schema_version"),
         "authority_diff_impact": diff.get("schema_version") if diff is not None else None,
         "governance_review_packets": [packet.get("schema_version") for packet in packets],
+        "semantic_commit_bundle": semantic_commit.get("schema_version") if semantic_commit is not None else None,
+        "compiled_authority_contract": compiled_contract.get("schema_version") if compiled_contract is not None else None,
     }
     expected = {
         "publication_manifest": PUBLICATION_MANIFEST_V1,
         "governance_impact_preview": GOVERNANCE_IMPACT_PREVIEW_V1,
         "authority_diff_impact": AUTHORITY_DIFF_IMPACT_V1 if diff is not None else None,
         "governance_review_packets": [GOVERNANCE_REVIEW_PACKET_V1 for _ in packets],
+        "semantic_commit_bundle": "semantic_commit_bundle.v1" if semantic_commit is not None else None,
+        "compiled_authority_contract": "compiled_authority_contract.v1" if compiled_contract is not None else None,
     }
     return {
         "compatibility_mode": "additive_v1",
@@ -283,6 +323,8 @@ def _compatible(artifacts: dict[str, Any], expected: dict[str, Any]) -> bool:
         and artifacts["governance_impact_preview"] == expected["governance_impact_preview"]
         and artifacts["authority_diff_impact"] == expected["authority_diff_impact"]
         and artifacts["governance_review_packets"] == expected["governance_review_packets"]
+        and artifacts["semantic_commit_bundle"] == expected["semantic_commit_bundle"]
+        and artifacts["compiled_authority_contract"] == expected["compiled_authority_contract"]
     )
 
 
@@ -359,6 +401,10 @@ def _semantic_artifact_hashes(
         result["governance_impact_preview.v1"] = immutable_inputs["preview_hash"]
     if immutable_inputs.get("diff_hash"):
         result.setdefault("authority_diff_impact.v1", immutable_inputs["diff_hash"])
+    if immutable_inputs.get("semantic_commit_hash"):
+        result.setdefault("semantic_commit_bundle.v1", immutable_inputs["semantic_commit_hash"])
+    if immutable_inputs.get("compiled_contract_hash"):
+        result.setdefault("compiled_authority_contract.v1", immutable_inputs["compiled_contract_hash"])
     return result
 
 
@@ -433,6 +479,24 @@ def _semantic_compatibility_warnings(bundle: dict[str, Any]) -> list[str]:
 
 def _artifact_hash(artifact: Any) -> str:
     return "sha256:" + hashlib.sha256(_canonical_json(artifact).encode("utf-8")).hexdigest()
+
+
+def _semantic_commit_hash(semantic_commit: dict[str, Any] | None) -> str | None:
+    if semantic_commit is None:
+        return None
+    value = semantic_commit.get("semantic_commit_hash") or semantic_commit.get("bundle_hash")
+    if isinstance(value, str) and value:
+        return value if value.startswith("sha256:") else f"sha256:{value}"
+    return _artifact_hash(semantic_commit)
+
+
+def _compiled_contract_hash(compiled_contract: dict[str, Any] | None) -> str | None:
+    if compiled_contract is None:
+        return None
+    value = compiled_contract.get("contract_hash") or compiled_contract.get("compiled_contract_hash")
+    if isinstance(value, str) and value:
+        return value if value.startswith("sha256:") else f"sha256:{value}"
+    return _artifact_hash(compiled_contract)
 
 
 def _canonical_json(value: Any) -> str:
