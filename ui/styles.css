@@ -241,6 +241,56 @@ select {
   color: var(--muted);
 }
 
+.operational-priority-bar {
+  max-width: 1180px;
+  display: grid;
+  grid-template-columns: minmax(260px, 1.25fr) repeat(3, minmax(130px, 0.58fr));
+  gap: 8px;
+  align-items: stretch;
+  margin: 0 auto 16px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fffdf9;
+  box-shadow: var(--shadow);
+}
+
+.priority-item {
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #fbfaf7;
+}
+
+.priority-item.primary {
+  border-left: 4px solid var(--brand);
+  background: #fff7f1;
+}
+
+.priority-item span {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--muted);
+  font-size: 0.66rem;
+  font-weight: 850;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.priority-item strong {
+  display: block;
+  overflow-wrap: anywhere;
+  color: var(--ink);
+  font-size: 0.88rem;
+  line-height: 1.2;
+}
+
+.operational-priority-bar.ready .priority-item.primary {
+  border-left-color: var(--green);
+  background: #f6faf6;
+}
+
 .band {
   max-width: 1180px;
   margin: 0 auto 28px;
@@ -2709,6 +2759,7 @@ textarea {
   }
 
   .operator-guidance,
+  .operational-priority-bar,
   .compact-hero,
   .summary-metrics,
   .compact-dl,

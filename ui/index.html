@@ -22,7 +22,7 @@
           <a href="#draft" class="nav-link" data-page-link="draft">Create Authority</a>
           <a href="#preview" class="nav-link" data-page-link="preview">Operational Impact</a>
           <a href="#diff" class="nav-link" data-page-link="diff">Change Review</a>
-          <a href="#publication" class="nav-link" data-page-link="publication">Publish Authority</a>
+          <a href="#publication" class="nav-link" data-page-link="publication">Activate Authority</a>
           <a href="#bundles" class="nav-link" data-page-link="bundles">Authority Registry</a>
           <a href="#diagnostics" class="nav-link" data-page-link="diagnostics">Diagnostics</a>
         </nav>
@@ -60,6 +60,25 @@
           <span>Interpret, compile, review, export, register.</span>
         </aside>
 
+        <aside id="operational-priority-bar" class="operational-priority-bar" aria-label="Operational continuity summary">
+          <div class="priority-item primary">
+            <span>Primary blocker</span>
+            <strong id="priority-blocker">Policy draft required</strong>
+          </div>
+          <div class="priority-item">
+            <span>Continuity</span>
+            <strong id="priority-continuity">Pending</strong>
+          </div>
+          <div class="priority-item">
+            <span>Replay</span>
+            <strong id="priority-replay">Pending</strong>
+          </div>
+          <div class="priority-item">
+            <span>Publication</span>
+            <strong id="priority-publication">Blocked</strong>
+          </div>
+        </aside>
+
         <section id="overview" class="band page overview-band active" data-page="overview">
           <div class="overview-hero compact-hero">
             <div>
@@ -69,7 +88,7 @@
             </div>
             <div class="overview-actions" aria-label="Recommended actions">
               <button class="primary-action" type="button" data-page-link="draft">Create Authority</button>
-              <button class="secondary-action" type="button" data-page-link="publication">Publish Authority</button>
+              <button class="secondary-action" type="button" data-page-link="publication">Activate Authority</button>
               <button class="secondary-action" type="button" data-page-link="bundles">Open Registry</button>
             </div>
           </div>
@@ -494,18 +513,18 @@
           <div class="section-heading">
             <div>
               <div class="section-kicker">Step 3</div>
-              <h2>Publish Authority</h2>
-              <p class="section-intent">Confirm publication posture, export the bundle, then register the authority lifecycle event locally.</p>
+              <h2>Activate Authority</h2>
+              <p class="section-intent">Move reviewed governance meaning into receipt-backed lifecycle continuity, then register the local authority posture.</p>
             </div>
             <div class="action-row">
               <button id="publication-review-button" class="primary-action compact-action" type="button">Generate Operational Impact</button>
-              <button id="export-button" class="secondary-action" type="button" disabled>Export Bundle</button>
-              <button id="register-button" class="primary-action compact-action" type="button" disabled>Register Authority Locally</button>
+              <button id="export-button" class="secondary-action" type="button" disabled>Create Publication Receipt</button>
+              <button id="register-button" class="primary-action compact-action" type="button" disabled>Register Authority Posture</button>
             </div>
           </div>
 
           <article class="release-narrative">
-            <div class="section-kicker">Publication meaning</div>
+            <div class="section-kicker">Activation meaning</div>
             <h3 id="release-headline">Review impact before publishing.</h3>
             <p id="release-summary" class="quiet">Create or restore an authority draft to see what publishing changes operationally.</p>
             <div class="release-impact-grid">
@@ -557,7 +576,7 @@
             </article>
             <article class="artifact-panel notes-panel">
               <h3>Publication notes</h3>
-              <p class="quiet">Notes are appended to the local publication receipt when exported.</p>
+              <p class="quiet">Notes are bound to the local publication receipt when activation evidence is created.</p>
               <label>
                 <span>Reason for supersession</span>
                 <textarea name="reason_for_supersession" rows="2"></textarea>
@@ -587,12 +606,12 @@
               <dl id="compiled-contract-panel" class="compact-dl"></dl>
             </article>
             <article class="artifact-panel">
-              <h3>Publication meaning</h3>
+              <h3>Activation meaning</h3>
               <p id="bundle-meaning" class="quiet">No bundle generated yet.</p>
-              <p class="explain-text publication-explain">Publishing creates a replayable governance authority that future execution evidence can bind to.</p>
+              <p class="explain-text publication-explain">Activation creates a replayable governance authority that future execution evidence can bind to.</p>
             </article>
             <article class="artifact-panel">
-              <h3>Publication consequences</h3>
+              <h3>Operational consequences</h3>
               <ul id="publication-consequences" class="semantic-list"></ul>
             </article>
             <details class="artifact-panel wide-panel forensic-panel">

@@ -584,9 +584,34 @@ def test_overview_uses_single_operational_status_surface():
     assert "No committed authority draft" not in html
     assert "Operational governance posture and continuity state." in html
     assert "Registry Inventory" in html
+    assert 'id="operational-priority-bar"' in html
+    assert "Primary blocker" in html
+    assert 'id="priority-continuity"' in html
+    assert 'id="priority-replay"' in html
+    assert 'id="priority-publication"' in html
+    assert "function renderOperationalPriorityBar" in source
+    assert "primaryOperationalBlocker()" in source
+    assert "continuityPriorityText" in source
+    assert "replayPriorityText" in source
+    assert "publicationPriorityText" in source
+    assert ".operational-priority-bar" in css
     assert "dataset.queuePage = page" in source
     assert "showPage(page)" in source
-    assert '"Semantic review required", "Review impact before publication.", "preview"' in source
+    assert '"Operational impact review required", "Confirm governance consequences before activation.", "preview"' in source
+
+
+def test_publication_surface_uses_activation_language():
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    source = APP_JS.read_text(encoding="utf-8")
+
+    assert "Activate Authority" in html
+    assert "Move reviewed governance meaning into receipt-backed lifecycle continuity" in html
+    assert "Create Publication Receipt" in html
+    assert "Register Authority Posture" in html
+    assert "Activation meaning" in html
+    assert "Activation creates a replayable governance authority" in html
+    assert "Bind reviewed authority meaning to replayable publication evidence." in source
+    assert "Ledger created activation evidence. Register locally to record the authority lifecycle posture." in source
 
 
 def test_ui_severity_semantics_are_documented():

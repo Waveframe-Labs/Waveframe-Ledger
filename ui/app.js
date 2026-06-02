@@ -1820,6 +1820,52 @@ function renderAuthorityContext() {
   setContextChip("#context-continuity-state", workflowState.impactReviewed || Boolean(registryEntry), continuityText === "Pending" ? "Pending" : "Active");
   setContextChip("#context-replay-state", workflowState.receiptGenerated || Boolean(registryEntry?.publication_receipt), workflowState.receiptGenerated || registryEntry?.publication_receipt ? "Bound" : "Pending");
   setContextChip("#context-register-state", workflowState.authorityRegistered, workflowState.authorityRegistered ? "Registered" : "Draft");
+  renderOperationalPriorityBar(registryEntry, currentArtifacts?.authority_bundle);
+}
+
+function renderOperationalPriorityBar(registryEntry, bundle) {
+  const blocker = primaryOperationalBlocker();
+  setText("#priority-blocker", blocker);
+  setText("#priority-continuity", continuityPriorityText(registryEntry, bundle));
+  setText("#priority-replay", replayPriorityText(registryEntry));
+  setText("#priority-publication", publicationPriorityText());
+  const bar = $("#operational-priority-bar");
+  if (bar) {
+    bar.classList.toggle("blocked", blocker !== "No active blocker");
+    bar.classList.toggle("ready", blocker === "No active blocker");
+  }
+}
+
+function primaryOperationalBlocker() {
+  if (authoringSessionDirty || policySourceDirty) return "Draft changes require semantic commit";
+  if (!workflowState.draftReady) return "Policy draft required";
+  if (semanticStateMachine.semantic_state !== "committed" && semanticStateMachine.semantic_state !== "valid") return "Semantic commit required";
+  if (semanticStateMachine.compiler_state !== "compiled") return "Compiled contract required";
+  if (!workflowState.impactReviewed) return "Operational impact review required";
+  if (!workflowState.bundleExported) return "Publication receipt required";
+  if (!workflowState.authorityRegistered) return "Local registration required";
+  return "No active blocker";
+}
+
+function continuityPriorityText(registryEntry, bundle) {
+  const continuity = continuityOverviewText(registryEntry, bundle);
+  if (continuity === "Pending") return "Pending";
+  if (/revalidation|revocation|snapshot|continuity/i.test(continuity)) return "Controls active";
+  return "Recorded";
+}
+
+function replayPriorityText(registryEntry) {
+  if (workflowState.receiptGenerated || registryEntry?.publication_receipt) return "Receipt-backed";
+  if (currentAuthorityExecutionProjection?.guard_enforcement_projection?.replay_obligations?.length) return "Required";
+  if (currentCompiledAuthorityContract) return "Projected";
+  return "Pending";
+}
+
+function publicationPriorityText() {
+  if (workflowState.authorityRegistered) return "Registered";
+  if (workflowState.receiptGenerated) return "Receipt ready";
+  if (workflowState.impactReviewed) return "Activation ready";
+  return "Blocked";
 }
 
 function setContextChip(selector, complete, text) {
@@ -2951,13 +2997,13 @@ function continuityOverviewText(registryEntry, bundle) {
 function pendingGovernanceActions(registry, diagnostics) {
   const actions = [];
   if (!workflowState.impactReviewed) {
-    actions.push(["Semantic review required", "Review impact before publication.", "preview"]);
+    actions.push(["Operational impact review required", "Confirm governance consequences before activation.", "preview"]);
   }
   if (workflowState.impactReviewed && !workflowState.bundleExported) {
-    actions.push(["Export bundle", "Create publication receipt evidence for the reviewed authority.", "publication"]);
+    actions.push(["Create publication receipt", "Bind reviewed authority meaning to replayable publication evidence.", "publication"]);
   }
   if (workflowState.receiptGenerated && !workflowState.authorityRegistered) {
-    actions.push(["Register locally", "Record the authority lifecycle event in the local registry.", "publication"]);
+    actions.push(["Register authority posture", "Record the local lifecycle event for this authority lineage.", "publication"]);
   }
   const warningCount = diagnostics.filter((item) => item.severity === "warning").length;
   if (warningCount > 0) {
@@ -4290,7 +4336,7 @@ async function exportBundle() {
     $("#status-bundle").textContent = "Exported";
     renderOperatorGuidance(
       "Bundle exported with receipt evidence.",
-      "Ledger created a publication receipt. Register locally to record the authority lifecycle event.",
+      "Ledger created activation evidence. Register locally to record the authority lifecycle posture.",
     );
     updateWorkflowState({
       draftReady: true,
