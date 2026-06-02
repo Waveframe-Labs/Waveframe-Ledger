@@ -116,10 +116,10 @@ select {
   max-width: 1180px;
   display: grid;
   grid-template-columns: minmax(230px, 0.36fr) minmax(360px, 1fr) minmax(190px, 0.28fr);
-  gap: 16px;
+  gap: 14px;
   align-items: center;
-  margin: 0 auto 12px;
-  padding: 14px 16px;
+  margin: 0 auto 10px;
+  padding: 11px 14px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.96);
@@ -129,8 +129,8 @@ select {
 
 .authority-context-main {
   display: grid;
-  grid-template-columns: 34px minmax(0, 1fr);
-  gap: 11px;
+  grid-template-columns: 30px minmax(0, 1fr);
+  gap: 9px;
   align-items: center;
 }
 
@@ -141,24 +141,24 @@ select {
 }
 
 .context-mark {
-  width: 34px;
-  height: 34px;
+  width: 30px;
+  height: 30px;
   object-fit: contain;
 }
 
 .authority-context-state {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
+  gap: 6px;
 }
 
 .context-chip {
   display: inline-flex;
-  min-height: 34px;
+  min-height: 29px;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  padding: 4px 8px;
+  gap: 3px;
+  padding: 3px 7px;
   border: 1px solid var(--line);
   border-radius: 7px;
   color: var(--muted);
@@ -171,14 +171,14 @@ select {
 
 .context-chip span {
   color: var(--muted);
-  font-size: 0.62rem;
+  font-size: 0.58rem;
   line-height: 1;
   text-transform: uppercase;
 }
 
 .context-chip strong {
   color: inherit;
-  font-size: 0.76rem;
+  font-size: 0.72rem;
   line-height: 1.15;
 }
 
@@ -300,9 +300,9 @@ h3 {
 
 h1 {
   max-width: 900px;
-  margin-top: 8px;
-  font-size: 2.6rem;
-  line-height: 1.12;
+  margin-top: 6px;
+  font-size: 2.2rem;
+  line-height: 1.05;
   font-weight: 850;
 }
 
@@ -315,9 +315,9 @@ h1 {
 
 .overview-actions {
   display: flex;
-  gap: 10px;
+  gap: 8px;
   flex-wrap: wrap;
-  margin-top: 22px;
+  margin-top: 18px;
 }
 
 .operations-grid {
@@ -440,6 +440,17 @@ h1 {
 .action-queue-panel .operations-list li {
   padding: 12px 13px;
   background: #fff8f3;
+}
+
+.action-queue-panel .operations-list li[role="button"] {
+  cursor: pointer;
+}
+
+.action-queue-panel .operations-list li[role="button"]:hover,
+.action-queue-panel .operations-list li[role="button"]:focus-visible {
+  border-color: #efb28e;
+  background: #fff1e9;
+  outline: none;
 }
 
 .posture-card {
@@ -1212,17 +1223,17 @@ textarea {
 .primary-action,
 .secondary-action,
 .tertiary-action {
-  min-height: 42px;
+  min-height: 38px;
   border: 1px solid transparent;
-  border-radius: 8px;
-  padding: 0 15px;
+  border-radius: 6px;
+  padding: 0 13px;
   font-weight: 850;
   cursor: pointer;
   white-space: nowrap;
 }
 
 .primary-action {
-  min-width: 254px;
+  min-width: 218px;
 }
 
 .compact-action {
@@ -1235,7 +1246,7 @@ textarea {
 
 .primary-action {
   color: #fff;
-  background: var(--brand);
+  background: #d84d05;
 }
 
 .commit-boundary-action {
@@ -1269,7 +1280,7 @@ textarea {
 .secondary-action {
   color: var(--brand-dark);
   background: var(--panel);
-  border-color: var(--brand);
+  border-color: #d96d34;
 }
 
 .secondary-action:disabled {

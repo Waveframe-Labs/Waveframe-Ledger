@@ -555,6 +555,9 @@ def test_overview_uses_single_operational_status_surface():
     assert "Unpublished" not in html
     assert "white-space: nowrap" in css
     assert "border-radius: 999px" in css
+    assert "font-size: 2.2rem" in css
+    assert "min-height: 29px" in css
+    assert "min-height: 38px" in css
     assert "Attention Queue" in html
     assert "Pending governance actions" not in html
     assert "Authority state, lifecycle alerts" not in html
@@ -566,6 +569,9 @@ def test_overview_uses_single_operational_status_surface():
     assert "No committed authority draft" not in html
     assert "Operational governance posture and continuity state." in html
     assert "Registry Inventory" in html
+    assert "dataset.queuePage = page" in source
+    assert "showPage(page)" in source
+    assert '"Semantic review required", "Review impact before publication.", "preview"' in source
 
 
 def test_ui_severity_semantics_are_documented():

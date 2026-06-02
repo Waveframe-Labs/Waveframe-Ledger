@@ -2784,20 +2784,20 @@ function continuityOverviewText(registryEntry, bundle) {
 function pendingGovernanceActions(registry, diagnostics) {
   const actions = [];
   if (!workflowState.impactReviewed) {
-    actions.push(["Semantic review required", "Review impact before publication."]);
+    actions.push(["Semantic review required", "Review impact before publication.", "preview"]);
   }
   if (workflowState.impactReviewed && !workflowState.bundleExported) {
-    actions.push(["Export bundle", "Create publication receipt evidence for the reviewed authority."]);
+    actions.push(["Export bundle", "Create publication receipt evidence for the reviewed authority.", "publication"]);
   }
   if (workflowState.receiptGenerated && !workflowState.authorityRegistered) {
-    actions.push(["Register locally", "Record the authority lifecycle event in the local registry."]);
+    actions.push(["Register locally", "Record the authority lifecycle event in the local registry.", "publication"]);
   }
   const warningCount = diagnostics.filter((item) => item.severity === "warning").length;
   if (warningCount > 0) {
-    actions.push(["Review diagnostics", `${warningCount} governance warning${warningCount === 1 ? "" : "s"} require operator awareness.`]);
+    actions.push(["Review diagnostics", `${warningCount} governance warning${warningCount === 1 ? "" : "s"} require operator awareness.`, "diagnostics"]);
   }
   if (registry.authorities.length === 0) {
-    actions.push(["Create registry baseline", "No authorities are registered locally yet."]);
+    actions.push(["Create registry baseline", "No authorities are registered locally yet.", "bundles"]);
   }
   return actions.slice(0, 4);
 }
@@ -2820,13 +2820,26 @@ function renderTextList(selector, items, empty) {
   if (!node) return;
   node.innerHTML = "";
   const materialized = items.length ? items : [empty];
-  for (const [title, text] of materialized) {
+  for (const [title, text, page] of materialized) {
     const li = document.createElement("li");
     const strong = document.createElement("strong");
     strong.textContent = title;
     const span = document.createElement("span");
     span.textContent = text;
     li.append(strong, span);
+    if (page) {
+      li.tabIndex = 0;
+      li.dataset.queuePage = page;
+      li.setAttribute("role", "button");
+      li.setAttribute("aria-label", `${title}: ${text}`);
+      li.addEventListener("click", () => showPage(page));
+      li.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          showPage(page);
+        }
+      });
+    }
     node.appendChild(li);
   }
 }
