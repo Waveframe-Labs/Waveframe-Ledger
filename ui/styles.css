@@ -738,6 +738,107 @@ h3 {
   border-left: 4px solid var(--brand);
 }
 
+.compiled-contract-boundary {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid #2d2a28;
+  border-left: 4px solid var(--brand);
+  border-radius: 8px;
+  color: #f7f5f2;
+  background: #111;
+  box-shadow: 0 16px 34px rgba(0, 0, 0, 0.18);
+}
+
+.compiled-contract-header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.compiled-contract-header .section-kicker {
+  color: #b8b1aa;
+}
+
+.compiled-contract-header h3 {
+  font-size: 1.14rem;
+}
+
+.contract-posture-chip {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  padding: 4px 10px;
+  border: 1px solid #4a4540;
+  border-radius: 999px;
+  color: #d8d2cc;
+  background: #1d1b19;
+  font-size: 0.76rem;
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+.contract-posture-chip.compiled {
+  color: #dff4e4;
+  border-color: #38664f;
+  background: #16251d;
+}
+
+.compiled-contract-summary {
+  max-width: 860px;
+  margin: 0;
+  color: #d8d2cc;
+}
+
+.compiled-contract-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.compiled-contract-grid div,
+.guard-projection-preview {
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid #393633;
+  border-radius: 7px;
+  background: #181716;
+}
+
+.compiled-contract-grid span,
+.guard-projection-preview > span {
+  display: block;
+  color: #aaa39c;
+  font-size: 0.66rem;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.compiled-contract-grid strong {
+  display: block;
+  margin-top: 4px;
+  color: #f7f5f2;
+  font-size: 0.86rem;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.guard-preview-list {
+  display: grid;
+  gap: 6px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.guard-preview-list li {
+  padding-left: 10px;
+  border-left: 3px solid var(--brand);
+  color: #e6dfd8;
+  font-size: 0.86rem;
+}
+
 .capability-list {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2512,6 +2613,7 @@ textarea {
   .registry-ops-grid,
   .registry-controls,
   .extraction-review,
+  .compiled-contract-grid,
   .authority-meta,
   .registry-detail-grid,
   .registry-scope-strip,

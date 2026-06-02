@@ -25,6 +25,7 @@ let interpretationAuditTrail = [];
 let currentSemanticExtras = {};
 let currentSemanticCommitBundle = null;
 let currentCompiledAuthorityContract = null;
+let currentAuthorityExecutionProjection = null;
 let currentSemanticAuthorityDiff = null;
 let currentLifecycleEnforcementProjection = null;
 let semanticDiffRequestToken = 0;
@@ -122,10 +123,12 @@ function committedDraftHash() {
 function resetCompiledAuthorityContract(reason = "not_compiled") {
   currentSemanticCommitBundle = null;
   currentCompiledAuthorityContract = null;
+  currentAuthorityExecutionProjection = null;
   setSemanticState({
     compiler_state: reason,
     compiled_contract_hash: null,
   });
+  renderCompiledContractBoundary(null, null);
 }
 
 function setSemanticState(partial) {
@@ -244,6 +247,7 @@ function saveWorkingAuthoringSession() {
 function resetSemanticStateMachine(reason = "no_committed_draft") {
   currentSemanticCommitBundle = null;
   currentCompiledAuthorityContract = null;
+  currentAuthorityExecutionProjection = null;
   setSemanticState({
     draft_state: "uncommitted",
     semantic_state: "not_ready",
@@ -255,6 +259,7 @@ function resetSemanticStateMachine(reason = "no_committed_draft") {
     compiled_contract_hash: null,
     invalidation_reason: reason,
   });
+  renderCompiledContractBoundary(null, null);
 }
 
 function clearAuthoringFields() {
@@ -1410,6 +1415,7 @@ async function compileAuthorityContract() {
     }
     currentSemanticCommitBundle = semanticCommitBundle;
     currentCompiledAuthorityContract = compiled;
+    currentAuthorityExecutionProjection = await buildAuthorityExecutionProjectionForUi(compiled);
     setSemanticState({
       compiler_state: "compiled",
       compiled_contract_hash: compiled.contract_hash || null,
@@ -1418,6 +1424,7 @@ async function compileAuthorityContract() {
       invalidation_reason: null,
     });
     $("#extraction-status").textContent = `Authority contract compiled. Contract hash ${shortHash(compiled.contract_hash || "compiled:unavailable")}. Generate Operational Impact next.`;
+    renderCompiledContractBoundary(compiled, currentAuthorityExecutionProjection);
     renderOperatorGuidance(
       "Authority contract compiled.",
       "Generate operational impact from the compiled deterministic authority contract before publication review.",
@@ -1429,6 +1436,105 @@ async function compileAuthorityContract() {
   } finally {
     compileAuthorityButton.textContent = "Compile Authority Contract";
     syncPublicationActions();
+  }
+}
+
+async function buildAuthorityExecutionProjectionForUi(compiled) {
+  const response = await fetch("/api/execution-projection", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ compiled_authority_contract: compiled }),
+  });
+  const projection = await response.json();
+  if (!response.ok) {
+    throw new Error(projection.error || "Unable to project execution requirements.");
+  }
+  return projection;
+}
+
+function renderCompiledContractBoundary(compiled, executionProjection) {
+  const posture = $("#compiled-contract-posture");
+  const summary = $("#compiled-contract-summary");
+  const fingerprint = $("#compiled-contract-fingerprint");
+  const capabilities = $("#compiled-contract-capabilities");
+  const admissibility = $("#compiled-contract-admissibility");
+  const continuity = $("#compiled-contract-continuity");
+  const guardList = $("#compiled-contract-guard-preview");
+  if (!posture || !summary || !fingerprint || !capabilities || !admissibility || !continuity || !guardList) return;
+
+  posture.classList.toggle("compiled", Boolean(compiled));
+  if (!compiled) {
+    posture.textContent = "Not compiled";
+    summary.textContent = "Commit semantic interpretation, then compile the authority contract to see the deterministic governance artifact.";
+    fingerprint.textContent = "pending";
+    capabilities.textContent = "pending";
+    admissibility.textContent = "pending";
+    continuity.textContent = "pending";
+    renderGuardPreviewItems(guardList, ["Compilation required before Guard-facing requirements can be projected."]);
+    return;
+  }
+
+  const approval = compiled.approval_requirements || {};
+  const continuityRules = compiled.continuity_requirements || {};
+  const replayObligations = Array.isArray(compiled.replay_obligations) ? compiled.replay_obligations : [];
+  const capabilityCount = Array.isArray(compiled.capability_scope) ? compiled.capability_scope.length : 0;
+  const requirementProjection = executionProjection?.execution_requirement_projection || {};
+  const admissibilityProjection = executionProjection?.execution_admissibility_projection || {};
+  const guardProjection = executionProjection?.guard_enforcement_projection || {};
+  const guardRequirements = guardProjection.admissibility_requirements || {};
+
+  posture.textContent = "Compiled";
+  summary.textContent = `${compiled.authority_ref || "Authority"} is compiled into a deterministic governance contract. This is the runtime-facing representation Ledger can publish and project for Guard consumption.`;
+  fingerprint.textContent = shortHash(compiled.contract_hash || "sha256:unavailable");
+  capabilities.textContent = `${capabilityCount} capability${capabilityCount === 1 ? "" : "ies"}`;
+  admissibility.textContent = compiledAdmissibilitySummary(approval, requirementProjection);
+  continuity.textContent = compiledContinuitySummary(continuityRules, replayObligations);
+  renderGuardPreviewItems(
+    guardList,
+    guardProjectionItems(guardRequirements, admissibilityProjection, requirementProjection),
+  );
+}
+
+function compiledAdmissibilitySummary(approval, requirementProjection) {
+  const approvals = Number(approval.minimum_approvals || requirementProjection.required_approvals || 0);
+  const roles = approval.required_roles || requirementProjection.required_roles || [];
+  if (!approvals && !roles.length) return "active lineage required";
+  const independent = approval.independent || requirementProjection.independent_approval_required ? " independent" : "";
+  const roleText = roles.length ? `, ${roles.slice(0, 2).join(" + ")}` : "";
+  return `${approvals || "role"}${independent} approval${approvals === 1 ? "" : "s"}${roleText}`;
+}
+
+function compiledContinuitySummary(continuityRules, replayObligations) {
+  const parts = [];
+  if (continuityRules.revalidation_required) parts.push("revalidation");
+  if (continuityRules.state_snapshot_required) parts.push("snapshot");
+  if (continuityRules.revocation_invalidates_resume) parts.push("revocation invalidation");
+  if (replayObligations.length) parts.push("replay evidence");
+  return parts.length ? parts.join(" + ") : "lineage binding";
+}
+
+function guardProjectionItems(guardRequirements, admissibilityProjection, requirementProjection) {
+  const items = [];
+  const approvals = Number(guardRequirements.required_approvals || requirementProjection.required_approvals || 0);
+  if (approvals) items.push(`${approvals} approval${approvals === 1 ? "" : "s"} required`);
+  if (guardRequirements.independent_approval_required) items.push("independent approval required");
+  if ((guardRequirements.required_roles || []).length) items.push(`roles: ${guardRequirements.required_roles.join(", ")}`);
+  if (requirementProjection.replay_evidence_required) items.push("replay evidence required");
+  if (requirementProjection.resume_validation_required) items.push("resume validation required");
+  for (const condition of admissibilityProjection.required_runtime_conditions || []) {
+    if (items.length >= 5) break;
+    const label = formatLabel(condition);
+    if (!items.includes(label)) items.push(label);
+  }
+  return items.length ? items : ["No additional Guard enforcement requirements projected."];
+}
+
+function renderGuardPreviewItems(node, items) {
+  node.innerHTML = "";
+  for (const item of items) {
+    const li = document.createElement("li");
+    li.textContent = item;
+    node.appendChild(li);
   }
 }
 
@@ -1689,6 +1795,7 @@ function renderInvalidatedImpact(reason) {
   renderExecutionContext("#preview-execution-context", null);
   renderOutcomes([]);
   renderList("#outcome-explorer", ["No operational outcome is reviewable until semantic meaning is regenerated for the current draft."]);
+  renderCompiledContractBoundary(null, null);
 }
 
 function renderInvalidatedChangeReview(reason) {
@@ -1761,6 +1868,7 @@ function renderArtifacts(payload, options = {}) {
     ? "Source and compilation lineage are present for authority publication."
     : "Lineage is incomplete; review source and compilation provenance before export.";
   renderCompiledContractPanel(payload.compiled_authority_contract || bundle.compiled_authority_contract || null);
+  renderCompiledContractBoundary(payload.compiled_authority_contract || bundle.compiled_authority_contract || null, currentAuthorityExecutionProjection);
   renderList("#publication-consequences", bundle.operational_implications);
   renderDefinitionList("#immutable-inputs", bundle.immutable_inputs);
   renderDefinitionList("#lineage-list", bundle.lineage);
@@ -2258,6 +2366,7 @@ function invalidateSemanticLineage(reason) {
   currentLifecycleEnforcementProjection = null;
   currentSemanticCommitBundle = null;
   currentCompiledAuthorityContract = null;
+  currentAuthorityExecutionProjection = null;
   pendingRegistration = null;
   setSemanticState({
     draft_state: "dirty",
@@ -2271,6 +2380,7 @@ function invalidateSemanticLineage(reason) {
     invalidation_reason: reason,
     invalidated_at: now,
   });
+  renderCompiledContractBoundary(null, null);
   workflowInvalidation = {
     active: true,
     reason,

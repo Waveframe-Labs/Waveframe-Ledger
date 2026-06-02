@@ -190,17 +190,32 @@ def test_committing_semantic_interpretation_is_boundary_before_operational_impac
 
 def test_compiler_boundary_is_visible_between_semantic_commit_and_operational_impact():
     html = (ROOT / "ui" / "index.html").read_text(encoding="utf-8")
+    css = (ROOT / "ui" / "styles.css").read_text(encoding="utf-8")
     source = APP_JS.read_text(encoding="utf-8")
     compile_body = _function_body(source, "compileAuthorityContract")
     capability_body = _function_body(source, "canGenerateOperationalImpact")
+    reset_body = _function_body(source, "resetCompiledAuthorityContract")
+    invalidation_body = _function_body(source, "invalidateSemanticLineage")
 
     assert 'id="compile-authority-button"' in html
     assert "Compile Authority Contract" in html
+    assert 'id="compiled-contract-boundary"' in html
+    assert "Deterministic contract" in html
+    assert "Contract fingerprint" in html
+    assert "Guard projection preview" in html
+    assert "compiled-contract-boundary" in css
+    assert "background: #111" in css
     assert 'fetch("/api/compile-authority"' in compile_body
+    assert 'fetch("/api/execution-projection"' in source
     assert "buildSemanticCommitBundleForUi" in compile_body
+    assert "currentAuthorityExecutionProjection = await buildAuthorityExecutionProjectionForUi(compiled)" in compile_body
+    assert "renderCompiledContractBoundary(compiled, currentAuthorityExecutionProjection)" in compile_body
     assert 'compiler_state: "compiled"' in compile_body
     assert "currentCompiledAuthorityContract" in capability_body
     assert 'semanticStateMachine.compiler_state === "compiled"' in capability_body
+    assert "renderCompiledContractBoundary(null, null)" in reset_body
+    assert "currentAuthorityExecutionProjection = null" in invalidation_body
+    assert "renderGuardPreviewItems" in source
 
 
 def test_publication_bundle_is_upgraded_with_compiled_contract_before_export():
