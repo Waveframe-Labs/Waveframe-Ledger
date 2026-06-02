@@ -37,10 +37,10 @@
               <strong id="context-authority-ref">No committed authority draft</strong>
             </div>
           </div>
-          <div class="authority-context-state" aria-label="Authority lifecycle state">
-            <span id="context-draft-state" class="context-chip active">Draft</span>
-            <span id="context-review-state" class="context-chip">Impact pending</span>
-            <span id="context-export-state" class="context-chip">Not exported</span>
+          <div class="authority-context-state" aria-label="Operational status rail">
+            <span id="context-lifecycle-state" class="context-chip active">Draft</span>
+            <span id="context-continuity-state" class="context-chip">Continuity pending</span>
+            <span id="context-replay-state" class="context-chip">Replay pending</span>
             <span id="context-register-state" class="context-chip">Not registered</span>
           </div>
           <dl class="authority-context-meta">
@@ -55,31 +55,9 @@
           </dl>
         </header>
 
-        <div class="workflow-state-banner" aria-label="Authority workflow state">
-          <div class="workflow-state-step" data-workflow-step="draft">
-            <span>Draft Ready</span>
-            <strong>Pending</strong>
-          </div>
-          <div class="workflow-state-step" data-workflow-step="impact">
-            <span>Impact Reviewed</span>
-            <strong>Pending</strong>
-          </div>
-          <div class="workflow-state-step" data-workflow-step="exported">
-            <span>Bundle Exported</span>
-            <strong>Pending</strong>
-          </div>
-          <div class="workflow-state-step" data-workflow-step="receipt">
-            <span>Receipt Generated</span>
-            <strong>Pending</strong>
-          </div>
-          <div class="workflow-state-step" data-workflow-step="registered">
-            <span>Authority Registered</span>
-            <strong>Pending</strong>
-          </div>
-        </div>
         <aside id="operator-guidance" class="operator-guidance" aria-live="polite">
           <strong>Start by defining the authority.</strong>
-          <span>Ledger will keep operational meaning visible as the authority moves from draft to local registration.</span>
+          <span>Interpret, compile, review, export, register.</span>
         </aside>
 
         <section id="overview" class="band page overview-band active" data-page="overview">
@@ -87,7 +65,7 @@
             <div>
               <div class="section-kicker">Governance operations</div>
               <h1>Current Governance Posture</h1>
-              <p class="overview-lede">Authority state, lifecycle alerts, replay readiness, and pending governance actions for the local Ledger workspace.</p>
+              <p class="overview-lede">Operational governance posture and continuity state.</p>
             </div>
             <div class="overview-actions" aria-label="Recommended actions">
               <button class="primary-action" type="button" data-page-link="draft">Create Authority</button>
@@ -106,7 +84,11 @@
               </div>
             </div>
             <div class="operations-grid">
-              <article class="authority-summary-card">
+              <article class="operations-panel action-queue-panel">
+                <h3>Attention Queue</h3>
+                <ul id="overview-pending-actions" class="operations-list"></ul>
+              </article>
+              <article class="authority-summary-card posture-card">
                 <div class="summary-card-header">
                   <div>
                     <span class="status-label">Current authority</span>
@@ -134,10 +116,6 @@
                 </dl>
               </article>
               <article class="operations-panel">
-                <h3>Pending governance actions</h3>
-                <ul id="overview-pending-actions" class="operations-list"></ul>
-              </article>
-              <article class="operations-panel">
                 <h3>Lifecycle alerts</h3>
                 <ul id="overview-lifecycle-alerts" class="operations-list"></ul>
               </article>
@@ -152,10 +130,10 @@
               </div>
             </div>
             <div class="operations-grid secondary-grid">
-              <article class="operations-panel">
-                <h3>Registry health</h3>
+              <details class="operations-panel low-frequency-panel">
+                <summary>Registry Inventory</summary>
                 <dl id="overview-registry-health" class="compact-dl"></dl>
-              </article>
+              </details>
               <article class="operations-panel">
                 <h3>Recent activity</h3>
                 <ol id="overview-activity-feed" class="activity-feed"></ol>

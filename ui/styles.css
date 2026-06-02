@@ -115,11 +115,11 @@ select {
   z-index: 20;
   max-width: 1180px;
   display: grid;
-  grid-template-columns: minmax(180px, 0.28fr) minmax(320px, 1fr) minmax(220px, 0.38fr);
-  gap: 14px;
+  grid-template-columns: minmax(230px, 0.36fr) minmax(360px, 1fr) minmax(190px, 0.28fr);
+  gap: 16px;
   align-items: center;
-  margin: 0 auto 14px;
-  padding: 12px 14px;
+  margin: 0 auto 12px;
+  padding: 14px 16px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.96);
@@ -147,22 +147,24 @@ select {
 }
 
 .authority-context-state {
-  display: flex;
-  gap: 7px;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
 }
 
 .context-chip {
   display: inline-flex;
-  min-height: 28px;
+  min-height: 34px;
   align-items: center;
+  justify-content: center;
   padding: 4px 8px;
   border: 1px solid var(--line);
   border-radius: 7px;
   color: var(--muted);
   background: #f7f6f2;
-  font-size: 0.76rem;
+  font-size: 0.74rem;
   font-weight: 850;
+  text-align: center;
 }
 
 .context-chip.active {
@@ -200,59 +202,6 @@ select {
   overflow-wrap: anywhere;
   font-size: 0.82rem;
   font-weight: 780;
-}
-
-.workflow-state-banner {
-  max-width: 1180px;
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 6px;
-  margin: 0 auto 12px;
-  padding: 7px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: #faf9f6;
-}
-
-.workflow-state-step {
-  min-height: 48px;
-  display: grid;
-  align-content: center;
-  gap: 1px;
-  padding: 7px 9px;
-  border: 1px solid var(--line);
-  border-radius: 7px;
-  background: var(--panel);
-}
-
-.workflow-state-step span {
-  color: #73787e;
-  font-size: 0.68rem;
-  font-weight: 850;
-  text-transform: uppercase;
-}
-
-.workflow-state-step strong {
-  color: var(--muted);
-  font-size: 0.82rem;
-}
-
-.workflow-state-step.complete {
-  border-color: #c9d6cb;
-  background: #f6faf6;
-}
-
-.workflow-state-step.complete strong {
-  color: var(--green);
-}
-
-.workflow-state-step.current {
-  border-color: #ffb48b;
-  background: #fff1e9;
-}
-
-.workflow-state-step.current strong {
-  color: var(--brand-dark);
 }
 
 .operator-guidance {
@@ -344,9 +293,9 @@ h1 {
 
 .overview-lede {
   max-width: 800px;
-  margin: 14px 0 0;
+  margin: 10px 0 0;
   color: var(--muted);
-  font-size: 1.03rem;
+  font-size: 1rem;
 }
 
 .overview-actions {
@@ -358,8 +307,8 @@ h1 {
 
 .operations-grid {
   display: grid;
-  grid-template-columns: minmax(320px, 1.15fr) minmax(240px, 0.85fr) minmax(240px, 0.85fr);
-  gap: 12px;
+  grid-template-columns: minmax(380px, 1.35fr) minmax(260px, 0.82fr) minmax(240px, 0.72fr);
+  gap: 14px;
   margin-top: 18px;
 }
 
@@ -427,6 +376,29 @@ h1 {
   gap: 10px;
 }
 
+.action-queue-panel {
+  border-color: #c6b8ac;
+  border-left: 4px solid var(--brand);
+  background: #fffdf9;
+}
+
+.action-queue-panel h3 {
+  font-size: 1.22rem;
+}
+
+.action-queue-panel .operations-list {
+  gap: 10px;
+}
+
+.action-queue-panel .operations-list li {
+  padding: 12px 13px;
+  background: #fff8f3;
+}
+
+.posture-card {
+  box-shadow: 0 1px 0 rgba(21, 21, 21, 0.03);
+}
+
 .operations-list,
 .activity-feed {
   display: grid;
@@ -451,6 +423,17 @@ h1 {
   display: block;
   color: var(--ink);
   font-size: 0.9rem;
+}
+
+.low-frequency-panel {
+  color: var(--muted);
+  box-shadow: none;
+}
+
+.low-frequency-panel summary {
+  cursor: pointer;
+  color: var(--ink);
+  font-weight: 850;
 }
 
 .overview-section {
@@ -2485,7 +2468,6 @@ textarea {
   .outcome-grid,
   .authoring-section,
   .lifecycle-preview,
-  .workflow-state-banner,
   .authority-context,
   .authority-context-meta {
     grid-template-columns: 1fr;

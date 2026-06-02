@@ -536,6 +536,27 @@ def test_ui_uses_canonical_waveframe_branding_assets():
     assert "ui/assets/branding/canon_wf_logo_extended.png" in readme
 
 
+def test_overview_uses_single_operational_status_surface():
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    css = STYLES_CSS.read_text(encoding="utf-8")
+    source = APP_JS.read_text(encoding="utf-8")
+
+    assert "workflow-state-banner" not in html
+    assert "workflow-state-step" not in html
+    assert "workflow-state-banner" not in css
+    assert "Operational status rail" in html
+    assert "context-lifecycle-state" in html
+    assert "context-continuity-state" in html
+    assert "context-replay-state" in html
+    assert "setContextChip(\"#context-continuity-state\"" in source
+    assert "setContextChip(\"#context-replay-state\"" in source
+    assert "Attention Queue" in html
+    assert "Pending governance actions" not in html
+    assert "Authority state, lifecycle alerts" not in html
+    assert "Operational governance posture and continuity state." in html
+    assert "Registry Inventory" in html
+
+
 def _function_body(source: str, function_name: str) -> str:
     marker = f"function {function_name}"
     start = source.index(marker)

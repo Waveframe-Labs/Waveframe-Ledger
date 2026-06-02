@@ -1619,25 +1619,25 @@ function renderOperatorGuidance(title, body) {
   }
   if (authoringSessionDirty) {
     guidance.querySelector("strong").textContent = "Unsaved draft changes.";
-    guidance.querySelector("span").textContent = "Extract and commit semantic interpretation before treating edits as authority posture.";
+    guidance.querySelector("span").textContent = "Recommit semantics before impact review.";
   } else if (!workflowState.draftReady) {
     guidance.querySelector("strong").textContent = "Draft policy text.";
-    guidance.querySelector("span").textContent = "Extract candidate semantics, reconcile ambiguities, then commit the semantic interpretation.";
+    guidance.querySelector("span").textContent = "Extract, reconcile, commit.";
   } else if (semanticStateMachine.semantic_state === "committed" && semanticStateMachine.compiler_state !== "compiled") {
     guidance.querySelector("strong").textContent = "Compile authority contract next.";
-    guidance.querySelector("span").textContent = "Compilation turns committed governance meaning into deterministic runtime representation.";
+    guidance.querySelector("span").textContent = "Create deterministic runtime representation.";
   } else if (!workflowState.impactReviewed) {
     guidance.querySelector("strong").textContent = "Generate operational impact next.";
-    guidance.querySelector("span").textContent = "Ledger has a compiled authority contract. Generate impact to review publication-relevant meaning.";
+    guidance.querySelector("span").textContent = "Review publication-relevant meaning.";
   } else if (!workflowState.bundleExported) {
     guidance.querySelector("strong").textContent = "Impact is reviewed.";
-    guidance.querySelector("span").textContent = "Export the authority bundle to create receipt evidence and prepare local registration.";
+    guidance.querySelector("span").textContent = "Export bundle and receipt evidence.";
   } else if (!workflowState.authorityRegistered) {
     guidance.querySelector("strong").textContent = "Bundle exported with receipt evidence.";
-    guidance.querySelector("span").textContent = "Register the authority locally to record the lifecycle event and make it visible in the registry.";
+    guidance.querySelector("span").textContent = "Register local lifecycle event.";
   } else {
     guidance.querySelector("strong").textContent = "Authority registered locally.";
-    guidance.querySelector("span").textContent = "The registry now holds lifecycle lineage, receipt posture, and replay-ready publication evidence.";
+    guidance.querySelector("span").textContent = "Lifecycle, receipt, and replay posture recorded.";
   }
 }
 
@@ -1652,9 +1652,10 @@ function renderAuthorityContext() {
   $("#context-lineage").textContent = registryEntry
     ? `${formatLabel(registryEntry.status)} lineage`
     : "draft lineage";
-  setContextChip("#context-draft-state", !authoringSessionDirty, authoringSessionDirty ? "Unsaved changes" : "Draft");
-  setContextChip("#context-review-state", workflowState.impactReviewed, workflowState.impactReviewed ? "Impact reviewed" : "Impact pending");
-  setContextChip("#context-export-state", workflowState.bundleExported, workflowState.bundleExported ? "Exported" : "Not exported");
+  const continuityText = continuityOverviewText(registryEntry, currentArtifacts?.authority_bundle);
+  setContextChip("#context-lifecycle-state", workflowState.impactReviewed && !authoringSessionDirty, authoringSessionDirty ? "Unsaved changes" : workflowState.impactReviewed ? "Impact reviewed" : "Draft");
+  setContextChip("#context-continuity-state", workflowState.impactReviewed || Boolean(registryEntry), continuityText === "review pending" ? "Continuity pending" : "Continuity set");
+  setContextChip("#context-replay-state", workflowState.receiptGenerated || Boolean(registryEntry?.publication_receipt), workflowState.receiptGenerated || registryEntry?.publication_receipt ? "Replay evidence" : "Replay pending");
   setContextChip("#context-register-state", workflowState.authorityRegistered, workflowState.authorityRegistered ? "Registered" : "Not registered");
 }
 
