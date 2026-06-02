@@ -107,8 +107,8 @@ def test_authority_header_uses_committed_draft_not_live_form_state():
 
     assert "committedDraft" in body
     assert "readDraft()" not in body
-    assert "No committed authority draft" in body
-    assert "No committed authority draft" in (ROOT / "ui" / "index.html").read_text(encoding="utf-8")
+    assert "No active governance posture" in body
+    assert "No active governance posture" in (ROOT / "ui" / "index.html").read_text(encoding="utf-8")
 
 
 def test_new_working_session_is_empty_not_sample_authority_clone():
@@ -126,7 +126,7 @@ def test_new_working_session_is_empty_not_sample_authority_clone():
     assert "committedDraft = null" in body
     assert "authoringSessionDirty = false" in body
     assert "saveWorkingAuthoringSession()" not in body
-    assert "No committed authority draft" in body
+    assert "No active governance posture" in body
     assert "Manual Authority Definition" in html
     assert "Advanced Manual Authoring" not in html
     assert '<details id="manual-authority-definition" class="authoring-section governance-module">' in html
@@ -553,8 +553,35 @@ def test_overview_uses_single_operational_status_surface():
     assert "Attention Queue" in html
     assert "Pending governance actions" not in html
     assert "Authority state, lifecycle alerts" not in html
+    assert "Execution governance" in html
+    assert "Lifecycle" in html
+    assert "Continuity" in html
+    assert "Replay" in html
+    assert "Registry" in html
+    assert "No committed authority draft" not in html
     assert "Operational governance posture and continuity state." in html
     assert "Registry Inventory" in html
+
+
+def test_ui_severity_semantics_are_documented():
+    doc = (ROOT / "UI_SEVERITY_SEMANTICS.md").read_text(encoding="utf-8")
+
+    for label in (
+        "informational",
+        "advisory",
+        "pending",
+        "review-required",
+        "continuity-sensitive",
+        "replay-sensitive",
+        "blocking",
+        "invalid",
+        "revoked",
+        "superseded",
+    ):
+        assert f"`{label}`" in doc
+
+    assert "governance posture, not infrastructure telemetry" in doc
+    assert "These labels do not represent Guard admissibility decisions" in doc
 
 
 def _function_body(source: str, function_name: str) -> str:

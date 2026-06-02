@@ -33,15 +33,15 @@
           <div class="authority-context-main">
             <img class="context-mark" src="/assets/branding/canon_wf_logo_mark_transparent.png" alt="" aria-hidden="true" />
             <div>
-              <span class="section-kicker">Current authority</span>
-              <strong id="context-authority-ref">No committed authority draft</strong>
+              <span class="section-kicker">Execution governance</span>
+              <strong id="context-authority-ref">No active governance posture</strong>
             </div>
           </div>
           <div class="authority-context-state" aria-label="Operational status rail">
-            <span id="context-lifecycle-state" class="context-chip active">Draft</span>
-            <span id="context-continuity-state" class="context-chip">Continuity pending</span>
-            <span id="context-replay-state" class="context-chip">Replay pending</span>
-            <span id="context-register-state" class="context-chip">Not registered</span>
+            <span id="context-lifecycle-state" class="context-chip active"><span>Lifecycle</span><strong>Draft</strong></span>
+            <span id="context-continuity-state" class="context-chip"><span>Continuity</span><strong>Pending Review</strong></span>
+            <span id="context-replay-state" class="context-chip"><span>Replay</span><strong>Incomplete</strong></span>
+            <span id="context-register-state" class="context-chip"><span>Registry</span><strong>Unpublished</strong></span>
           </div>
           <dl class="authority-context-meta">
             <div>
@@ -91,29 +91,17 @@
               <article class="authority-summary-card posture-card">
                 <div class="summary-card-header">
                   <div>
-                    <span class="status-label">Current authority</span>
-                    <strong id="status-authority-ref">not generated</strong>
+                    <span class="status-label">Execution posture</span>
+                    <strong id="status-authority-ref">not established</strong>
                   </div>
                   <span id="overview-authority-state" class="status-badge">Draft</span>
                 </div>
-                <dl class="summary-metrics">
-                  <div>
-                    <dt>Semantic readiness</dt>
-                    <dd id="status-semantic">draft required</dd>
-                  </div>
-                  <div>
-                    <dt>Publication object</dt>
-                    <dd id="status-bundle">not exported</dd>
-                  </div>
-                  <div>
-                    <dt>Replay readiness</dt>
-                    <dd id="overview-replay-readiness">receipt pending</dd>
-                  </div>
-                  <div>
-                    <dt>Continuity posture</dt>
-                    <dd id="overview-continuity-posture">review pending</dd>
-                  </div>
-                </dl>
+                <div class="readiness-strip" aria-label="Readiness indicators">
+                  <span><em>Semantics</em><strong id="status-semantic">Required</strong></span>
+                  <span><em>Publication</em><strong id="status-bundle">Blocked</strong></span>
+                  <span><em>Replay</em><strong id="overview-replay-readiness">Incomplete</strong></span>
+                  <span><em>Continuity</em><strong id="overview-continuity-posture">Pending</strong></span>
+                </div>
               </article>
               <article class="operations-panel">
                 <h3>Lifecycle alerts</h3>

@@ -207,7 +207,7 @@ function restoreDraftSession() {
     clearExtractionReview();
     clearOperationalImpact();
     clearPublicationReadiness();
-    draftSessionStatus.textContent = "No committed authority draft. Start with policy text or manual authoring.";
+    draftSessionStatus.textContent = "No active governance posture. Start with policy text or manual authoring.";
     updateWorkflowState({ draftReady: false });
     return;
   }
@@ -291,7 +291,7 @@ function clearExtractionReview() {
   renderCapabilities("#extracted-capabilities", []);
   renderDefinitionValues("#extracted-authority", {
     "Candidate status": "No candidate semantics extracted",
-    "Commit status": "No committed authority draft",
+    "Governance posture": "No active governance posture",
   });
   renderExtractionList("#extracted-rules", [], "No candidate obligations extracted.");
   renderExtractionList("#extracted-ambiguities", [], "No extraction ambiguities recorded.");
@@ -366,9 +366,9 @@ function startNewDraft() {
   useExtractionButton.disabled = true;
   if (applyAllExtractionButton) applyAllExtractionButton.disabled = true;
   openReconciliationButton.disabled = true;
-  $("#status-authority-ref").textContent = "not generated";
-  $("#status-semantic").textContent = "draft required";
-  $("#status-bundle").textContent = "not exported";
+  $("#status-authority-ref").textContent = "not established";
+  $("#status-semantic").textContent = "Required";
+  $("#status-bundle").textContent = "Blocked";
   $("#release-registration").textContent = "Bundle not exported.";
   clearWorkflowInvalidation();
   updateWorkflowState({
@@ -378,7 +378,7 @@ function startNewDraft() {
     receiptGenerated: false,
     authorityRegistered: false,
   });
-  draftSessionStatus.textContent = "No committed authority draft. Start with policy text or manual authoring.";
+  draftSessionStatus.textContent = "No active governance posture. Start with policy text or manual authoring.";
   renderAuthorityContext();
   renderOperationsOverview();
   renderBundleRegistry();
@@ -1643,7 +1643,7 @@ function renderOperatorGuidance(title, body) {
 
 function renderAuthorityContext() {
   const stableDraft = committedDraft || null;
-  const authorityRef = currentArtifacts?.authority_bundle?.authority_ref || (stableDraft ? `${stableDraft.contract_id || "authority"}@${stableDraft.contract_version || "draft"}` : "No committed authority draft");
+  const authorityRef = currentArtifacts?.authority_bundle?.authority_ref || (stableDraft ? `${stableDraft.contract_id || "authority"}@${stableDraft.contract_version || "draft"}` : "No active governance posture");
   const registryEntry = currentArtifacts?.authority_bundle ? findRegistryEntry(currentArtifacts.authority_bundle.authority_ref) : null;
   $("#context-authority-ref").textContent = authorityRef;
   $("#context-reviewed-at").textContent = workflowTimestamps.reviewed
@@ -1653,16 +1653,21 @@ function renderAuthorityContext() {
     ? `${formatLabel(registryEntry.status)} lineage`
     : "draft lineage";
   const continuityText = continuityOverviewText(registryEntry, currentArtifacts?.authority_bundle);
-  setContextChip("#context-lifecycle-state", workflowState.impactReviewed && !authoringSessionDirty, authoringSessionDirty ? "Unsaved changes" : workflowState.impactReviewed ? "Impact reviewed" : "Draft");
-  setContextChip("#context-continuity-state", workflowState.impactReviewed || Boolean(registryEntry), continuityText === "review pending" ? "Continuity pending" : "Continuity set");
-  setContextChip("#context-replay-state", workflowState.receiptGenerated || Boolean(registryEntry?.publication_receipt), workflowState.receiptGenerated || registryEntry?.publication_receipt ? "Replay evidence" : "Replay pending");
-  setContextChip("#context-register-state", workflowState.authorityRegistered, workflowState.authorityRegistered ? "Registered" : "Not registered");
+  setContextChip("#context-lifecycle-state", workflowState.impactReviewed && !authoringSessionDirty, authoringSessionDirty ? "Uncommitted" : workflowState.impactReviewed ? "Reviewed" : "Draft");
+  setContextChip("#context-continuity-state", workflowState.impactReviewed || Boolean(registryEntry), continuityText === "Pending" ? "Pending Review" : "Controls Active");
+  setContextChip("#context-replay-state", workflowState.receiptGenerated || Boolean(registryEntry?.publication_receipt), workflowState.receiptGenerated || registryEntry?.publication_receipt ? "Evidence Bound" : "Incomplete");
+  setContextChip("#context-register-state", workflowState.authorityRegistered, workflowState.authorityRegistered ? "Published" : "Unpublished");
 }
 
 function setContextChip(selector, complete, text) {
   const node = $(selector);
   if (!node) return;
-  node.textContent = text;
+  const valueNode = node.querySelector("strong");
+  if (valueNode) {
+    valueNode.textContent = text;
+  } else {
+    node.textContent = text;
+  }
   node.classList.toggle("complete", complete);
   node.classList.toggle("active", !complete);
 }
@@ -1675,8 +1680,8 @@ function scheduleLivePreview() {
 }
 
 function renderInvalidatedImpact(reason) {
-  $("#status-semantic").textContent = "semantic extraction invalidated";
-  $("#status-bundle").textContent = "publication blocked";
+  $("#status-semantic").textContent = "Invalidated";
+  $("#status-bundle").textContent = "Blocked";
   $("#preview-summary").textContent = invalidatedImpactMessage(reason);
   renderList("#preview-enforcement", ["Extraction and reconciliation are required before Ledger can render current enforcement behavior."]);
   renderList("#preview-consequences", ["Prior operational consequences were cleared because they were derived from stale semantic lineage."]);
@@ -1728,8 +1733,8 @@ function renderArtifacts(payload, options = {}) {
   const bundle = payload.authority_bundle;
   const workspaceProjection = authorityWorkspaceProjection(payload);
   $("#status-authority-ref").textContent = bundle.authority_ref;
-  $("#status-semantic").textContent = reviewed ? "ready" : "changes need review";
-  $("#status-bundle").textContent = reviewed ? "ready to export" : "review impact before export";
+  $("#status-semantic").textContent = reviewed ? "Ready" : "Review Required";
+  $("#status-bundle").textContent = reviewed ? "Export Ready" : "Blocked";
   if (!preserveWorkflow) {
     updateWorkflowState({
       draftReady: true,
@@ -2715,7 +2720,7 @@ function renderOperationsOverview() {
   renderCoherenceBanner("#overview-coherence-banner", registryCoherenceProjection(registry));
 
   setText("#overview-authority-state", registryEntry ? formatLabel(registryEntry.status) : workflowState.impactReviewed ? "Reviewed Draft" : "Draft");
-  setText("#overview-replay-readiness", workflowState.receiptGenerated || registryEntry?.publication_receipt ? "receipt available" : "receipt pending");
+  setText("#overview-replay-readiness", workflowState.receiptGenerated || registryEntry?.publication_receipt ? "Complete" : "Incomplete");
   setText("#overview-continuity-posture", continuityOverviewText(registryEntry, bundle));
 
   renderTextList("#overview-pending-actions", pendingActions, ["No pending actions", "No current draft, receipt, or registry action requires attention."]);
@@ -2773,13 +2778,13 @@ function setText(selector, text) {
 function continuityOverviewText(registryEntry, bundle) {
   if (registryEntry?.continuity_posture) return registryEntry.continuity_posture;
   const firstContinuity = firstText(bundle?.continuity_implications);
-  return firstContinuity || "review pending";
+  return firstContinuity || "Pending";
 }
 
 function pendingGovernanceActions(registry, diagnostics) {
   const actions = [];
   if (!workflowState.impactReviewed) {
-    actions.push(["Review impact", "Confirm current authority meaning before export."]);
+    actions.push(["Semantic review required", "Review impact before publication."]);
   }
   if (workflowState.impactReviewed && !workflowState.bundleExported) {
     actions.push(["Export bundle", "Create publication receipt evidence for the reviewed authority."]);
@@ -4102,7 +4107,7 @@ async function exportBundle() {
     pendingRegistration = { receipt, notes };
     workflowTimestamps.exported = publishedAt;
     registerButton.disabled = false;
-    $("#status-bundle").textContent = "bundle exported";
+    $("#status-bundle").textContent = "Exported";
     renderOperatorGuidance(
       "Bundle exported with receipt evidence.",
       "Ledger created a publication receipt. Register locally to record the authority lifecycle event.",
@@ -4185,7 +4190,7 @@ function registerAuthorityLocally() {
   }
   const entry = publishCurrentBundleToRegistry(pendingRegistration.receipt, pendingRegistration.notes);
   workflowTimestamps.registered = new Date().toISOString();
-  $("#status-bundle").textContent = "registered locally";
+  $("#status-bundle").textContent = "Registered";
   renderOperatorGuidance(
     "Authority registered locally.",
     `${entry.authority_ref} is now visible in the registry with lifecycle lineage and receipt evidence.`,

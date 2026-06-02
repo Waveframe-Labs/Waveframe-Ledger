@@ -154,6 +154,7 @@ select {
 
 .context-chip {
   display: inline-flex;
+  flex-direction: column;
   min-height: 34px;
   align-items: center;
   justify-content: center;
@@ -165,6 +166,20 @@ select {
   font-size: 0.74rem;
   font-weight: 850;
   text-align: center;
+}
+
+.context-chip span {
+  color: var(--muted);
+  font-size: 0.62rem;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.context-chip strong {
+  margin-top: 2px;
+  color: inherit;
+  font-size: 0.76rem;
+  line-height: 1.15;
 }
 
 .context-chip.active {
@@ -342,12 +357,43 @@ h1 {
   font-size: 1.15rem;
 }
 
+.readiness-strip,
 .summary-metrics,
 .compact-dl {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px 14px;
   margin: 14px 0 0;
+}
+
+.readiness-strip {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.readiness-strip span {
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #fbfaf7;
+}
+
+.readiness-strip em {
+  display: block;
+  color: var(--muted);
+  font-size: 0.66rem;
+  font-style: normal;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.readiness-strip strong {
+  display: block;
+  margin-top: 2px;
+  overflow-wrap: anywhere;
+  font-size: 0.82rem;
+  line-height: 1.2;
 }
 
 .summary-metrics div,
