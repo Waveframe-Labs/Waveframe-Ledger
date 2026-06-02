@@ -550,6 +550,11 @@ def test_overview_uses_single_operational_status_surface():
     assert "context-replay-state" in html
     assert "setContextChip(\"#context-continuity-state\"" in source
     assert "setContextChip(\"#context-replay-state\"" in source
+    assert "Pending Review" not in html
+    assert "Incomplete" not in html
+    assert "Unpublished" not in html
+    assert "white-space: nowrap" in css
+    assert "border-radius: 999px" in css
     assert "Attention Queue" in html
     assert "Pending governance actions" not in html
     assert "Authority state, lifecycle alerts" not in html

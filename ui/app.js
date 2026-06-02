@@ -1654,9 +1654,9 @@ function renderAuthorityContext() {
     : "draft lineage";
   const continuityText = continuityOverviewText(registryEntry, currentArtifacts?.authority_bundle);
   setContextChip("#context-lifecycle-state", workflowState.impactReviewed && !authoringSessionDirty, authoringSessionDirty ? "Uncommitted" : workflowState.impactReviewed ? "Reviewed" : "Draft");
-  setContextChip("#context-continuity-state", workflowState.impactReviewed || Boolean(registryEntry), continuityText === "Pending" ? "Pending Review" : "Controls Active");
-  setContextChip("#context-replay-state", workflowState.receiptGenerated || Boolean(registryEntry?.publication_receipt), workflowState.receiptGenerated || registryEntry?.publication_receipt ? "Evidence Bound" : "Incomplete");
-  setContextChip("#context-register-state", workflowState.authorityRegistered, workflowState.authorityRegistered ? "Published" : "Unpublished");
+  setContextChip("#context-continuity-state", workflowState.impactReviewed || Boolean(registryEntry), continuityText === "Pending" ? "Pending" : "Active");
+  setContextChip("#context-replay-state", workflowState.receiptGenerated || Boolean(registryEntry?.publication_receipt), workflowState.receiptGenerated || registryEntry?.publication_receipt ? "Bound" : "Pending");
+  setContextChip("#context-register-state", workflowState.authorityRegistered, workflowState.authorityRegistered ? "Registered" : "Draft");
 }
 
 function setContextChip(selector, complete, text) {
@@ -2720,7 +2720,7 @@ function renderOperationsOverview() {
   renderCoherenceBanner("#overview-coherence-banner", registryCoherenceProjection(registry));
 
   setText("#overview-authority-state", registryEntry ? formatLabel(registryEntry.status) : workflowState.impactReviewed ? "Reviewed Draft" : "Draft");
-  setText("#overview-replay-readiness", workflowState.receiptGenerated || registryEntry?.publication_receipt ? "Complete" : "Incomplete");
+  setText("#overview-replay-readiness", workflowState.receiptGenerated || registryEntry?.publication_receipt ? "Complete" : "Pending");
   setText("#overview-continuity-posture", continuityOverviewText(registryEntry, bundle));
 
   renderTextList("#overview-pending-actions", pendingActions, ["No pending actions", "No current draft, receipt, or registry action requires attention."]);
