@@ -18,6 +18,7 @@ from governance_ledger.local_registry.projections.operational import build_autho
 from governance_ledger.semantics.compiler import compile_semantic_commit_bundle
 from governance_ledger.semantics.diagnostics import build_governance_quality_diagnostics
 from governance_ledger.semantics.diffing import build_semantic_authority_diff
+from governance_ledger.semantics.execution_projection import build_authority_execution_projection
 from governance_ledger.semantics.extraction import extract_governance_semantics
 from governance_ledger.semantics.lifecycle_enforcement import build_semantic_lifecycle_enforcement_projection
 from governance_ledger.semantics.packets import build_governance_review_packet
@@ -124,6 +125,18 @@ class LedgerUIHandler(BaseHTTPRequestHandler):
                 self._write_json({"error": str(exc)}, status=400)
             except Exception as exc:  # pragma: no cover - defensive HTTP boundary
                 self._write_json({"error": f"Unable to compile authority contract: {exc}"}, status=500)
+            return
+        if parsed.path == "/api/execution-projection":
+            try:
+                payload = self._read_json_body()
+                compiled_contract = payload.get("compiled_authority_contract")
+                if not isinstance(compiled_contract, dict):
+                    raise ValueError("Execution projection requires compiled_authority_contract.")
+                self._write_json(build_authority_execution_projection(compiled_contract))
+            except ValueError as exc:
+                self._write_json({"error": str(exc)}, status=400)
+            except Exception as exc:  # pragma: no cover - defensive HTTP boundary
+                self._write_json({"error": f"Unable to build authority execution projection: {exc}"}, status=500)
             return
         if parsed.path != "/api/compose":
             self._write_json({"error": "not found"}, status=404)

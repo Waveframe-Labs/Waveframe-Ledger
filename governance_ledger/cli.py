@@ -26,6 +26,7 @@ from governance_ledger.semantics.compiler import (
     compile_semantic_commit_bundle,
     format_compiled_authority_contract,
 )
+from governance_ledger.semantics.execution_projection import build_authority_execution_projection
 from governance_ledger.semantics.diff import (
     build_authority_diff_impact,
     format_authority_diff_impact,
@@ -155,6 +156,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     compile_authority_parser.add_argument("--semantic-commit", required=True)
     compile_authority_parser.add_argument("--output")
     compile_authority_parser.add_argument("--json", action="store_true")
+
+    execution_projection_parser = subparsers.add_parser(
+        "execution-projection",
+        help="project runtime requirements from compiled_authority_contract.v1",
+    )
+    execution_projection_parser.add_argument("--compiled-contract", required=True)
+    execution_projection_parser.add_argument("--output")
+    execution_projection_parser.add_argument("--json", action="store_true")
 
     replay_authority_parser = subparsers.add_parser(
         "replay-authority",
@@ -309,6 +318,13 @@ def main(argv: Sequence[str] | None = None) -> int:
                 json.dumps(result, indent=2, sort_keys=True) + "\n",
                 encoding="utf-8",
             )
+    elif args.command == "execution-projection":
+        result = build_authority_execution_projection(_read_json_arg(args.compiled_contract) or {})
+        if args.output:
+            Path(args.output).write_text(
+                json.dumps(result, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
     else:
         result = show_artifact(args.path)
 
@@ -348,6 +364,18 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
     elif args.command == "compile-authority":
         print(format_compiled_authority_contract(result))
+    elif args.command == "execution-projection":
+        print(
+            "\n".join(
+                [
+                    "[Authority Execution Projection]",
+                    "",
+                    f"Authority: {result['authority_ref']}",
+                    f"Compiled contract hash: {result.get('compiled_contract_hash') or 'unavailable'}",
+                    f"Guard projection: {result['guard_enforcement_projection']['schema_version']}",
+                ]
+            )
+        )
     elif args.command in {"replay-authority", "replay-execution", "verify-lineage"}:
         print(_format_replay_summary(result))
         return 0 if _replay_ok(result) else 1
