@@ -15,6 +15,7 @@ from governance_ledger.local_registry.projection import (
     build_authority_workspace_projection as build_local_authority_workspace_projection,
 )
 from governance_ledger.local_registry.projections.operational import build_authority_operational_summary
+from governance_ledger.semantics.compiler import compile_semantic_commit_bundle
 from governance_ledger.semantics.diagnostics import build_governance_quality_diagnostics
 from governance_ledger.semantics.diffing import build_semantic_authority_diff
 from governance_ledger.semantics.extraction import extract_governance_semantics
@@ -111,6 +112,18 @@ class LedgerUIHandler(BaseHTTPRequestHandler):
                 self._write_json({"error": str(exc)}, status=400)
             except Exception as exc:  # pragma: no cover - defensive HTTP boundary
                 self._write_json({"error": f"Unable to build semantic lifecycle enforcement projection: {exc}"}, status=500)
+            return
+        if parsed.path == "/api/compile-authority":
+            try:
+                payload = self._read_json_body()
+                semantic_commit = payload.get("semantic_commit_bundle")
+                if not isinstance(semantic_commit, dict):
+                    raise ValueError("Authority compilation requires semantic_commit_bundle.")
+                self._write_json(compile_semantic_commit_bundle(semantic_commit))
+            except ValueError as exc:
+                self._write_json({"error": str(exc)}, status=400)
+            except Exception as exc:  # pragma: no cover - defensive HTTP boundary
+                self._write_json({"error": f"Unable to compile authority contract: {exc}"}, status=500)
             return
         if parsed.path != "/api/compose":
             self._write_json({"error": "not found"}, status=404)

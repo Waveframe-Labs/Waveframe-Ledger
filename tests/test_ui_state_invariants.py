@@ -173,13 +173,29 @@ def test_committing_semantic_interpretation_is_boundary_before_operational_impac
 
     assert "applyDraftToForm" in body
     assert 'semantic_state: "committed"' in body
+    assert 'compiler_state: "not_compiled"' in body
     assert 'impact_state: "invalidated"' in body
     assert "impactReviewed: false" in body
     assert "bundleExported: false" in body
     assert "receiptGenerated: false" in body
     assert "authorityRegistered: false" in body
-    assert "Generate Operational Impact next" in body
+    assert "Compile Authority Contract next" in body
     assert "exportButton.disabled = true" in body
+
+
+def test_compiler_boundary_is_visible_between_semantic_commit_and_operational_impact():
+    html = (ROOT / "ui" / "index.html").read_text(encoding="utf-8")
+    source = APP_JS.read_text(encoding="utf-8")
+    compile_body = _function_body(source, "compileAuthorityContract")
+    capability_body = _function_body(source, "canGenerateOperationalImpact")
+
+    assert 'id="compile-authority-button"' in html
+    assert "Compile Authority Contract" in html
+    assert 'fetch("/api/compile-authority"' in compile_body
+    assert "buildSemanticCommitBundleForUi" in compile_body
+    assert 'compiler_state: "compiled"' in compile_body
+    assert "currentCompiledAuthorityContract" in capability_body
+    assert 'semanticStateMachine.compiler_state === "compiled"' in capability_body
 
 
 def test_policy_source_changes_invalidate_semantic_lineage_before_impact_review():
@@ -211,6 +227,8 @@ def test_operational_impact_renders_only_current_valid_semantic_lineage():
     assert "payload.ui_draft_hash !== committedDraftHash()" in render_body
     assert "renderInvalidatedImpact" in render_body
     assert "currentArtifacts = null" in invalidation_body
+    assert "currentCompiledAuthorityContract = null" in invalidation_body
+    assert "compiled_authority_contract.v1" in invalidation_body
     assert "governance_impact_preview.v1" in invalidation_body
     assert "generateButton.disabled = reviewBusy || !reviewAvailable" in sync_body
 
@@ -223,6 +241,7 @@ def test_ui_uses_action_level_capability_gates():
         "canExtractSemantics",
         "canCommitSemanticInterpretation",
         "canReconcileAmbiguities",
+        "canCompileAuthorityContract",
         "canGenerateOperationalImpact",
         "canReviewImpact",
         "canExportBundle",
@@ -232,6 +251,7 @@ def test_ui_uses_action_level_capability_gates():
 
     assert "extractPolicyButton.disabled = reviewBusy || !canExtractSemantics()" in sync_body
     assert "useExtractionButton.disabled = !canCommitSemanticInterpretation()" in sync_body
+    assert "compileAuthorityButton.disabled = reviewBusy || !canCompileAuthorityContract()" in sync_body
     assert "openReconciliationButton.disabled = !canReconcileAmbiguities()" in sync_body
     assert "exportButton.disabled = !canExportBundle(hasArtifacts)" in sync_body
     assert "registerButton.disabled = !canRegisterAuthority()" in sync_body
@@ -245,6 +265,7 @@ def test_authoring_ui_exposes_staged_pipeline_not_apply_buttons():
     assert "Extract Governance Meaning" in html
     assert "Reconcile Ambiguities" in html
     assert "Commit Semantic Interpretation" in html
+    assert "Compile Authority Contract" in html
     assert "commit-boundary-action" in html
     assert "Generate Operational Impact" in html
     assert "Apply Deterministic Fields" not in html

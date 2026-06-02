@@ -21,6 +21,11 @@ from governance_ledger.replay import (
     replay_governance_compilation,
     verify_authority_lineage,
 )
+from governance_ledger.semantics.compiler import (
+    build_semantic_commit_bundle,
+    compile_semantic_commit_bundle,
+    format_compiled_authority_contract,
+)
 from governance_ledger.semantics.diff import (
     build_authority_diff_impact,
     format_authority_diff_impact,
@@ -130,6 +135,24 @@ def main(argv: Sequence[str] | None = None) -> int:
     authority_bundle_parser.add_argument("--review-packet", action="append", default=[])
     authority_bundle_parser.add_argument("--output")
     authority_bundle_parser.add_argument("--json", action="store_true")
+
+    semantic_commit_parser = subparsers.add_parser(
+        "semantic-commit",
+        help="freeze completed semantic reconciliation as semantic_commit_bundle.v1",
+    )
+    semantic_commit_parser.add_argument("--reconciliation", required=True)
+    semantic_commit_parser.add_argument("--committed-by", default="governance-ledger")
+    semantic_commit_parser.add_argument("--committed-at")
+    semantic_commit_parser.add_argument("--output")
+    semantic_commit_parser.add_argument("--json", action="store_true")
+
+    compile_authority_parser = subparsers.add_parser(
+        "compile-authority",
+        help="compile semantic_commit_bundle.v1 into compiled_authority_contract.v1",
+    )
+    compile_authority_parser.add_argument("--semantic-commit", required=True)
+    compile_authority_parser.add_argument("--output")
+    compile_authority_parser.add_argument("--json", action="store_true")
 
     replay_authority_parser = subparsers.add_parser(
         "replay-authority",
@@ -264,6 +287,24 @@ def main(argv: Sequence[str] | None = None) -> int:
                 json.dumps(result, indent=2, sort_keys=True) + "\n",
                 encoding="utf-8",
             )
+    elif args.command == "semantic-commit":
+        result = build_semantic_commit_bundle(
+            _read_json_arg(args.reconciliation) or {},
+            committed_by=args.committed_by,
+            committed_at=args.committed_at,
+        )
+        if args.output:
+            Path(args.output).write_text(
+                json.dumps(result, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+    elif args.command == "compile-authority":
+        result = compile_semantic_commit_bundle(_read_json_arg(args.semantic_commit) or {})
+        if args.output:
+            Path(args.output).write_text(
+                json.dumps(result, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
     else:
         result = show_artifact(args.path)
 
@@ -290,6 +331,19 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(format_governance_review_packet(result))
     elif args.command == "authority-bundle":
         print(format_authority_bundle(result))
+    elif args.command == "semantic-commit":
+        print(
+            "\n".join(
+                [
+                    "[Semantic Commit Bundle]",
+                    "",
+                    f"Commit: {result['semantic_commit_id']}",
+                    f"Hash: {result['semantic_commit_hash']}",
+                ]
+            )
+        )
+    elif args.command == "compile-authority":
+        print(format_compiled_authority_contract(result))
     elif args.command in {"replay-authority", "replay-execution", "verify-lineage"}:
         print(_format_replay_summary(result))
         return 0 if _replay_ok(result) else 1

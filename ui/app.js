@@ -7,6 +7,7 @@ const newDraftButton = document.querySelector("#new-draft-button");
 const saveDraftButton = document.querySelector("#save-draft-button");
 const extractPolicyButton = document.querySelector("#extract-policy-button");
 const useExtractionButton = document.querySelector("#use-extraction-button");
+const compileAuthorityButton = document.querySelector("#compile-authority-button");
 const applyAllExtractionButton = document.querySelector("#apply-all-extraction-button");
 const openReconciliationButton = document.querySelector("#open-reconciliation-button");
 const manualFirstButton = document.querySelector("#manual-first-button");
@@ -22,6 +23,8 @@ let interpretationDecisions = [];
 let unresolvedReconciliationBlocks = [];
 let interpretationAuditTrail = [];
 let currentSemanticExtras = {};
+let currentSemanticCommitBundle = null;
+let currentCompiledAuthorityContract = null;
 let currentSemanticAuthorityDiff = null;
 let currentLifecycleEnforcementProjection = null;
 let semanticDiffRequestToken = 0;
@@ -53,10 +56,12 @@ let semanticStateMachine = {
   schema_version: "semantic_state_machine.v1",
   draft_state: "uncommitted",
   semantic_state: "not_ready",
+  compiler_state: "not_compiled",
   impact_state: "not_reviewed",
   publication_state: "blocked",
   draft_hash: null,
   artifact_draft_hash: null,
+  compiled_contract_hash: null,
   invalidation_reason: null,
 };
 const DRAFT_SESSION_KEY = "governance-ledger:draft-authority-session:v1";
@@ -105,6 +110,15 @@ function stableHash(value) {
 
 function committedDraftHash() {
   return committedDraft ? stableHash(committedDraft) : null;
+}
+
+function resetCompiledAuthorityContract(reason = "not_compiled") {
+  currentSemanticCommitBundle = null;
+  currentCompiledAuthorityContract = null;
+  setSemanticState({
+    compiler_state: reason,
+    compiled_contract_hash: null,
+  });
 }
 
 function setSemanticState(partial) {
@@ -179,6 +193,7 @@ function restoreDraftSession() {
     policySourceDirty = false;
     currentExtraction = null;
     currentSemanticExtras = {};
+    resetCompiledAuthorityContract();
     if (policySourceText) policySourceText.value = "";
     resetSemanticStateMachine("draft_not_committed");
     clearAuthoringFields();
@@ -201,6 +216,7 @@ function restoreDraftSession() {
     invalidation_reason: authoringSessionDirty ? "working_authoring_changes" : "restored_committed_draft",
   });
   currentSemanticExtras = semanticExtrasFromCandidate(session.draft || {});
+  resetCompiledAuthorityContract("not_compiled");
   clearAuthoringFields();
   draftSessionStatus.textContent = authoringSessionDirty
     ? `Working session state restored ${new Date(session.updated_at).toLocaleTimeString()}. Manual fields remain empty until explicitly populated.`
@@ -219,13 +235,17 @@ function saveWorkingAuthoringSession() {
 }
 
 function resetSemanticStateMachine(reason = "no_committed_draft") {
+  currentSemanticCommitBundle = null;
+  currentCompiledAuthorityContract = null;
   setSemanticState({
     draft_state: "uncommitted",
     semantic_state: "not_ready",
+    compiler_state: "not_compiled",
     impact_state: "not_reviewed",
     publication_state: "blocked",
     draft_hash: null,
     artifact_draft_hash: null,
+    compiled_contract_hash: null,
     invalidation_reason: reason,
   });
 }
@@ -317,6 +337,7 @@ function startNewDraft() {
   currentSemanticAuthorityDiff = null;
   currentLifecycleEnforcementProjection = null;
   currentSemanticExtras = {};
+  resetCompiledAuthorityContract();
   committedDraft = null;
   authoringSessionDirty = false;
   policySourceDirty = false;
@@ -373,14 +394,17 @@ async function extractPolicySemantics() {
     }
     currentExtraction = extraction;
     resetReconciliationState();
+    resetCompiledAuthorityContract("semantic_extraction_provisional");
     policySourceDirty = false;
     setSemanticState({
       draft_state: committedDraft ? "committed" : "uncommitted",
       semantic_state: "extracted_requires_confirmation",
+      compiler_state: "not_compiled",
       impact_state: "invalidated",
       publication_state: "blocked",
       draft_hash: committedDraftHash(),
       artifact_draft_hash: null,
+      compiled_contract_hash: null,
       invalidation_reason: "extraction_requires_operator_confirmation",
     });
     renderSemanticExtraction(extraction);
@@ -1026,15 +1050,18 @@ function commitSemanticInterpretation() {
   };
   currentArtifacts = null;
   pendingRegistration = null;
+  resetCompiledAuthorityContract("semantic_commit_requires_compilation");
   policySourceDirty = false;
   commitCurrentDraft();
   setSemanticState({
     draft_state: "committed",
     semantic_state: "committed",
+    compiler_state: "not_compiled",
     impact_state: "invalidated",
     publication_state: "blocked",
     draft_hash: committedDraftHash(),
     artifact_draft_hash: null,
+    compiled_contract_hash: null,
     invalidation_reason: "semantic_interpretation_committed_requires_impact_review",
   });
   workflowInvalidation = {
@@ -1062,11 +1089,11 @@ function commitSemanticInterpretation() {
     receiptGenerated: false,
     authorityRegistered: false,
   });
-  $("#extraction-status").textContent = `Semantic interpretation committed. Fingerprint ${shortHash(committedDraftHash() || "draft:unavailable")}. Generate Operational Impact next.`;
+  $("#extraction-status").textContent = `Semantic interpretation committed. Fingerprint ${shortHash(committedDraftHash() || "draft:unavailable")}. Compile Authority Contract next.`;
   renderReconciliationWorkflow("#reconciliation-workflow", currentExtraction.ambiguities);
   renderOperatorGuidance(
     "Semantic interpretation committed.",
-    "Generate operational impact from the committed semantic interpretation before publication review.",
+    "Compile the deterministic authority contract before operational impact review.",
   );
 }
 
@@ -1243,6 +1270,114 @@ function populateManualFieldsFromCommittedDraft() {
   draftSessionStatus.textContent = "Manual fields populated from committed interpretation.";
 }
 
+function buildSemanticCommitBundleForUi() {
+  if (!currentReconciliation || currentReconciliation.interpretation_completeness_posture !== "complete") {
+    throw new Error("Semantic reconciliation must be complete before compilation.");
+  }
+  if (!committedDraft) {
+    throw new Error("Committed semantic meaning is required before compilation.");
+  }
+  const semanticHash = stableHash(committedDraft);
+  return {
+    schema_version: "semantic_commit_bundle.v1",
+    source_id: currentReconciliation.source_id,
+    source_hash: currentReconciliation.source_hash,
+    extraction_id: currentReconciliation.extraction_id,
+    semantic_commit_id: `semantic-commit-${semanticHash.replace("draft:", "")}`,
+    semantic_commit_hash: semanticHash,
+    committed_at: new Date().toISOString(),
+    committed_by: "local-ledger-ui",
+    committed_capabilities: committedDraft.capabilities || [],
+    resolved_interpretations: currentReconciliation.operator_interpretation_decisions || [],
+    approved_constraints: {
+      approval: committedDraft.approval_chain_semantics || {},
+      escalation: {
+        escalation_threshold: committedDraft.escalation_threshold || null,
+        escalation_semantics: committedDraft.escalation_semantics || "",
+      },
+      continuity: committedDraft.state_snapshot_semantics || {},
+      execution: committedDraft.execution_context_semantics || {},
+    },
+    lifecycle_posture: {
+      revocation_invalidates_resume: Boolean(committedDraft.revocation_invalidates_resume),
+      supersession_requires_revalidation: Boolean(committedDraft.continuity_revalidation),
+    },
+    continuity_posture: committedDraft.state_snapshot_semantics || {},
+    identity_bindings: {
+      governance_actor: committedDraft.governance_actor || {},
+      authority_role_binding: committedDraft.authority_role_binding || {},
+      approval_chain_semantics: committedDraft.approval_chain_semantics || {},
+      identity_continuity_semantics: committedDraft.identity_continuity_semantics || {},
+    },
+    execution_admissibility_semantics: {
+      execution_context: committedDraft.execution_context_semantics || {},
+      temporal_validation: committedDraft.temporal_semantics || {},
+      runtime_enforced_by: "Guard/Cloud",
+      ledger_boundary: "models deterministic runtime representation only",
+    },
+    replay_obligations: committedDraft.state_snapshot_semantics?.snapshot_required
+      ? [{ obligation_type: "state_snapshot_evidence", required: true, binding: "active_governance_state" }]
+      : [],
+    committed_semantic_meaning: committedDraft,
+    non_goals: [
+      "does_not_interpret_raw_policy_text",
+      "does_not_compile_provisional_extraction",
+      "does_not_resolve_ambiguities",
+      "does_not_call_guard",
+      "does_not_determine_runtime_admissibility",
+    ],
+    bundle_hash: stableHash({
+      semantic_hash: semanticHash,
+      decisions: currentReconciliation.operator_interpretation_decisions || [],
+    }),
+  };
+}
+
+async function compileAuthorityContract() {
+  if (!canCompileAuthorityContract()) {
+    renderOperatorGuidance(
+      "Semantic compilation unavailable.",
+      "Commit semantic interpretation before compiling the deterministic authority contract.",
+    );
+    return;
+  }
+  compileAuthorityButton.disabled = true;
+  compileAuthorityButton.textContent = "Compiling Contract...";
+  try {
+    const semanticCommitBundle = buildSemanticCommitBundleForUi();
+    const response = await fetch("/api/compile-authority", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ semantic_commit_bundle: semanticCommitBundle }),
+    });
+    const compiled = await response.json();
+    if (!response.ok) {
+      throw new Error(compiled.error || "Unable to compile authority contract.");
+    }
+    currentSemanticCommitBundle = semanticCommitBundle;
+    currentCompiledAuthorityContract = compiled;
+    setSemanticState({
+      compiler_state: "compiled",
+      compiled_contract_hash: compiled.contract_hash || null,
+      impact_state: "not_reviewed",
+      publication_state: "compiled_not_reviewed",
+      invalidation_reason: null,
+    });
+    $("#extraction-status").textContent = `Authority contract compiled. Contract hash ${shortHash(compiled.contract_hash || "compiled:unavailable")}. Generate Operational Impact next.`;
+    renderOperatorGuidance(
+      "Authority contract compiled.",
+      "Generate operational impact from the compiled deterministic authority contract before publication review.",
+    );
+  } catch (error) {
+    resetCompiledAuthorityContract("compile_failed");
+    renderDiagnostics([{ severity: "error", code: "authority_compile_error", text: error.message }]);
+    renderOperatorGuidance("Authority compilation failed.", error.message);
+  } finally {
+    compileAuthorityButton.textContent = "Compile Authority Contract";
+    syncPublicationActions();
+  }
+}
+
 async function generateArtifacts(options = {}) {
   const shouldNavigate = options.navigate === true;
   const isReview = options.review === true || shouldNavigate;
@@ -1273,6 +1408,8 @@ async function generateArtifacts(options = {}) {
       throw new Error(payload.error || "Unable to generate semantic artifacts.");
     }
     payload.ui_draft_hash = draftHash;
+    payload.semantic_commit_bundle = currentSemanticCommitBundle;
+    payload.compiled_authority_contract = currentCompiledAuthorityContract;
     currentArtifacts = payload;
     pendingRegistration = null;
     if (isReview) {
@@ -1281,10 +1418,12 @@ async function generateArtifacts(options = {}) {
       setSemanticState({
         draft_state: "committed",
         semantic_state: "valid",
+        compiler_state: "compiled",
         impact_state: "valid",
         publication_state: "reviewed_not_exported",
         draft_hash: draftHash,
         artifact_draft_hash: draftHash,
+        compiled_contract_hash: currentCompiledAuthorityContract?.contract_hash || null,
         invalidation_reason: null,
       });
     }
@@ -1309,6 +1448,7 @@ function setBusy(isBusy) {
   generateButton.textContent = isBusy ? "Generating Impact..." : "Generate Operational Impact";
   publicationReviewButton.disabled = isBusy;
   publicationReviewButton.textContent = isBusy ? "Generating Impact..." : "Generate Operational Impact";
+  compileAuthorityButton.disabled = isBusy || !canCompileAuthorityContract();
   if (!isBusy) {
     syncPublicationActions();
   }
@@ -1353,6 +1493,7 @@ function syncPublicationActions() {
   const reviewAvailable = canGenerateOperationalImpact();
   extractPolicyButton.disabled = reviewBusy || !canExtractSemantics();
   useExtractionButton.disabled = !canCommitSemanticInterpretation();
+  compileAuthorityButton.disabled = reviewBusy || !canCompileAuthorityContract();
   if (applyAllExtractionButton) applyAllExtractionButton.disabled = true;
   openReconciliationButton.disabled = !canReconcileAmbiguities();
   generateButton.disabled = reviewBusy || !reviewAvailable;
@@ -1377,12 +1518,26 @@ function canReconcileAmbiguities() {
   return Boolean(currentExtraction);
 }
 
+function canCompileAuthorityContract() {
+  return Boolean(
+    committedDraft
+      && currentReconciliation?.interpretation_completeness_posture === "complete"
+      && semanticStateMachine.semantic_state === "committed"
+      && semanticStateMachine.draft_state === "committed"
+      && semanticStateMachine.compiler_state !== "compiled"
+      && !authoringSessionDirty
+      && !policySourceDirty,
+  );
+}
+
 function canGenerateOperationalImpact() {
   return Boolean(
     workflowState.draftReady
       && !authoringSessionDirty
       && !policySourceDirty
       && semanticStateMachine.semantic_state === "committed"
+      && semanticStateMachine.compiler_state === "compiled"
+      && currentCompiledAuthorityContract
       && semanticStateMachine.draft_state === "committed",
   );
 }
@@ -1413,9 +1568,12 @@ function renderOperatorGuidance(title, body) {
   } else if (!workflowState.draftReady) {
     guidance.querySelector("strong").textContent = "Draft policy text.";
     guidance.querySelector("span").textContent = "Extract candidate semantics, reconcile ambiguities, then commit the semantic interpretation.";
+  } else if (semanticStateMachine.semantic_state === "committed" && semanticStateMachine.compiler_state !== "compiled") {
+    guidance.querySelector("strong").textContent = "Compile authority contract next.";
+    guidance.querySelector("span").textContent = "Compilation turns committed governance meaning into deterministic runtime representation.";
   } else if (!workflowState.impactReviewed) {
     guidance.querySelector("strong").textContent = "Generate operational impact next.";
-    guidance.querySelector("span").textContent = "Ledger has committed semantics. Generate impact to review publication-relevant meaning.";
+    guidance.querySelector("span").textContent = "Ledger has a compiled authority contract. Generate impact to review publication-relevant meaning.";
   } else if (!workflowState.bundleExported) {
     guidance.querySelector("strong").textContent = "Impact is reviewed.";
     guidance.querySelector("span").textContent = "Export the authority bundle to create receipt evidence and prepare local registration.";
@@ -2000,14 +2158,18 @@ function invalidateSemanticLineage(reason) {
   currentArtifacts = null;
   currentSemanticAuthorityDiff = null;
   currentLifecycleEnforcementProjection = null;
+  currentSemanticCommitBundle = null;
+  currentCompiledAuthorityContract = null;
   pendingRegistration = null;
   setSemanticState({
     draft_state: "dirty",
     semantic_state: "invalidated",
+    compiler_state: "invalidated",
     impact_state: "invalidated",
     publication_state: "blocked",
     draft_hash: committedDraftHash(),
     artifact_draft_hash: null,
+    compiled_contract_hash: null,
     invalidation_reason: reason,
     invalidated_at: now,
   });
@@ -2019,6 +2181,8 @@ function invalidateSemanticLineage(reason) {
       "governance_semantic_extraction.v1",
       "governance_semantic_provenance.v1",
       "governance_semantic_reconciliation.v1",
+      "semantic_commit_bundle.v1",
+      "compiled_authority_contract.v1",
       "governance_impact_preview.v1",
       "authority_diff_impact.v1",
       "authority_workspace_projection.v1",
@@ -4148,6 +4312,7 @@ newDraftButton.addEventListener("click", startNewDraft);
 saveDraftButton?.addEventListener("click", commitCurrentDraft);
 extractPolicyButton.addEventListener("click", extractPolicySemantics);
 useExtractionButton.addEventListener("click", commitSemanticInterpretation);
+compileAuthorityButton.addEventListener("click", compileAuthorityContract);
 applyAllExtractionButton?.addEventListener("click", commitSemanticInterpretation);
 openReconciliationButton.addEventListener("click", openReconciliationReview);
 manualFirstButton?.addEventListener("click", startManualFirstAuthoring);
