@@ -477,6 +477,10 @@ def test_reconciliation_uses_explicit_ambiguity_resolution_states():
     assert "resolution_state_pending" in readiness_body
     assert "resolution_state_unresolved" in readiness_body
     assert "semanticCommitReadiness().semantic_commit_ready" in gate_body
+    assert "ambiguity_fingerprint" in source
+    assert "function ambiguityFingerprint" in source
+    assert "semanticRecordMatchesAmbiguity" in source
+    assert "withoutSemanticRecordForAmbiguity" in source
 
 
 def test_reconciliation_renders_semantic_commit_blocker_observability():
@@ -489,7 +493,11 @@ def test_reconciliation_renders_semantic_commit_blocker_observability():
     assert 'panel.id = "semantic-commit-readiness"' in readiness_render_body
     assert "Semantic commit blockers" in readiness_render_body
     assert "All required ambiguities are acknowledged or interpreted." in readiness_render_body
-    assert "${item.ambiguity_id} -> ${item.resolution_state}" in readiness_render_body
+    assert "${item.ambiguity_id} (${shortHash(item.ambiguity_fingerprint" in readiness_render_body
+    assert "-> ${item.resolution_state}" in readiness_render_body
+    assert "All IDs:" in readiness_render_body
+    assert "Resolved IDs:" in readiness_render_body
+    assert "Pending IDs:" in readiness_render_body
     assert ".semantic-commit-readiness" in css
 
 
