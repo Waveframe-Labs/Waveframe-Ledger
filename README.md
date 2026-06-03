@@ -384,3 +384,9 @@ Canonical schemas live in [schemas/](schemas/), including:
 - [PROVENANCE.md](PROVENANCE.md)
 - [NON_GOALS.md](NON_GOALS.md)
 - [schemas/](schemas/)
+
+---
+
+<div align="center">
+  <sub>© 2026 Waveframe Labs — Independent Open-Science Research Entity</sub>
+</div>
