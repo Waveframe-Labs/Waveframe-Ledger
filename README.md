@@ -3,7 +3,7 @@ title: "Governance-Ledger"
 document_type: "overview"
 system: "Governance-Ledger"
 component: "core"
-version: "0.3.0"
+version: "0.4.0"
 status: "draft"
 
 created: "2026-05-08"
@@ -341,16 +341,50 @@ Canonical schemas live in [schemas/](schemas/), including:
 - [authority_bundle.v1.json](schemas/authority_bundle.v1.json): authority bundles.
 - [publication_receipt.v1.json](schemas/publication_receipt.v1.json): publication receipts.
 - [authority_lifecycle_event.v1.json](schemas/authority_lifecycle_event.v1.json): append-only authority lifecycle events.
+- [governance_semantic_extraction.v1.json](schemas/governance_semantic_extraction.v1.json): deterministic semantic extraction artifacts.
+- [governance_semantic_provenance.v1.json](schemas/governance_semantic_provenance.v1.json): semantic provenance and source-span bindings.
+- [governance_semantic_reconciliation.v1.json](schemas/governance_semantic_reconciliation.v1.json): semantic reconciliation artifacts.
+- [semantic_conflict.v1.json](schemas/semantic_conflict.v1.json): semantic conflicts.
+- [semantic_ambiguity.v1.json](schemas/semantic_ambiguity.v1.json): semantic ambiguities.
+- [semantic_interpretation_decision.v1.json](schemas/semantic_interpretation_decision.v1.json): operator interpretation decisions.
+- [semantic_reconciliation_projection.v1.json](schemas/semantic_reconciliation_projection.v1.json): reconciliation projections.
+- [semantic_stability_projection.v1.json](schemas/semantic_stability_projection.v1.json): semantic stability projections.
+- [semantic_commit_bundle.v1.json](schemas/semantic_commit_bundle.v1.json): committed semantic interpretation bundles.
+- [semantic_authority_diff.v1.json](schemas/semantic_authority_diff.v1.json): semantic authority diffs.
+- [semantic_lifecycle_enforcement_projection.v1.json](schemas/semantic_lifecycle_enforcement_projection.v1.json): lifecycle enforcement consequence projections.
+- [compiled_authority_contract.v1.json](schemas/compiled_authority_contract.v1.json): compiled authority contracts.
+- [authority_execution_projection.v1.json](schemas/authority_execution_projection.v1.json): authority execution projections.
+- [execution_requirement_projection.v1.json](schemas/execution_requirement_projection.v1.json): execution requirement projections.
+- [execution_admissibility_projection.v1.json](schemas/execution_admissibility_projection.v1.json): execution admissibility projections.
+- [runtime_consequence_projection.v1.json](schemas/runtime_consequence_projection.v1.json): runtime consequence projections.
+- [guard_enforcement_projection.v1.json](schemas/guard_enforcement_projection.v1.json): Guard enforcement projections.
+- [governance_capability.v1.json](schemas/governance_capability.v1.json): governance capabilities.
+- [capability_requirement.v1.json](schemas/capability_requirement.v1.json): capability requirements.
+- [capability_continuity_semantics.v1.json](schemas/capability_continuity_semantics.v1.json): capability continuity semantics.
+- [capability_evidence_requirement.v1.json](schemas/capability_evidence_requirement.v1.json): capability evidence requirements.
+- [capability_execution_constraint.v1.json](schemas/capability_execution_constraint.v1.json): capability execution constraints.
+- [capability_identity_requirement.v1.json](schemas/capability_identity_requirement.v1.json): capability identity requirements.
+- [temporal_authority_semantics.v1.json](schemas/temporal_authority_semantics.v1.json): temporal authority semantics.
+- [state_posture_snapshot_semantics.v1.json](schemas/state_posture_snapshot_semantics.v1.json): state posture snapshot semantics.
+- [execution_context_semantics.v1.json](schemas/execution_context_semantics.v1.json): execution context semantics.
+- [governance_actor.v1.json](schemas/governance_actor.v1.json): governance actors.
+- [authority_role_binding.v1.json](schemas/authority_role_binding.v1.json): authority role bindings.
+- [approval_chain_semantics.v1.json](schemas/approval_chain_semantics.v1.json): approval chain semantics.
+- [identity_continuity_semantics.v1.json](schemas/identity_continuity_semantics.v1.json): identity continuity semantics.
 - [governance_event.v1.json](schemas/governance_event.v1.json): base governance event envelope.
 - [projection_generation_event.v1.json](schemas/projection_generation_event.v1.json): projection generation events.
 - [projection_invalidation_event.v1.json](schemas/projection_invalidation_event.v1.json): projection invalidation events.
 - [continuity_transition_event.v1.json](schemas/continuity_transition_event.v1.json): continuity transition events.
 - [governance_replay_state.v1.json](schemas/governance_replay_state.v1.json): governance chronology replay state.
 - [governance_replay_diff.v1.json](schemas/governance_replay_diff.v1.json): governance replay state diffs.
+- [governance_lineage_verification.v1.json](schemas/governance_lineage_verification.v1.json): lineage verification artifacts.
 - [replay_authority_request.v1.json](schemas/replay_authority_request.v1.json): replay authority requests.
 - [replay_execution_request.v1.json](schemas/replay_execution_request.v1.json): replay execution requests.
 - [publication_manifest.v1.json](schemas/publication_manifest.v1.json): publication manifests.
+- [publication_manifest.schema.json](schemas/publication_manifest.schema.json): publication manifest schema compatibility.
 - [contract_registry.schema.json](schemas/contract_registry.schema.json): contract registries.
+- [deployment.schema.json](schemas/deployment.schema.json): deployment records.
+- [cricore_policy.schema.json](schemas/cricore_policy.schema.json): CRI-CORE policy compatibility.
 - [review.schema.json](schemas/review.schema.json): reviews.
 - [snapshot.schema.json](schemas/snapshot.schema.json): snapshots.
 
@@ -363,6 +397,10 @@ Canonical schemas live in [schemas/](schemas/), including:
 - [GOVERNANCE_EVENT_MODEL.md](GOVERNANCE_EVENT_MODEL.md)
 - [GOVERNANCE_CHRONOLOGY_REPLAY.md](GOVERNANCE_CHRONOLOGY_REPLAY.md)
 - [EVENT_ORDERING_SEMANTICS.md](EVENT_ORDERING_SEMANTICS.md)
+- [GOVERNANCE_SEMANTIC_RECONCILIATION.md](GOVERNANCE_SEMANTIC_RECONCILIATION.md)
+- [TEMPORAL_AND_STATE_CONTINUITY.md](TEMPORAL_AND_STATE_CONTINUITY.md)
+- [EXECUTION_CONTEXT_MODEL.md](EXECUTION_CONTEXT_MODEL.md)
+- [IDENTITY_AND_RESPONSIBILITY_MODEL.md](IDENTITY_AND_RESPONSIBILITY_MODEL.md)
 - [GOVERNANCE_OBJECT_MODEL.md](GOVERNANCE_OBJECT_MODEL.md)
 - [SEMANTICS.md](SEMANTICS.md)
 - [LIFECYCLE.md](LIFECYCLE.md)

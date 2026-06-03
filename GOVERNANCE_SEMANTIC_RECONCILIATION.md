@@ -69,7 +69,7 @@ Operator interpretation:
   "decision_type": "threshold_definition",
   "ambiguity_id": "ambiguity-large-transfer",
   "resolved_value": 250000,
-  "operator": "local-ledger-ui",
+  "operator": "governance-ledger",
   "timestamp": "2026-01-01T00:00:00Z",
   "rationale": "Treasury policy baseline",
   "justification": "Treasury policy baseline",

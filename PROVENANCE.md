@@ -3,7 +3,7 @@ title: "Governance Provenance"
 document_type: "provenance"
 system: "Governance-Ledger"
 component: "core"
-version: "0.3.0"
+version: "0.4.0"
 status: "draft"
 
 created: "2026-05-08"

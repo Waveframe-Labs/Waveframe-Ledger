@@ -3,7 +3,7 @@ title: "Governance Chronology Replay"
 document_type: "architecture"
 system: "Governance-Ledger"
 component: "chronology-replay"
-version: "0.3.0"
+version: "0.4.0"
 status: "draft"
 
 created: "2026-05-27"

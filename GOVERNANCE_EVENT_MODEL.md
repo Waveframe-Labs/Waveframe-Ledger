@@ -3,7 +3,7 @@ title: "Governance Event Model"
 document_type: "architecture"
 system: "Governance-Ledger"
 component: "governance-events"
-version: "0.3.0"
+version: "0.4.0"
 status: "draft"
 
 created: "2026-05-27"

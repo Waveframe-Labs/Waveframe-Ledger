@@ -3,7 +3,7 @@ title: "Governance Object Model"
 document_type: "reference"
 system: "Governance-Ledger"
 component: "core"
-version: "0.3.0"
+version: "0.4.0"
 status: "draft"
 
 created: "2026-05-08"

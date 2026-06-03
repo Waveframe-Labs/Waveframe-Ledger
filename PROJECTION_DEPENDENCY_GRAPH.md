@@ -2,12 +2,12 @@
 title: "Projection Dependency Graph"
 document_type: "architecture"
 system: "Governance-Ledger"
-component: "local-registry-projections"
-version: "0.3.0"
+component: "public-projections"
+version: "0.4.0"
 status: "draft"
 
 created: "2026-05-27"
-updated: "2026-05-27"
+updated: "2026-06-03"
 
 authors:
   - "Waveframe Labs"
@@ -21,55 +21,76 @@ repository: "https://github.com/Waveframe-Labs/Governance-Ledger"
 
 summary: >
   Canonical dependency, invalidation, freshness, and generation-order semantics
-  for Ledger local registry projections.
+  for public Ledger governance projections.
 ---
 
 # Projection Dependency Graph
 
-Ledger projections are deterministic views over local registry facts. Dependency order matters because Registry surfaces now render lifecycle, lineage, continuity, replay, freshness, reconciliation, and health as one operational posture.
+Ledger projections are deterministic views over public governance artifacts. Dependency order matters because semantic extraction, reconciliation, compilation, execution projection, publication, and chronology replay must remain causally aligned.
 
 ## Source Facts
 
 The projection graph starts from durable facts:
 
-- `authority_registry_entry.v1`
-- `authority_lifecycle_event.v1`
+- `governance_source.v1`
+- `governance_semantic_extraction.v1`
+- `governance_semantic_reconciliation.v1`
+- `semantic_commit_bundle.v1`
+- `compiled_authority_contract.v1`
+- `authority_bundle.v1`
 - `publication_receipt.v1`
-- `diagnostic_rollup.v1`
-- exported semantic artifacts referenced by registry entries
+- `governance_event.v1`
 
 These facts persist historically. Projections recompute from them.
 
 ## Canonical Generation Order
 
 ```text
-authority_registry_entry.v1[]
-  -> authority_drift_indicator.v1
-  -> authority_timeline_projection.v1
-  -> authority_lineage_projection.v1
-  -> active_authority_projection.v1
-  -> registry_health_projection.v1
-  -> governance_continuity_projection.v1
-  -> governance_timeline_projection.v1
-  -> governance_activity_projection.v1
-  -> governance_reconciliation_projection.v1
+governance_source.v1
+  -> governance_semantic_extraction.v1
+  -> governance_semantic_reconciliation.v1
+  -> semantic_reconciliation_projection.v1
+  -> semantic_commit_bundle.v1
+  -> compiled_authority_contract.v1
+  -> authority_execution_projection.v1
+  -> execution_requirement_projection.v1
+  -> execution_admissibility_projection.v1
+  -> guard_enforcement_projection.v1
+  -> runtime_consequence_projection.v1
+  -> governance_impact_preview.v1
+  -> authority_bundle.v1
+  -> publication_receipt.v1
+  -> governance_replay_state.v1
 ```
 
-`governance_reconciliation_projection.v1` is intentionally late in the graph because it reconciles lifecycle state, lineage state, replay posture, continuity posture, projection freshness, active authority state, and registry health.
+Diff projections compare durable artifacts across versions:
+
+```text
+previous compiled_authority_contract.v1
+current compiled_authority_contract.v1
+  -> semantic_authority_diff.v1
+  -> authority_diff_impact.v1
+  -> semantic_lifecycle_enforcement_projection.v1
+  -> governance_replay_diff.v1
+```
 
 ## Dependency Table
 
 | Projection | Depends on | Purpose |
 | --- | --- | --- |
-| `authority_drift_indicator.v1` | previous and current registry entries | Detect deterministic governance rule drift. |
-| `authority_timeline_projection.v1` | lifecycle events | Render one authority's lifecycle events. |
-| `authority_lineage_projection.v1` | registry entries, drift indicators, authority timelines | Build version chain, supersession edges, lineage timeline, and drift. |
-| `active_authority_projection.v1` | registry entries | Resolve current active authority per authority family. |
-| `registry_health_projection.v1` | registry entries, lineage projection | Summarize replay readiness, warnings, and continuity drift. |
-| `governance_continuity_projection.v1` | registry entries, drift indicators | Detect continuity posture, fragmentation, replay degradation, and governance churn. |
-| `governance_timeline_projection.v1` | registry entries, lifecycle events, drift indicators, diagnostic rollups, receipts | Produce unified governance chronology. |
-| `governance_activity_projection.v1` | registry entries, lineage projection | Produce compact operational activity feed. |
-| `governance_reconciliation_projection.v1` | registry entries, lineage, health, continuity, active authority, freshness state | Reconcile cross-projection posture and emit deterministic issues. |
+| `semantic_reconciliation_projection.v1` | extraction, conflicts, ambiguities, interpretation decisions | Summarize interpretation completeness and unresolved semantic posture. |
+| `compiled_authority_contract.v1` | semantic commit bundle | Emit deterministic contract structure from committed semantic meaning. |
+| `authority_execution_projection.v1` | compiled authority contract | Summarize execution-facing authority requirements. |
+| `execution_requirement_projection.v1` | compiled authority contract | Emit deterministic runtime requirement facts without evaluating execution. |
+| `execution_admissibility_projection.v1` | compiled authority contract, execution requirements | Describe admissibility inputs Guard would require. |
+| `guard_enforcement_projection.v1` | compiled authority contract | Isolate the subset of compiled authority Guard may consume. |
+| `runtime_consequence_projection.v1` | compiled authority contract, execution projections | Describe runtime consequences without executing or blocking. |
+| `governance_impact_preview.v1` | authority contract, semantic commit, compiled contract, execution projections | Render deterministic operational meaning. |
+| `semantic_authority_diff.v1` | previous and current compiled contracts | Diff governance meaning instead of document structure. |
+| `authority_diff_impact.v1` | previous and current authority artifacts or compiled contracts | Render operational impact of authority changes. |
+| `semantic_lifecycle_enforcement_projection.v1` | semantic diff, compiled contracts, replay posture | Describe lifecycle invalidation and continuity consequences. |
+| `governance_replay_state.v1` | append-only governance events and replay cutoff | Reconstruct governance posture at a point in time. |
+| `governance_replay_diff.v1` | two governance replay states | Compare governance posture over time. |
 
 ## Freshness Fields
 
@@ -77,9 +98,11 @@ Freshness-capable projections should use:
 
 ```json
 {
-  "generated_at": "2026-05-27T00:00:00Z",
+  "generated_at": "2026-06-03T00:00:00Z",
   "source_event_ids": [],
-  "freshness_posture": "fresh"
+  "freshness_posture": "fresh",
+  "projection_version": "v1",
+  "projection_dependencies": []
 }
 ```
 
@@ -88,41 +111,38 @@ Allowed `freshness_posture` values:
 - `fresh`: projection source events match current source facts.
 - `stale`: projection source events are older than current source facts.
 - `invalidated`: a change explicitly invalidated the projection.
-
-`governance_reconciliation_projection.v1` records freshness for the projections it reconciles. Other projections may add these fields additively as the storage adapter matures.
+- `reconciled`: reconciliation found no divergence for the projection's source facts.
 
 ## Invalidation Propagation
 
-Invalidation starts with a registry or draft change and propagates along dependency edges.
+Invalidation starts with a source artifact or governance event and propagates along dependency edges.
 
 Examples:
 
-- `draft_updated` invalidates workspace, operational summary, diagnostics, and continuity projections.
-- `authority_registered` invalidates registry entry, active authority, lineage, health, activity, timeline, and continuity projections.
-- `authority_superseded` invalidates lineage, active authority, health, operational summary, activity, timeline, and continuity projections.
-- `replay_posture_invalidated` invalidates operational summary, health, activity, timeline, and continuity projections.
-
-The executable mapping lives in `projection_invalidation_plan.v1`.
+- `governance_source_changed` invalidates extraction, reconciliation, semantic commit, compiled contract, impact preview, and publication readiness.
+- `interpretation_decision_changed` invalidates semantic commit, compiled contract, execution projections, and impact preview.
+- `compiled_contract_changed` invalidates execution requirements, admissibility projection, Guard enforcement projection, runtime consequences, authority bundle, and publication receipt.
+- `authority_superseded` invalidates semantic diff, diff impact, lifecycle enforcement projection, and replay state for later cutoffs.
+- `replay_posture_invalidated` invalidates runtime consequence projection, admissibility projection, impact preview, and replay state.
 
 ## Freshness Propagation
 
 Freshness propagates downstream:
 
 ```text
-stale source facts
-  -> stale lineage
-  -> stale active authority
-  -> stale health
-  -> stale continuity
-  -> stale timeline/activity
-  -> reconciliation issue
+stale semantic extraction
+  -> stale reconciliation
+  -> stale semantic commit
+  -> stale compiled authority
+  -> stale execution projections
+  -> stale publication bundle
 ```
 
 Invalidation is stronger than staleness:
 
 ```text
-invalidated projection
-  -> reconciliation_posture: invalidated
+invalidated compiled authority
+  -> publication blocked until recompilation
 ```
 
 ## Reconciliation Boundary
@@ -131,11 +151,12 @@ Reconciliation does not fix state and does not generate recommendations.
 
 It only emits deterministic observations such as:
 
-- `projection_divergence`
-- `replay_posture_inconsistent`
-- `lineage_gap`
-- `multiple_active_authorities`
-- `continuity_posture_unstable`
-- `registry_health_unstable`
+- unresolved ambiguity
+- semantic conflict
+- interpretation changed
+- committed semantics stale
+- compiled contract stale
+- continuity posture changed
+- replay posture inconsistent
 
 This keeps Ledger in its proper role: semantic governance infrastructure, not automated policy remediation.

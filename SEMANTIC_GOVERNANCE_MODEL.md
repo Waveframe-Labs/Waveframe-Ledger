@@ -3,7 +3,7 @@ title: "Semantic Governance Model"
 document_type: "ontology"
 system: "Governance-Ledger"
 component: "semantic-governance"
-version: "0.3.0"
+version: "0.4.0"
 status: "draft"
 
 created: "2026-05-27"

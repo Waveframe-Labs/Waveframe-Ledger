@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.4.0 - 2026-06-03
+
+Governance-Ledger v0.4.0 formalizes the public deterministic governance object layer, governance event architecture, chronology replay contracts, semantic reconciliation, compiled authority contracts, and execution-facing projection boundaries.
 
 ### Added
 
@@ -12,10 +14,13 @@
 - Deterministic governance chronology replay via `governance_replay_state.v1`.
 - Governance replay diff via `governance_replay_diff.v1`.
 - Architecture docs for projection ownership, dependency graph, semantic governance model, governance event model, chronology replay, and event ordering semantics.
+- Semantic extraction, reconciliation, provenance, temporal continuity, execution context, identity responsibility, compiled authority, semantic lifecycle enforcement, authority execution, and Guard enforcement projection schemas.
 
 ### Changed
 
 - README now documents governance event architecture, chronology replay, and new canonical public schemas.
+- Public package surface is normalized around deterministic governance objects and reference tooling.
+- Package version bumped to `0.4.0`.
 
 ### Verification
 
