@@ -651,20 +651,22 @@ function renderReconciliationWorkflow(selector, ambiguities) {
     const strategyProvenance = reconciliationStrategyProvenancePanel(normalized);
     const comparison = interpretationComparisonPanel(ambiguity, existingDecision);
     const consequencePreview = interpretationConsequencePreview(normalized, existingDecision);
-    const choices = document.createElement("div");
-    choices.className = "resolution-choices";
-    for (const choice of resolutionChoicesForAmbiguity(ambiguity)) {
-      const button = document.createElement("button");
-      button.type = "button";
-      button.dataset.resolutionChoice = choice;
-      button.className = choice === existingDecision?.selected_interpretation ? "selected" : "";
-      button.textContent = choice;
-      choices.appendChild(button);
+    const choices = tier === "informational" ? null : document.createElement("div");
+    if (choices) {
+      choices.className = "resolution-choices";
+      for (const choice of resolutionChoicesForAmbiguity(ambiguity)) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.dataset.resolutionChoice = choice;
+        button.className = choice === existingDecision?.selected_interpretation ? "selected" : "";
+        button.textContent = choice;
+        choices.appendChild(button);
+      }
     }
     const rationale = document.createElement("textarea");
     rationale.rows = 2;
     rationale.dataset.resolutionRationale = normalized.ambiguity_id;
-    rationale.placeholder = tier === "informational" ? "Optional rationale" : "Operator rationale for this interpretation";
+    rationale.placeholder = tier === "blocking" ? "Rationale for unresolved blocker" : "Operator rationale for this interpretation";
     rationale.value = existingDecision?.justification || existingBlock?.rationale || "";
     let attestation = null;
     if (tier === "high-impact") {
@@ -684,12 +686,19 @@ function renderReconciliationWorkflow(selector, ambiguities) {
     save.className = "tertiary-action";
     save.dataset.saveResolution = normalized.ambiguity_id;
     save.textContent = tier === "informational" ? "Accept informational posture" : "Save interpretation decision";
+    if (existingDecision?.ambiguity_resolution_state === "acknowledged") save.disabled = true;
     const unresolved = document.createElement("button");
     unresolved.type = "button";
     unresolved.className = "tertiary-action";
     unresolved.dataset.markUnresolved = normalized.ambiguity_id;
     unresolved.textContent = "Mark unresolved blocker";
-    actions.append(save, unresolved);
+    if (tier === "informational") {
+      actions.append(save);
+    } else if (tier === "blocking") {
+      actions.append(unresolved);
+    } else {
+      actions.append(save, unresolved);
+    }
     const status = document.createElement("p");
     status.className = "resolution-status";
     status.textContent = existingDecision
@@ -699,10 +708,11 @@ function renderReconciliationWorkflow(selector, ambiguities) {
         : "Decision required before semantic commitment.";
     const history = decisionRevisionHistory(normalized.ambiguity_id);
     if (tier === "blocking") {
-      save.disabled = true;
       status.textContent = "Blocking ambiguity. Resolve policy language before semantic commitment.";
     }
-    item.append(title, severity, classification, summary, strategyProvenance, comparison, consequencePreview, choices, rationale);
+    item.append(title, severity, classification, summary, strategyProvenance, comparison, consequencePreview);
+    if (choices) item.appendChild(choices);
+    if (tier !== "informational") item.appendChild(rationale);
     if (attestation) item.appendChild(attestation);
     item.append(actions, status, history);
     node.appendChild(item);
@@ -746,6 +756,7 @@ function ambiguityResolutionState(ambiguity) {
 
 function ambiguityResolvedForProgression(ambiguity) {
   const state = ambiguityResolutionState(ambiguity);
+  if (ambiguityTier(ambiguity) === "blocking") return false;
   if (state === "unresolved" || state === "pending") return false;
   if (state === "acknowledged") return ambiguityTier(ambiguity) === "informational";
   return state === "interpreted";

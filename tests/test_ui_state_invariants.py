@@ -438,7 +438,7 @@ def test_reconciliation_tiers_lower_informational_friction_and_gate_high_impact(
     assert "undefined_threshold" in tier_body
     assert "contradictory_approval_semantics" in tier_body
     assert 'tier === "informational" ? "Accept informational posture"' in source
-    assert 'tier === "informational" ? "Optional rationale"' in source
+    assert '"Optional rationale"' not in source
     assert 'tier === "high-impact" && !rationale' in save_body
     assert 'tier === "high-impact" && !attested' in save_body
 
@@ -446,6 +446,7 @@ def test_reconciliation_tiers_lower_informational_friction_and_gate_high_impact(
 def test_reconciliation_uses_explicit_ambiguity_resolution_states():
     source = APP_JS.read_text(encoding="utf-8")
     reconciliation_body = _function_body(source, "buildGovernanceSemanticReconciliation")
+    render_body = _function_body(source, "renderReconciliationWorkflow")
     decision_body = _function_body(source, "buildInterpretationDecision")
     save_body = _function_body(source, "saveInterpretationDecision")
     progression_body = _function_body(source, "ambiguityResolvedForProgression")
@@ -455,8 +456,15 @@ def test_reconciliation_uses_explicit_ambiguity_resolution_states():
 
     assert 'choice = tier === "informational"' in save_body
     assert '"Accept informational posture"' in save_body
+    assert 'choices = tier === "informational" ? null' in render_body
+    assert 'if (tier === "informational") {' in render_body
+    assert 'actions.append(save);' in render_body
+    assert 'if (tier !== "informational") item.appendChild(rationale)' in render_body
+    assert 'else if (tier === "blocking") {' in render_body
+    assert 'actions.append(unresolved);' in render_body
     assert 'decision_posture: resolutionState === "acknowledged" ? "operator_acknowledged" : "operator_reviewed"' in decision_body
     assert "ambiguity_resolution_state: resolutionState" in decision_body
+    assert 'if (ambiguityTier(ambiguity) === "blocking") return false' in progression_body
     assert 'state === "acknowledged") return ambiguityTier(ambiguity) === "informational"' in progression_body
     assert "ambiguity_resolution_states: states" in reconciliation_body
     assert "!ambiguityResolvedForProgression(ambiguity)" in reconciliation_body
