@@ -635,12 +635,12 @@ function renderReconciliationWorkflow(selector, ambiguities) {
     const tier = ambiguityTier(normalized);
     const governanceClass = ambiguityGovernanceClass(normalized);
     const confidencePosture = interpretationConfidencePosture(normalized);
-    const existingDecision = findInterpretationDecision(normalized);
-    const existingBlock = findUnresolvedReconciliationBlock(normalized);
+    const key = ambiguityKey(normalized);
+    const existingDecision = decisionsByAmbiguityKey()[key];
+    const existingBlock = unresolvedBlocksByAmbiguityKey()[key];
     const item = document.createElement("div");
     item.className = "resolution-item";
-    item.dataset.ambiguityId = normalized.ambiguity_id;
-    item.dataset.ambiguityFingerprint = normalized.ambiguity_fingerprint;
+    item.dataset.ambiguityKey = key;
     const title = document.createElement("strong");
     title.textContent = formatLabel(normalized.ambiguity_type);
     const severity = document.createElement("span");
@@ -666,7 +666,7 @@ function renderReconciliationWorkflow(selector, ambiguities) {
     }
     const rationale = document.createElement("textarea");
     rationale.rows = 2;
-    rationale.dataset.resolutionRationale = normalized.ambiguity_id;
+    rationale.dataset.resolutionRationale = key;
     rationale.placeholder = tier === "blocking" ? "Rationale for unresolved blocker" : "Operator rationale for this interpretation";
     rationale.value = existingDecision?.justification || existingBlock?.rationale || "";
     let attestation = null;
@@ -675,7 +675,7 @@ function renderReconciliationWorkflow(selector, ambiguities) {
       attestation.className = "resolution-attestation";
       const checkbox = document.createElement("input");
       checkbox.type = "checkbox";
-      checkbox.dataset.resolutionAttestation = normalized.ambiguity_id;
+      checkbox.dataset.resolutionAttestation = key;
       const span = document.createElement("span");
       span.textContent = "I attest this interpretation changes operational governance meaning.";
       attestation.append(checkbox, span);
@@ -685,15 +685,13 @@ function renderReconciliationWorkflow(selector, ambiguities) {
     const save = document.createElement("button");
     save.type = "button";
     save.className = "tertiary-action";
-    save.dataset.saveResolution = normalized.ambiguity_id;
-    save.dataset.saveResolutionFingerprint = normalized.ambiguity_fingerprint;
+    save.dataset.saveResolutionKey = key;
     save.textContent = tier === "informational" ? "Accept informational posture" : "Save interpretation decision";
     if (existingDecision?.ambiguity_resolution_state === "acknowledged") save.disabled = true;
     const unresolved = document.createElement("button");
     unresolved.type = "button";
     unresolved.className = "tertiary-action";
-    unresolved.dataset.markUnresolved = normalized.ambiguity_id;
-    unresolved.dataset.markUnresolvedFingerprint = normalized.ambiguity_fingerprint;
+    unresolved.dataset.markUnresolvedKey = key;
     unresolved.textContent = "Mark unresolved blocker";
     if (tier === "informational") {
       actions.append(save);
@@ -709,7 +707,7 @@ function renderReconciliationWorkflow(selector, ambiguities) {
       : existingBlock
         ? `Unresolved blocker: ${existingBlock.rationale || existingBlock.selected_interpretation}`
         : "Decision required before semantic commitment.";
-    const history = decisionRevisionHistory(normalized.ambiguity_id);
+    const history = decisionRevisionHistory(key);
     if (tier === "blocking") {
       status.textContent = "Blocking ambiguity. Resolve policy language before semantic commitment.";
     }
@@ -749,8 +747,9 @@ function ambiguityTier(ambiguity) {
 }
 
 function ambiguityResolutionState(ambiguity) {
-  const decision = findInterpretationDecision(ambiguity);
-  const unresolved = findUnresolvedReconciliationBlock(ambiguity);
+  const key = ambiguityKey(ambiguity);
+  const decision = decisionsByAmbiguityKey()[key];
+  const unresolved = unresolvedBlocksByAmbiguityKey()[key];
   if (unresolved) return "unresolved";
   if (!decision) return "pending";
   if (decision.ambiguity_resolution_state) return decision.ambiguity_resolution_state;
@@ -759,24 +758,20 @@ function ambiguityResolutionState(ambiguity) {
   return "interpreted";
 }
 
-function findInterpretationDecision(ambiguity) {
-  return interpretationDecisions.find((item) => semanticRecordMatchesAmbiguity(item, ambiguity));
+function ambiguityKey(ambiguity) {
+  return ambiguity?.ambiguity_fingerprint || ambiguity?.ambiguity_id || ambiguity?.id || "";
 }
 
-function findUnresolvedReconciliationBlock(ambiguity) {
-  return unresolvedReconciliationBlocks.find((item) => semanticRecordMatchesAmbiguity(item, ambiguity));
+function decisionsByAmbiguityKey() {
+  return Object.fromEntries(interpretationDecisions.map((decision) => [decision.ambiguity_key || ambiguityKey(decision), decision]));
 }
 
-function semanticRecordMatchesAmbiguity(record, ambiguity) {
-  if (!record || !ambiguity) return false;
-  if (record.ambiguity_fingerprint && ambiguity.ambiguity_fingerprint) {
-    return record.ambiguity_fingerprint === ambiguity.ambiguity_fingerprint;
-  }
-  return record.ambiguity_id === ambiguity.ambiguity_id;
+function unresolvedBlocksByAmbiguityKey() {
+  return Object.fromEntries(unresolvedReconciliationBlocks.map((block) => [block.ambiguity_key || ambiguityKey(block), block]));
 }
 
-function withoutSemanticRecordForAmbiguity(records, ambiguity) {
-  return records.filter((record) => !semanticRecordMatchesAmbiguity(record, ambiguity));
+function withoutSemanticRecordForAmbiguityKey(records, key) {
+  return records.filter((record) => (record.ambiguity_key || ambiguityKey(record)) !== key);
 }
 
 function ambiguityResolvedForProgression(ambiguity) {
@@ -792,7 +787,12 @@ function semanticCommitReadiness() {
     return {
       schema_version: "semantic_commit_readiness.v1",
       semantic_commit_ready: false,
+      all_ambiguity_keys: [],
+      resolved_keys: [],
+      pending_keys: [],
+      decision_keys: interpretationDecisions.map((decision) => decision.ambiguity_key || ambiguityKey(decision)),
       blocking_reasons: [{
+        ambiguity_key: "none",
         reason: "candidate_authority_missing",
         detail: "No extracted authority candidate is available for semantic commitment.",
       }],
@@ -820,16 +820,17 @@ function semanticCommitReadiness() {
   return {
     schema_version: "semantic_commit_readiness.v1",
     semantic_commit_ready: blockingReasons.length === 0,
-    all_ambiguity_ids: requiredSemanticAmbiguities().map((ambiguity) => ambiguity.ambiguity_id),
-    resolved_ids: requiredSemanticAmbiguities().filter((ambiguity) => ambiguityResolvedForProgression(ambiguity)).map((ambiguity) => ambiguity.ambiguity_id),
-    pending_ids: blockingReasons.map((reason) => reason.ambiguity_id),
-    decision_fingerprints: interpretationDecisions.map((decision) => decision.ambiguity_fingerprint || decision.ambiguity_id),
+    all_ambiguity_keys: requiredSemanticAmbiguities().map((ambiguity) => ambiguityKey(ambiguity)),
+    resolved_keys: requiredSemanticAmbiguities().filter((ambiguity) => ambiguityResolvedForProgression(ambiguity)).map((ambiguity) => ambiguityKey(ambiguity)),
+    pending_keys: blockingReasons.map((reason) => reason.ambiguity_key),
+    decision_keys: interpretationDecisions.map((decision) => decision.ambiguity_key || ambiguityKey(decision)),
     blocking_reasons: blockingReasons,
   };
 }
 
 function semanticCommitBlocker(ambiguity, state, reason) {
   return {
+    ambiguity_key: ambiguityKey(ambiguity),
     ambiguity_id: ambiguity.ambiguity_id,
     ambiguity_fingerprint: ambiguity.ambiguity_fingerprint,
     ambiguity_type: ambiguity.ambiguity_type,
@@ -1025,13 +1026,13 @@ function interpretationConsequencesForChoice(ambiguity, choice) {
   ];
 }
 
-function decisionRevisionHistory(ambiguityId) {
+function decisionRevisionHistory(key) {
   const panel = document.createElement("div");
   panel.className = "decision-revision-history";
   const title = document.createElement("strong");
   title.textContent = "Decision revision history";
   const list = document.createElement("ul");
-  const entries = interpretationAuditTrail.filter((entry) => entry.details?.ambiguity_id === ambiguityId);
+  const entries = interpretationAuditTrail.filter((entry) => entry.details?.ambiguity_key === key);
   const values = entries.length ? entries : [{ summary: "No decision revisions recorded for this ambiguity." }];
   for (const entry of values) {
     const item = document.createElement("li");
@@ -1115,16 +1116,18 @@ function semanticAmbiguity(item, index = 1) {
   const ambiguityType = item.ambiguity_type || item.type || "semantic_ambiguity";
   const text = item.text || item.summary || "";
   const summary = item.summary || item.text || "";
+  const ambiguityFingerprint = item.ambiguity_fingerprint || ambiguityFingerprintForPayload({
+    ambiguity_type: ambiguityType,
+    text,
+    summary,
+    semantic_region: item.semantic_region || item.field || item.rule_type || "",
+    extraction_strategy: item.extraction_strategy || item.extraction_method || "deterministic_pattern_pass",
+  });
   return {
     schema_version: "semantic_ambiguity.v1",
     ambiguity_id: item.ambiguity_id || `ambiguity-${String(index).padStart(3, "0")}`,
-    ambiguity_fingerprint: item.ambiguity_fingerprint || ambiguityFingerprint({
-      ambiguity_type: ambiguityType,
-      text,
-      summary,
-      semantic_region: item.semantic_region || item.field || item.rule_type || "",
-      extraction_strategy: item.extraction_strategy || item.extraction_method || "deterministic_pattern_pass",
-    }),
+    ambiguity_fingerprint: ambiguityFingerprint,
+    ambiguity_key: item.ambiguity_key || ambiguityFingerprint,
     ambiguity_type: ambiguityType,
     text,
     summary,
@@ -1132,7 +1135,7 @@ function semanticAmbiguity(item, index = 1) {
   };
 }
 
-function ambiguityFingerprint(payload) {
+function ambiguityFingerprintForPayload(payload) {
   return stableHash({
     ambiguity_type: payload.ambiguity_type || "",
     text: String(payload.text || "").trim().toLowerCase(),
@@ -1148,12 +1151,8 @@ function requiredSemanticAmbiguities() {
     .filter((item) => item.requires_operator_resolution);
 }
 
-function findRequiredSemanticAmbiguity(ambiguityId, ambiguityFingerprint = null) {
-  return requiredSemanticAmbiguities().find((candidate) => (
-    ambiguityFingerprint
-      ? candidate.ambiguity_fingerprint === ambiguityFingerprint
-      : candidate.ambiguity_id === ambiguityId
-  )) || requiredSemanticAmbiguities().find((candidate) => candidate.ambiguity_id === ambiguityId);
+function findRequiredSemanticAmbiguityByKey(key) {
+  return requiredSemanticAmbiguities().find((candidate) => ambiguityKey(candidate) === key);
 }
 
 function blockingSemanticAmbiguities() {
@@ -1208,7 +1207,7 @@ function buildInterpretationDecision(ambiguity, choice, rationale) {
   const stablePayload = {
     decision_type: decisionType,
     field,
-    ambiguity_fingerprint: ambiguity.ambiguity_fingerprint,
+    ambiguity_key: ambiguityKey(ambiguity),
     selected_interpretation: choice,
     rejected_interpretations: rejected,
     operator: "local-ledger-ui",
@@ -1222,6 +1221,7 @@ function buildInterpretationDecision(ambiguity, choice, rationale) {
     selected_interpretation: choice,
     rejected_interpretations: rejected,
     decision_type: decisionType,
+    ambiguity_key: ambiguityKey(ambiguity),
     ambiguity_id: ambiguity.ambiguity_id,
     ambiguity_fingerprint: ambiguity.ambiguity_fingerprint,
     resolved_value: resolvedValue,
@@ -1261,6 +1261,7 @@ function buildGovernanceSemanticReconciliation() {
   const unresolved = ambiguities.filter((ambiguity) => !ambiguityResolvedForProgression(ambiguity));
   const normalized = unresolved.length ? {} : normalizedAuthorityFromDecisions(currentExtraction.candidate_authority || {});
   const states = ambiguities.map((ambiguity) => ({
+    ambiguity_key: ambiguityKey(ambiguity),
     ambiguity_id: ambiguity.ambiguity_id,
     ambiguity_fingerprint: ambiguity.ambiguity_fingerprint,
     ambiguity_type: ambiguity.ambiguity_type,
@@ -1298,20 +1299,20 @@ function renderSemanticCommitReadiness(node) {
   const list = document.createElement("ul");
   const items = readiness.blocking_reasons.length
     ? readiness.blocking_reasons
-    : [{ ambiguity_id: "none", reason: "all_required_ambiguities_resolved", resolution_state: "ready", severity: "none" }];
+    : [{ ambiguity_key: "none", ambiguity_id: "none", reason: "all_required_ambiguities_resolved", resolution_state: "ready", severity: "none" }];
   for (const item of items) {
     const line = document.createElement("li");
-    line.textContent = item.ambiguity_id === "none"
+    line.textContent = item.ambiguity_key === "none"
       ? "All required ambiguities are acknowledged or interpreted."
-      : `${item.ambiguity_id} (${shortHash(item.ambiguity_fingerprint || "fingerprint:unavailable")}) -> ${item.resolution_state}; ${formatLabel(item.reason)}.`;
+      : `${item.ambiguity_id} [${shortHash(item.ambiguity_key)}] -> ${item.resolution_state}; ${formatLabel(item.reason)}.`;
     list.appendChild(line);
   }
   if (!readiness.semantic_commit_ready) {
     const debugLine = document.createElement("li");
-    debugLine.textContent = `All IDs: ${readiness.all_ambiguity_ids.join(", ") || "none"} | Resolved IDs: ${readiness.resolved_ids.join(", ") || "none"} | Pending IDs: ${readiness.pending_ids.join(", ") || "none"}`;
+    debugLine.textContent = `All keys: ${readiness.all_ambiguity_keys.map((value) => shortHash(value)).join(", ") || "none"} | Resolved keys: ${readiness.resolved_keys.map((value) => shortHash(value)).join(", ") || "none"} | Pending keys: ${readiness.pending_keys.map((value) => shortHash(value)).join(", ") || "none"}`;
     list.appendChild(debugLine);
     const decisionLine = document.createElement("li");
-    decisionLine.textContent = `Decision fingerprints: ${readiness.decision_fingerprints.map((value) => shortHash(value)).join(", ") || "none"}`;
+    decisionLine.textContent = `Decision keys: ${readiness.decision_keys.map((value) => shortHash(value)).join(", ") || "none"}`;
     list.appendChild(decisionLine);
   }
   panel.append(title, list);
@@ -1525,21 +1526,26 @@ function handleReconciliationInteraction(event) {
     return;
   }
 
-  const saveButton = event.target.closest("[data-save-resolution]");
+  const saveButton = event.target.closest("[data-save-resolution-key]");
   if (saveButton) {
-    saveInterpretationDecision(saveButton.dataset.saveResolution, saveButton.dataset.saveResolutionFingerprint);
+    saveInterpretationDecision(saveButton.dataset.saveResolutionKey);
     return;
   }
 
-  const unresolvedButton = event.target.closest("[data-mark-unresolved]");
+  const unresolvedButton = event.target.closest("[data-mark-unresolved-key]");
   if (unresolvedButton) {
-    markInterpretationUnresolved(unresolvedButton.dataset.markUnresolved, undefined, "", unresolvedButton.dataset.markUnresolvedFingerprint);
+    markInterpretationUnresolved(unresolvedButton.dataset.markUnresolvedKey);
   }
 }
 
-function saveInterpretationDecision(ambiguityId, ambiguityFingerprint = null) {
-  const item = document.querySelector(`[data-ambiguity-id="${ambiguityId}"]`);
-  const ambiguity = findRequiredSemanticAmbiguity(ambiguityId, ambiguityFingerprint);
+function reconciliationItemByKey(key) {
+  return [...document.querySelectorAll("[data-ambiguity-key]")]
+    .find((item) => item.dataset.ambiguityKey === key);
+}
+
+function saveInterpretationDecision(key) {
+  const item = reconciliationItemByKey(key);
+  const ambiguity = findRequiredSemanticAmbiguityByKey(key);
   const rationale = item?.querySelector("[data-resolution-rationale]")?.value?.trim() || "";
   const tier = ambiguity ? ambiguityTier(ambiguity) : "informational";
   const choice = tier === "informational"
@@ -1564,27 +1570,27 @@ function saveInterpretationDecision(ambiguityId, ambiguityFingerprint = null) {
     return;
   }
   if (isUnresolvedChoice(choice)) {
-    markInterpretationUnresolved(ambiguityId, choice, rationale, ambiguityFingerprint);
+    markInterpretationUnresolved(key, choice, rationale);
     return;
   }
   const decision = buildInterpretationDecision(ambiguity, choice, rationale || "Acknowledged informational posture.");
   interpretationDecisions = [
-    ...withoutSemanticRecordForAmbiguity(interpretationDecisions, ambiguity),
+    ...withoutSemanticRecordForAmbiguityKey(interpretationDecisions, key),
     decision,
   ];
-  unresolvedReconciliationBlocks = withoutSemanticRecordForAmbiguity(unresolvedReconciliationBlocks, ambiguity);
+  unresolvedReconciliationBlocks = withoutSemanticRecordForAmbiguityKey(unresolvedReconciliationBlocks, key);
   recordInterpretationAudit(
     decision.ambiguity_resolution_state === "acknowledged" ? "ambiguity_acknowledged" : "interpretation_decision_saved",
     `${formatLabel(ambiguity.ambiguity_type)} ${decision.ambiguity_resolution_state === "acknowledged" ? "acknowledged" : `resolved as ${choice}`}.`,
-    { ambiguity_id: ambiguityId, ambiguity_fingerprint: ambiguity.ambiguity_fingerprint, decision_id: decision.decision_id, resolution_state: decision.ambiguity_resolution_state },
+    { ambiguity_key: key, ambiguity_id: ambiguity.ambiguity_id, ambiguity_fingerprint: ambiguity.ambiguity_fingerprint, decision_id: decision.decision_id, resolution_state: decision.ambiguity_resolution_state },
   );
   updateReconciliationState();
   renderReconciliationWorkflow("#reconciliation-workflow", currentExtraction.ambiguities);
 }
 
-function markInterpretationUnresolved(ambiguityId, selectedInterpretation = "Mark unresolved ambiguity", rationale = "", ambiguityFingerprint = null) {
-  const ambiguity = findRequiredSemanticAmbiguity(ambiguityId, ambiguityFingerprint);
-  const item = document.querySelector(`[data-ambiguity-id="${ambiguityId}"]`);
+function markInterpretationUnresolved(key, selectedInterpretation = "Mark unresolved ambiguity", rationale = "") {
+  const ambiguity = findRequiredSemanticAmbiguityByKey(key);
+  const item = reconciliationItemByKey(key);
   const enteredRationale = rationale || item?.querySelector("[data-resolution-rationale]")?.value?.trim() || "";
   const status = item?.querySelector(".resolution-status");
   const tier = ambiguity ? ambiguityTier(ambiguity) : "informational";
@@ -1594,10 +1600,11 @@ function markInterpretationUnresolved(ambiguityId, selectedInterpretation = "Mar
     return;
   }
   unresolvedReconciliationBlocks = [
-    ...withoutSemanticRecordForAmbiguity(unresolvedReconciliationBlocks, ambiguity),
+    ...withoutSemanticRecordForAmbiguityKey(unresolvedReconciliationBlocks, key),
     {
       schema_version: "semantic_unresolved_blocker.v1",
-      ambiguity_id: ambiguityId,
+      ambiguity_key: key,
+      ambiguity_id: ambiguity.ambiguity_id,
       ambiguity_fingerprint: ambiguity.ambiguity_fingerprint,
       ambiguity_type: ambiguity.ambiguity_type,
       selected_interpretation: selectedInterpretation,
@@ -1606,11 +1613,11 @@ function markInterpretationUnresolved(ambiguityId, selectedInterpretation = "Mar
       ambiguity_resolution_state: "unresolved",
     },
   ];
-  interpretationDecisions = withoutSemanticRecordForAmbiguity(interpretationDecisions, ambiguity);
+  interpretationDecisions = withoutSemanticRecordForAmbiguityKey(interpretationDecisions, key);
   recordInterpretationAudit(
     "interpretation_marked_unresolved",
     `${formatLabel(ambiguity.ambiguity_type)} remains an unresolved blocker.`,
-    { ambiguity_id: ambiguityId, ambiguity_fingerprint: ambiguity.ambiguity_fingerprint },
+    { ambiguity_key: key, ambiguity_id: ambiguity.ambiguity_id, ambiguity_fingerprint: ambiguity.ambiguity_fingerprint },
   );
   updateReconciliationState();
   renderReconciliationWorkflow("#reconciliation-workflow", currentExtraction.ambiguities);

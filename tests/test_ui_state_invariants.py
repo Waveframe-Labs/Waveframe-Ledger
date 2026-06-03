@@ -401,8 +401,8 @@ def test_reconciliation_workspace_records_operator_decisions_and_blocks_unresolv
     assert "semantic_unresolved_blocker.v1" in source
     assert "interpretationAuditTrail" in source
     assert "reconciliation-audit-trail" in render_body
-    assert "dataset.saveResolution" in render_body
-    assert "dataset.markUnresolved" in render_body
+    assert "dataset.saveResolutionKey" in render_body
+    assert "dataset.markUnresolvedKey" in render_body
     assert "ambiguityTier" in render_body
     assert "interpretationComparisonPanel" in render_body
     assert "decisionRevisionHistory" in render_body
@@ -479,9 +479,10 @@ def test_reconciliation_uses_explicit_ambiguity_resolution_states():
     assert "semanticCommitReadiness().semantic_commit_ready" in gate_body
     assert "ambiguity_fingerprint" in source
     assert "function ambiguityFingerprint" in source
-    assert "semanticRecordMatchesAmbiguity" in source
-    assert "withoutSemanticRecordForAmbiguity" in source
-    assert "findRequiredSemanticAmbiguity" in source
+    assert "function ambiguityKey" in source
+    assert "decisionsByAmbiguityKey" in source
+    assert "withoutSemanticRecordForAmbiguityKey" in source
+    assert "findRequiredSemanticAmbiguityByKey" in source
 
 
 def test_reconciliation_renders_semantic_commit_blocker_observability():
@@ -494,33 +495,37 @@ def test_reconciliation_renders_semantic_commit_blocker_observability():
     assert 'panel.id = "semantic-commit-readiness"' in readiness_render_body
     assert "Semantic commit blockers" in readiness_render_body
     assert "All required ambiguities are acknowledged or interpreted." in readiness_render_body
-    assert "${item.ambiguity_id} (${shortHash(item.ambiguity_fingerprint" in readiness_render_body
+    assert "${item.ambiguity_id} [${shortHash(item.ambiguity_key)}]" in readiness_render_body
     assert "-> ${item.resolution_state}" in readiness_render_body
-    assert "All IDs:" in readiness_render_body
-    assert "Resolved IDs:" in readiness_render_body
-    assert "Pending IDs:" in readiness_render_body
-    assert "Decision fingerprints:" in readiness_render_body
+    assert "All keys:" in readiness_render_body
+    assert "Resolved keys:" in readiness_render_body
+    assert "Pending keys:" in readiness_render_body
+    assert "Decision keys:" in readiness_render_body
     assert ".semantic-commit-readiness" in css
 
 
-def test_reconciliation_actions_bind_to_ambiguity_fingerprints():
+def test_reconciliation_actions_bind_to_canonical_ambiguity_keys():
     source = APP_JS.read_text(encoding="utf-8")
     render_body = _function_body(source, "renderReconciliationWorkflow")
     handler_body = _function_body(source, "handleReconciliationInteraction")
     save_body = _function_body(source, "saveInterpretationDecision")
     unresolved_body = _function_body(source, "markInterpretationUnresolved")
-    finder_body = _function_body(source, "findRequiredSemanticAmbiguity")
+    finder_body = _function_body(source, "findRequiredSemanticAmbiguityByKey")
 
-    assert "item.dataset.ambiguityFingerprint = normalized.ambiguity_fingerprint" in render_body
-    assert "save.dataset.saveResolutionFingerprint = normalized.ambiguity_fingerprint" in render_body
-    assert "unresolved.dataset.markUnresolvedFingerprint = normalized.ambiguity_fingerprint" in render_body
-    assert "saveButton.dataset.saveResolutionFingerprint" in handler_body
-    assert "unresolvedButton.dataset.markUnresolvedFingerprint" in handler_body
-    assert "function saveInterpretationDecision(ambiguityId, ambiguityFingerprint = null)" in source
-    assert "findRequiredSemanticAmbiguity(ambiguityId, ambiguityFingerprint)" in save_body
-    assert "function markInterpretationUnresolved(ambiguityId, selectedInterpretation = \"Mark unresolved ambiguity\", rationale = \"\", ambiguityFingerprint = null)" in source
-    assert "findRequiredSemanticAmbiguity(ambiguityId, ambiguityFingerprint)" in unresolved_body
-    assert "candidate.ambiguity_fingerprint === ambiguityFingerprint" in finder_body
+    assert "const key = ambiguityKey(normalized)" in render_body
+    assert "item.dataset.ambiguityKey = key" in render_body
+    assert "save.dataset.saveResolutionKey = key" in render_body
+    assert "unresolved.dataset.markUnresolvedKey = key" in render_body
+    assert "saveButton.dataset.saveResolutionKey" in handler_body
+    assert "unresolvedButton.dataset.markUnresolvedKey" in handler_body
+    assert "function saveInterpretationDecision(key)" in source
+    assert "findRequiredSemanticAmbiguityByKey(key)" in save_body
+    assert "function markInterpretationUnresolved(key, selectedInterpretation = \"Mark unresolved ambiguity\", rationale = \"\")" in source
+    assert "findRequiredSemanticAmbiguityByKey(key)" in unresolved_body
+    assert "ambiguityKey(candidate) === key" in finder_body
+    assert "saveResolutionFingerprint" not in source
+    assert "markUnresolvedFingerprint" not in source
+    assert "data-ambiguity-id" not in source
 
 
 def test_reconciliation_surfaces_interpretation_authority_and_consequence_preview():
