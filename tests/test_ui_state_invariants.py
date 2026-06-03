@@ -481,6 +481,7 @@ def test_reconciliation_uses_explicit_ambiguity_resolution_states():
     assert "function ambiguityFingerprint" in source
     assert "semanticRecordMatchesAmbiguity" in source
     assert "withoutSemanticRecordForAmbiguity" in source
+    assert "findRequiredSemanticAmbiguity" in source
 
 
 def test_reconciliation_renders_semantic_commit_blocker_observability():
@@ -498,7 +499,28 @@ def test_reconciliation_renders_semantic_commit_blocker_observability():
     assert "All IDs:" in readiness_render_body
     assert "Resolved IDs:" in readiness_render_body
     assert "Pending IDs:" in readiness_render_body
+    assert "Decision fingerprints:" in readiness_render_body
     assert ".semantic-commit-readiness" in css
+
+
+def test_reconciliation_actions_bind_to_ambiguity_fingerprints():
+    source = APP_JS.read_text(encoding="utf-8")
+    render_body = _function_body(source, "renderReconciliationWorkflow")
+    handler_body = _function_body(source, "handleReconciliationInteraction")
+    save_body = _function_body(source, "saveInterpretationDecision")
+    unresolved_body = _function_body(source, "markInterpretationUnresolved")
+    finder_body = _function_body(source, "findRequiredSemanticAmbiguity")
+
+    assert "item.dataset.ambiguityFingerprint = normalized.ambiguity_fingerprint" in render_body
+    assert "save.dataset.saveResolutionFingerprint = normalized.ambiguity_fingerprint" in render_body
+    assert "unresolved.dataset.markUnresolvedFingerprint = normalized.ambiguity_fingerprint" in render_body
+    assert "saveButton.dataset.saveResolutionFingerprint" in handler_body
+    assert "unresolvedButton.dataset.markUnresolvedFingerprint" in handler_body
+    assert "function saveInterpretationDecision(ambiguityId, ambiguityFingerprint = null)" in source
+    assert "findRequiredSemanticAmbiguity(ambiguityId, ambiguityFingerprint)" in save_body
+    assert "function markInterpretationUnresolved(ambiguityId, selectedInterpretation = \"Mark unresolved ambiguity\", rationale = \"\", ambiguityFingerprint = null)" in source
+    assert "findRequiredSemanticAmbiguity(ambiguityId, ambiguityFingerprint)" in unresolved_body
+    assert "candidate.ambiguity_fingerprint === ambiguityFingerprint" in finder_body
 
 
 def test_reconciliation_surfaces_interpretation_authority_and_consequence_preview():

@@ -640,6 +640,7 @@ function renderReconciliationWorkflow(selector, ambiguities) {
     const item = document.createElement("div");
     item.className = "resolution-item";
     item.dataset.ambiguityId = normalized.ambiguity_id;
+    item.dataset.ambiguityFingerprint = normalized.ambiguity_fingerprint;
     const title = document.createElement("strong");
     title.textContent = formatLabel(normalized.ambiguity_type);
     const severity = document.createElement("span");
@@ -685,12 +686,14 @@ function renderReconciliationWorkflow(selector, ambiguities) {
     save.type = "button";
     save.className = "tertiary-action";
     save.dataset.saveResolution = normalized.ambiguity_id;
+    save.dataset.saveResolutionFingerprint = normalized.ambiguity_fingerprint;
     save.textContent = tier === "informational" ? "Accept informational posture" : "Save interpretation decision";
     if (existingDecision?.ambiguity_resolution_state === "acknowledged") save.disabled = true;
     const unresolved = document.createElement("button");
     unresolved.type = "button";
     unresolved.className = "tertiary-action";
     unresolved.dataset.markUnresolved = normalized.ambiguity_id;
+    unresolved.dataset.markUnresolvedFingerprint = normalized.ambiguity_fingerprint;
     unresolved.textContent = "Mark unresolved blocker";
     if (tier === "informational") {
       actions.append(save);
@@ -1145,6 +1148,14 @@ function requiredSemanticAmbiguities() {
     .filter((item) => item.requires_operator_resolution);
 }
 
+function findRequiredSemanticAmbiguity(ambiguityId, ambiguityFingerprint = null) {
+  return requiredSemanticAmbiguities().find((candidate) => (
+    ambiguityFingerprint
+      ? candidate.ambiguity_fingerprint === ambiguityFingerprint
+      : candidate.ambiguity_id === ambiguityId
+  )) || requiredSemanticAmbiguities().find((candidate) => candidate.ambiguity_id === ambiguityId);
+}
+
 function blockingSemanticAmbiguities() {
   return requiredSemanticAmbiguities().filter((ambiguity) => ambiguityTier(ambiguity) === "blocking");
 }
@@ -1299,6 +1310,9 @@ function renderSemanticCommitReadiness(node) {
     const debugLine = document.createElement("li");
     debugLine.textContent = `All IDs: ${readiness.all_ambiguity_ids.join(", ") || "none"} | Resolved IDs: ${readiness.resolved_ids.join(", ") || "none"} | Pending IDs: ${readiness.pending_ids.join(", ") || "none"}`;
     list.appendChild(debugLine);
+    const decisionLine = document.createElement("li");
+    decisionLine.textContent = `Decision fingerprints: ${readiness.decision_fingerprints.map((value) => shortHash(value)).join(", ") || "none"}`;
+    list.appendChild(decisionLine);
   }
   panel.append(title, list);
   node.appendChild(panel);
@@ -1513,19 +1527,19 @@ function handleReconciliationInteraction(event) {
 
   const saveButton = event.target.closest("[data-save-resolution]");
   if (saveButton) {
-    saveInterpretationDecision(saveButton.dataset.saveResolution);
+    saveInterpretationDecision(saveButton.dataset.saveResolution, saveButton.dataset.saveResolutionFingerprint);
     return;
   }
 
   const unresolvedButton = event.target.closest("[data-mark-unresolved]");
   if (unresolvedButton) {
-    markInterpretationUnresolved(unresolvedButton.dataset.markUnresolved);
+    markInterpretationUnresolved(unresolvedButton.dataset.markUnresolved, undefined, "", unresolvedButton.dataset.markUnresolvedFingerprint);
   }
 }
 
-function saveInterpretationDecision(ambiguityId) {
+function saveInterpretationDecision(ambiguityId, ambiguityFingerprint = null) {
   const item = document.querySelector(`[data-ambiguity-id="${ambiguityId}"]`);
-  const ambiguity = requiredSemanticAmbiguities().find((candidate) => candidate.ambiguity_id === ambiguityId);
+  const ambiguity = findRequiredSemanticAmbiguity(ambiguityId, ambiguityFingerprint);
   const rationale = item?.querySelector("[data-resolution-rationale]")?.value?.trim() || "";
   const tier = ambiguity ? ambiguityTier(ambiguity) : "informational";
   const choice = tier === "informational"
@@ -1550,7 +1564,7 @@ function saveInterpretationDecision(ambiguityId) {
     return;
   }
   if (isUnresolvedChoice(choice)) {
-    markInterpretationUnresolved(ambiguityId, choice, rationale);
+    markInterpretationUnresolved(ambiguityId, choice, rationale, ambiguityFingerprint);
     return;
   }
   const decision = buildInterpretationDecision(ambiguity, choice, rationale || "Acknowledged informational posture.");
@@ -1568,8 +1582,8 @@ function saveInterpretationDecision(ambiguityId) {
   renderReconciliationWorkflow("#reconciliation-workflow", currentExtraction.ambiguities);
 }
 
-function markInterpretationUnresolved(ambiguityId, selectedInterpretation = "Mark unresolved ambiguity", rationale = "") {
-  const ambiguity = requiredSemanticAmbiguities().find((candidate) => candidate.ambiguity_id === ambiguityId);
+function markInterpretationUnresolved(ambiguityId, selectedInterpretation = "Mark unresolved ambiguity", rationale = "", ambiguityFingerprint = null) {
+  const ambiguity = findRequiredSemanticAmbiguity(ambiguityId, ambiguityFingerprint);
   const item = document.querySelector(`[data-ambiguity-id="${ambiguityId}"]`);
   const enteredRationale = rationale || item?.querySelector("[data-resolution-rationale]")?.value?.trim() || "";
   const status = item?.querySelector(".resolution-status");
