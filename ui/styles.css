@@ -621,6 +621,80 @@ h3 {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.operator-confidence-surface {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+  margin: -8px 0 18px;
+}
+
+.confidence-card {
+  min-width: 0;
+  display: grid;
+  align-content: start;
+  gap: 5px;
+  min-height: 84px;
+  padding: 10px 11px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfaf7;
+}
+
+.confidence-card span {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 850;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.confidence-card strong {
+  color: var(--ink);
+  font-size: 0.94rem;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.confidence-card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.3;
+}
+
+.confidence-card.stable {
+  border-color: #c9d6cb;
+  background: #f7fbf7;
+}
+
+.confidence-card.stable strong {
+  color: var(--green);
+}
+
+.confidence-card.sensitive {
+  border-color: #ffbf98;
+  background: #fff7f1;
+}
+
+.confidence-card.sensitive strong {
+  color: var(--brand-dark);
+}
+
+.confidence-card.review-required {
+  border-color: #e3bbb6;
+  background: #fff5f3;
+}
+
+.confidence-card.review-required strong {
+  color: var(--red);
+}
+
+.confidence-card.pending {
+  background: #f7f6f2;
+}
+
 .status-tile,
 .output-item,
 .boundary-item,
@@ -2833,6 +2907,7 @@ textarea {
   .causality-events li,
   .technical-summary,
   .diagnostics-summary,
+  .operator-confidence-surface,
   .form-grid,
   .outcome-grid,
   .authoring-section,

@@ -413,11 +413,13 @@
         <section id="preview" class="band page" data-page="preview">
           <div class="section-heading">
             <div>
-              <div class="section-kicker">Step 2</div>
+              <div class="section-kicker">Impact review</div>
               <h2>Operational Impact</h2>
+              <p class="section-intent">Review deterministic execution, continuity, replay, and lifecycle consequences before activation.</p>
             </div>
-            <span class="artifact-pill">Ledger-derived</span>
+            <span class="artifact-pill">Ledger-derived posture</span>
           </div>
+          <section id="impact-confidence-surface" class="operator-confidence-surface" aria-label="Operator confidence posture"></section>
           <div class="artifact-layout">
             <article class="artifact-panel">
               <h3>Governance summary</h3>
@@ -512,7 +514,7 @@
         <section id="publication" class="band page" data-page="publication">
           <div class="section-heading">
             <div>
-              <div class="section-kicker">Step 3</div>
+              <div class="section-kicker">Activation boundary</div>
               <h2>Activate Authority</h2>
               <p class="section-intent">Move reviewed governance meaning into receipt-backed lifecycle continuity, then register the local authority posture.</p>
             </div>
@@ -522,6 +524,7 @@
               <button id="register-button" class="primary-action compact-action" type="button" disabled>Register Authority Posture</button>
             </div>
           </div>
+          <section id="publication-confidence-surface" class="operator-confidence-surface" aria-label="Publication confidence posture"></section>
 
           <article class="release-narrative">
             <div class="section-kicker">Activation meaning</div>
@@ -655,6 +658,7 @@
             </div>
           </div>
           <section id="registry-coherence-banner" class="coherence-banner registry-coherence-banner" aria-label="Registry coherence posture"></section>
+          <section id="registry-confidence-surface" class="operator-confidence-surface" aria-label="Registry confidence posture"></section>
           <section class="registry-operations" aria-labelledby="registry-operations-title">
             <div class="overview-section-heading">
               <div>
@@ -737,6 +741,7 @@
             </div>
           </div>
           <div id="diagnostics-summary" class="diagnostics-summary" aria-label="Diagnostics summary"></div>
+          <section id="diagnostics-confidence-surface" class="operator-confidence-surface" aria-label="Diagnostics confidence posture"></section>
           <div id="diagnostics-list" class="diagnostics-list">
             <div class="empty-state">
               <strong>No diagnostics yet.</strong>

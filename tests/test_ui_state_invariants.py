@@ -759,6 +759,42 @@ def test_publication_surface_uses_activation_language():
     assert "Ledger created activation evidence. Register locally to record the authority lifecycle posture." in source
 
 
+def test_normalized_pages_surface_operator_confidence_posture():
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    css = STYLES_CSS.read_text(encoding="utf-8")
+    source = APP_JS.read_text(encoding="utf-8")
+    projection_body = _function_body(source, "operatorConfidenceProjection")
+    render_body = _function_body(source, "renderOperatorConfidenceSurfaces")
+
+    for surface in (
+        "impact-confidence-surface",
+        "publication-confidence-surface",
+        "registry-confidence-surface",
+        "diagnostics-confidence-surface",
+    ):
+        assert f'id="{surface}"' in html
+
+    for label in (
+        "Interpretation posture",
+        "Continuity sensitivity",
+        "Replay confidence",
+        "Governance certainty",
+        "Authority drift risk",
+    ):
+        assert label in projection_body
+
+    assert "operator_confidence_projection.v1" in projection_body
+    assert "renderOperatorConfidenceSurface(selector, projection)" in render_body
+    assert "renderOperatorConfidenceSurfaces()" in source
+    assert "renderOperatorConfidenceSurfaces(items || [])" in source
+    assert ".operator-confidence-surface" in css
+    assert ".confidence-card.sensitive" in css
+    assert ".confidence-card.review-required" in css
+    assert "Impact review" in html
+    assert "Activation boundary" in html
+    assert "Ledger-derived posture" in html
+
+
 def test_ui_severity_semantics_are_documented():
     doc = (ROOT / "UI_SEVERITY_SEMANTICS.md").read_text(encoding="utf-8")
 

@@ -2022,6 +2022,7 @@ function renderWorkflowState() {
   syncPublicationActions();
   renderAuthorityContext();
   renderOperationsOverview();
+  renderOperatorConfidenceSurfaces();
   if (semanticStateMachine.impact_state === "invalidated" && !currentArtifacts) {
     renderInvalidatedImpact(semanticStateMachine.invalidation_reason);
     renderInvalidatedChangeReview(semanticStateMachine.invalidation_reason);
@@ -2506,6 +2507,7 @@ function renderDiagnostics(items) {
   node.innerHTML = "";
   summary.innerHTML = "";
   const diagnostics = (items || []).map(projectDiagnostic);
+  renderOperatorConfidenceSurfaces(items || []);
   const warningCount = diagnostics.filter((item) => item.severity === "warning").length;
   const infoCount = diagnostics.filter((item) => item.severity === "info").length;
   const domains = new Set(diagnostics.map((item) => item.domain).filter(Boolean));
@@ -3322,6 +3324,186 @@ function renderOperationsOverview() {
   renderRegistryHealth(registry);
   renderActivityFeed(registry);
   renderRelationshipFeed(registry);
+  renderOperatorConfidenceSurfaces();
+}
+
+function renderOperatorConfidenceSurfaces(diagnosticsOverride = null) {
+  const projection = operatorConfidenceProjection(diagnosticsOverride);
+  for (const selector of [
+    "#impact-confidence-surface",
+    "#publication-confidence-surface",
+    "#registry-confidence-surface",
+    "#diagnostics-confidence-surface",
+  ]) {
+    renderOperatorConfidenceSurface(selector, projection);
+  }
+}
+
+function operatorConfidenceProjection(diagnosticsOverride = null) {
+  const registry = loadBundleRegistry();
+  const bundle = currentArtifacts?.authority_bundle || null;
+  const registryEntry = bundle ? findRegistryEntry(bundle.authority_ref) : null;
+  const diagnostics = diagnosticsOverride || currentArtifacts?.diagnostics || [];
+  const reconciliation = currentReconciliation || (currentExtraction ? buildGovernanceSemanticReconciliation() : null);
+  const decisions = reconciliation?.operator_interpretation_decisions || interpretationDecisions || [];
+  const ambiguities = requiredSemanticAmbiguities();
+  const highImpactDecisions = decisions.filter((decision) => decision.governance_class && !String(decision.governance_class).includes("lexical"));
+  const acknowledged = decisions.filter((decision) => decision.ambiguity_resolution_state === "acknowledged");
+  const readiness = semanticCommitReadiness();
+  const coherence = registryCoherenceProjection(registry);
+  const continuityText = continuityOverviewText(registryEntry, bundle);
+  const replayRequired = Boolean(
+    workflowState.receiptGenerated
+      || registryEntry?.publication_receipt
+      || currentAuthorityExecutionProjection?.guard_enforcement_projection?.replay_obligations?.length
+      || currentCompiledAuthorityContract?.replay_obligations?.length,
+  );
+  const warningCount = diagnostics.filter((item) => item.severity === "warning" || item.severity === "error").length;
+  return {
+    schema_version: "operator_confidence_projection.v1",
+    interpretation_stability: confidenceItem(
+      "Interpretation posture",
+      interpretationStabilityLabel(readiness, highImpactDecisions, acknowledged),
+      interpretationStabilityReason(readiness, highImpactDecisions, acknowledged, ambiguities),
+    ),
+    continuity_sensitivity: confidenceItem(
+      "Continuity sensitivity",
+      continuityConfidenceLabel(continuityText, registryEntry),
+      continuityConfidenceReason(continuityText, registryEntry),
+    ),
+    replay_confidence: confidenceItem(
+      "Replay confidence",
+      replayConfidenceLabel(registryEntry, replayRequired),
+      replayConfidenceReason(registryEntry, replayRequired),
+    ),
+    governance_certainty: confidenceItem(
+      "Governance certainty",
+      governanceCertaintyLabel(readiness, warningCount),
+      governanceCertaintyReason(readiness, warningCount),
+    ),
+    authority_drift_risk: confidenceItem(
+      "Authority drift risk",
+      authorityDriftRiskLabel(coherence),
+      authorityDriftRiskReason(coherence),
+    ),
+  };
+}
+
+function confidenceItem(label, posture, reason) {
+  return { label, posture, reason };
+}
+
+function interpretationStabilityLabel(readiness, highImpactDecisions, acknowledged) {
+  if (authoringSessionDirty || policySourceDirty || semanticStateMachine.semantic_state === "invalidated") return "Invalidated";
+  if (!currentExtraction) return "Pending";
+  if (!readiness.semantic_commit_ready) return "Review required";
+  if (highImpactDecisions.length) return "Sensitive";
+  if (acknowledged.length) return "Sensitive";
+  return "Stable";
+}
+
+function interpretationStabilityReason(readiness, highImpactDecisions, acknowledged, ambiguities) {
+  if (authoringSessionDirty || policySourceDirty || semanticStateMachine.semantic_state === "invalidated") {
+    return "Draft or policy text changed after semantic interpretation.";
+  }
+  if (!currentExtraction) return "No extraction has been committed for this working session.";
+  if (!readiness.semantic_commit_ready) return `${readiness.blocking_reasons.length} interpretation item${readiness.blocking_reasons.length === 1 ? "" : "s"} still require operator resolution.`;
+  if (highImpactDecisions.length) return "High-impact interpretation decisions affect operational governance meaning.";
+  if (acknowledged.length) return "Temporal or continuity semantics required operator acknowledgement.";
+  if (ambiguities.length) return "All required ambiguities are reconciled for semantic progression.";
+  return "No unresolved interpretation ambiguity is present.";
+}
+
+function continuityConfidenceLabel(continuityText, registryEntry) {
+  if (registryEntry?.status === "revoked" || registryEntry?.status === "superseded") return "Continuity-sensitive";
+  if (/revalidation|revocation|snapshot|continuity/i.test(continuityText || "")) return "Controls active";
+  if (continuityText && continuityText !== "Pending") return "Recorded";
+  return "Pending";
+}
+
+function continuityConfidenceReason(continuityText, registryEntry) {
+  if (registryEntry?.status === "revoked") return "Revoked authority posture affects resumed execution continuity.";
+  if (registryEntry?.status === "superseded") return "Supersession lineage requires continuity awareness for older workflows.";
+  if (/revalidation|revocation|snapshot/i.test(continuityText || "")) return "Resume or snapshot controls are part of the authority posture.";
+  return "Continuity posture appears after impact review or local registration.";
+}
+
+function replayConfidenceLabel(registryEntry, replayRequired) {
+  if (workflowState.receiptGenerated || registryEntry?.publication_receipt) return "Receipt-backed";
+  if (replayRequired) return "Evidence required";
+  return "Pending";
+}
+
+function replayConfidenceReason(registryEntry, replayRequired) {
+  if (registryEntry?.publication_receipt?.receipt_hash) return `Publication receipt ${shortHash(registryEntry.publication_receipt.receipt_hash)} is available.`;
+  if (workflowState.receiptGenerated) return "Activation evidence has been created for this workspace.";
+  if (replayRequired) return "Compiled or projected requirements include replay evidence obligations.";
+  return "Replay posture becomes meaningful after compilation or publication receipt creation.";
+}
+
+function governanceCertaintyLabel(readiness, warningCount) {
+  if (!readiness.semantic_commit_ready) return "Operator required";
+  if (warningCount) return "Advisory review";
+  if (workflowState.impactReviewed) return "Reviewed";
+  if (semanticStateMachine.semantic_state === "committed") return "Committed";
+  return "Pending";
+}
+
+function governanceCertaintyReason(readiness, warningCount) {
+  if (!readiness.semantic_commit_ready) return "Semantic commitment is waiting on reconciliation readiness.";
+  if (warningCount) return `${warningCount} advisory diagnostic${warningCount === 1 ? "" : "s"} should be reviewed.`;
+  if (workflowState.impactReviewed) return "Operational impact has been reviewed for the current compiled authority.";
+  if (semanticStateMachine.semantic_state === "committed") return "Semantic interpretation is committed but impact review is pending.";
+  return "Governance certainty appears after extraction, reconciliation, and semantic commitment.";
+}
+
+function authorityDriftRiskLabel(coherence) {
+  if (coherence.posture === "authority_conflict") return "Authority conflict";
+  if (coherence.counts?.continuity_risk) return "Continuity-sensitive";
+  if (coherence.counts?.stale_projections) return "Stale";
+  if (coherence.counts?.replay_degradation) return "Replay-sensitive";
+  return "Low";
+}
+
+function authorityDriftRiskReason(coherence) {
+  if (coherence.posture === "authority_conflict") return "Multiple active authority records exist in local registry state.";
+  if (coherence.counts?.continuity_risk) return "Lifecycle posture contains supersession, revocation, or continuity-sensitive lineage.";
+  if (coherence.counts?.stale_projections) return "One or more projections require refresh before relying on derived posture.";
+  if (coherence.counts?.replay_degradation) return "Receipt-backed replay posture is incomplete for at least one authority.";
+  return "No registry drift signal is currently elevated.";
+}
+
+function renderOperatorConfidenceSurface(selector, projection) {
+  const node = $(selector);
+  if (!node) return;
+  node.innerHTML = "";
+  const items = [
+    projection.interpretation_stability,
+    projection.continuity_sensitivity,
+    projection.replay_confidence,
+    projection.governance_certainty,
+    projection.authority_drift_risk,
+  ];
+  for (const item of items) {
+    const card = document.createElement("article");
+    card.className = `confidence-card ${postureClass(item.posture)}`;
+    const label = document.createElement("span");
+    label.textContent = item.label;
+    const posture = document.createElement("strong");
+    posture.textContent = item.posture;
+    const reason = document.createElement("p");
+    reason.textContent = item.reason;
+    card.append(label, posture, reason);
+    node.appendChild(card);
+  }
+}
+
+function postureClass(posture) {
+  const normalized = String(posture || "pending").toLowerCase();
+  if (/invalid|conflict|operator|required/.test(normalized)) return "review-required";
+  if (/sensitive|evidence|advisory|stale/.test(normalized)) return "sensitive";
+  if (/stable|reviewed|receipt|committed|low|recorded|active/.test(normalized)) return "stable";
+  return "pending";
 }
 
 function renderCoherenceBanner(selector, coherence) {
