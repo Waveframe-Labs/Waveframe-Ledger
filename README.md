@@ -1,29 +1,6 @@
----
-title: "Governance-Ledger"
-document_type: "overview"
-system: "Governance-Ledger"
-component: "core"
-version: "0.4.0"
-status: "draft"
-
-created: "2026-05-08"
-updated: "2026-05-27"
-
-authors:
-  - "Waveframe Labs"
-
-maintainers:
-  - "Waveframe Labs"
-
-license: "Apache-2.0"
-
-repository: "https://github.com/Waveframe-Labs/Governance-Ledger"
-
-summary: >
-  Governance-Ledger is governance compiler, semantic validation, and
-  semantic derivation infrastructure for deterministic governance
-  operationalization.
----
+<p align="center">
+  <img src="https://raw.githubusercontent.com/Waveframe-Labs/.github/main/assets/branding/canon_wf_logo_extended.png" width="700">
+</p>
 
 # Governance-Ledger
 
