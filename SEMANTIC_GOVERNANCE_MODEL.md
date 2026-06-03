@@ -29,7 +29,7 @@ summary: >
 
 Ledger owns governance meaning.
 
-This document defines the canonical semantic ontology for local Ledger governance authoring, registry state, projections, continuity posture, reconciliation, freshness, and operational governance coherence.
+This document defines the canonical semantic ontology for public Ledger governance objects, deterministic semantic interpretation, compiled authority contracts, replay posture, continuity semantics, reconciliation, freshness, and projection boundaries.
 
 It is intentionally not a Cloud operations model and not a Guard admissibility model.
 
@@ -90,7 +90,7 @@ Drift is not a score and not an anomaly detector.
 
 ### Reconciliation
 
-Reconciliation compares lifecycle state, lineage state, replay posture, continuity posture, projection freshness, active authority state, and registry health to detect deterministic divergence.
+Reconciliation compares source interpretation, semantic ambiguity, replay posture, continuity posture, projection freshness, and compiled authority meaning to detect deterministic divergence.
 
 Reconciliation does not fix state and does not recommend policy changes.
 
@@ -102,10 +102,10 @@ Example:
 
 ```text
 draft updated
-  -> authority_workspace_projection.v1 invalidated
-  -> authority_operational_summary.v1 invalidated
-  -> governance_continuity_projection.v1 invalidated
-  -> diagnostic_rollup.v1 invalidated
+  -> governance_semantic_extraction.v1 invalidated
+  -> semantic_reconciliation_projection.v1 invalidated
+  -> governance_impact_preview.v1 invalidated
+  -> compiled_authority_contract.v1 invalidated
 ```
 
 Invalidation does not delete historical artifacts.
@@ -126,7 +126,7 @@ A lifecycle event is an append-only fact attached to an authority lineage.
 
 Canonical artifact:
 
-- `authority_lifecycle_event.v1`
+- `governance_event.v1`
 
 Lifecycle events include:
 
@@ -139,33 +139,35 @@ Lifecycle events include:
 
 ### Operational Summary
 
-An operational summary is a projection that renders the authority as a governance object, not JSON.
+An operational summary is a deterministic interpretation of what an authority means operationally.
 
-It includes lifecycle posture, drift summary, replay readiness, governance meaning, and relationship graph.
+It includes governance meaning, continuity implications, replay posture, execution consequences, and publication implications.
 
-Canonical projection:
+Canonical artifacts:
 
-- `authority_operational_summary.v1`
+- `governance_impact_preview.v1`
+- `authority_execution_projection.v1`
 
 ### Active Authority
 
-An active authority is the current registered, non-superseded, non-revoked authority for an authority family.
+An active authority is the authority version selected by a consuming registry or operations system as the current governance posture for an authority family.
 
-Canonical projection:
-
-- `active_authority_projection.v1`
+Public Ledger defines deterministic authority objects, lineage metadata, event semantics, and replayable chronology state. Hosted products and consuming systems decide how active authority selection is stored and displayed.
 
 ### Governance Activity
 
-Governance activity is a compact operational feed derived from lifecycle events and semantic drift.
+Governance activity is the deterministic chronology of governance events, projection generation, projection invalidation, continuity transitions, and semantic drift.
 
-Canonical projection:
+Canonical artifacts:
 
-- `governance_activity_projection.v1`
+- `governance_event.v1`
+- `projection_generation_event.v1`
+- `projection_invalidation_event.v1`
+- `continuity_transition_event.v1`
 
 ### Governance Coherence
 
-Governance coherence is the operator-facing posture that summarizes whether registry state, continuity, replay, lifecycle, reconciliation, and projection freshness remain aligned.
+Governance coherence is the posture that summarizes whether semantic interpretation, compiled authority meaning, replay posture, continuity semantics, and projection freshness remain aligned.
 
 Coherence uses governance-native language:
 
@@ -178,46 +180,51 @@ Coherence uses governance-native language:
 
 ## Projection Taxonomy
 
-### Operational
+### Semantic
 
-Operational projections render governance meaning and activity for operators.
+Semantic projections render deterministic governance meaning and interpretation posture.
 
-- `authority_operational_summary.v1`
-- `governance_activity_projection.v1`
+- `governance_impact_preview.v1`
+- `authority_diff_impact.v1`
+- `governance_review_packet.v1`
+- `governance_semantic_extraction.v1`
+- `semantic_reconciliation_projection.v1`
+- `semantic_stability_projection.v1`
 
-### Continuity
+### Compilation And Execution
 
-Continuity projections render authority lineage and execution-continuity semantics.
+Compilation and execution projections render deterministic runtime-facing requirements without invoking Guard.
 
-- `governance_continuity_projection.v1`
-- `authority_lineage_projection.v1`
+- `compiled_authority_contract.v1`
+- `execution_requirement_projection.v1`
+- `execution_admissibility_projection.v1`
+- `runtime_consequence_projection.v1`
+- `guard_enforcement_projection.v1`
+- `authority_execution_projection.v1`
 
-### Reconciliation
+### Publication And Replay
 
-Reconciliation projections compare state surfaces for divergence, freshness, replay inconsistency, active authority ambiguity, and registry posture.
+Publication and replay artifacts bind semantic outputs to lineage, receipts, replay state, and replay diffs.
 
-- `governance_reconciliation_projection.v1`
-- `registry_health_projection.v1`
+- `authority_bundle.v1`
+- `publication_receipt.v1`
+- `governance_replay_state.v1`
+- `governance_replay_diff.v1`
 
-### Workspace
+### Lifecycle Consequence
 
-Workspace projections render the current working authority draft and release posture.
+Lifecycle consequence projections describe deterministic continuity and admissibility consequences from semantic authority changes.
 
-- `authority_workspace_projection.v1`
+- `semantic_lifecycle_enforcement_projection.v1`
 
-### Lifecycle
+### Events And Freshness
 
-Lifecycle projections render chronology, lifecycle transition posture, replay posture changes, diagnostics, drift, activation, and deactivation.
+Event and freshness artifacts record projection causality and invalidation.
 
-- `governance_timeline_projection.v1`
-- `authority_timeline_projection.v1`
-
-### Activity And Registry Selection
-
-Registry selection projections resolve current operational registry views.
-
-- `active_authority_projection.v1`
-- `projection_invalidation_plan.v1`
+- `governance_event.v1`
+- `projection_generation_event.v1`
+- `projection_invalidation_event.v1`
+- `continuity_transition_event.v1`
 
 ## Mutation Boundaries
 
@@ -274,7 +281,7 @@ Examples:
 
 ### Reconciled
 
-`reconciled` means reconciliation found no divergence across lifecycle, lineage, replay, continuity, projection freshness, active authority state, or registry health.
+`reconciled` means reconciliation found no divergence across semantic interpretation, compiled authority meaning, lineage, replay posture, continuity semantics, or projection freshness.
 
 ## Invalidation Propagation
 
@@ -284,26 +291,22 @@ Examples:
 
 ```text
 draft changed
-  -> workspace projection invalidated
-  -> operational summary invalidated
-  -> continuity projection invalidated
-  -> diagnostics rollup invalidated
+  -> governance_semantic_extraction.v1 invalidated
+  -> semantic_reconciliation_projection.v1 invalidated
+  -> governance_impact_preview.v1 invalidated
+  -> compiled_authority_contract.v1 invalidated
 
-authority registered
-  -> registry entry changed
-  -> active authority projection invalidated
-  -> lineage projection invalidated
-  -> health projection invalidated
-  -> activity projection invalidated
-  -> timeline projection invalidated
-  -> continuity projection invalidated
+authority superseded
+  -> authority_diff_impact.v1 regenerated
+  -> semantic_lifecycle_enforcement_projection.v1 regenerated
+  -> governance_replay_state.v1 regenerated for later cutoffs
+  -> guard_enforcement_projection.v1 regenerated if compiled contract changed
 
 replay posture invalidated
-  -> operational summary invalidated
-  -> registry health invalidated
-  -> governance activity invalidated
-  -> governance timeline invalidated
-  -> governance continuity invalidated
+  -> runtime_consequence_projection.v1 invalidated
+  -> execution_admissibility_projection.v1 invalidated
+  -> governance_impact_preview.v1 invalidated
+  -> governance_replay_state.v1 regenerated
 ```
 
 Historical source facts persist. Projections recompute.
@@ -385,10 +388,10 @@ The projection schemas or source facts required to derive the projection.
 
 Examples:
 
-- `authority_registry_entry.v1`
+- `governance_impact_preview.v1`
 - `authority_lifecycle_event.v1`
-- `authority_lineage_projection.v1`
-- `governance_continuity_projection.v1`
+- `compiled_authority_contract.v1`
+- `guard_enforcement_projection.v1`
 
 ## Non-Goals
 

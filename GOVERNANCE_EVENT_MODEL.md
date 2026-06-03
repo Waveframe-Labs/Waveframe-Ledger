@@ -45,13 +45,13 @@ Ledger uses the following event categories:
 
 - `lifecycle`: authority lifecycle transitions such as drafted, reviewed, exported, registered, superseded, and revoked.
 - `continuity`: continuity posture changes that affect resumed, delayed, replayed, or lineage-dependent execution.
-- `reconciliation`: deterministic reconciliation findings across lifecycle, lineage, replay, continuity, freshness, active authority, and registry health.
+- `reconciliation`: deterministic reconciliation findings across semantic interpretation, compiled authority meaning, lineage, replay, continuity, and freshness.
 - `projection`: projection generation and invalidation.
 - `replay`: replay receipt, replay compatibility, semantic hash, manifest, or lineage evidence posture changes.
 - `lineage`: authority version chain, supersession, revocation, and lineage gap events.
 - `drift`: deterministic semantic changes across authority versions.
-- `registry`: local registry insertion, update, supersession, revocation, and registry coherence posture changes.
-- `workspace`: draft state, impact review posture, export readiness, and local workflow invalidation.
+- `publication`: authority bundle, publication receipt, manifest, and publication lineage posture changes.
+- `source`: governance source, extraction, reconciliation, semantic commit, and compilation invalidation events.
 
 ## Base Event Envelope
 
@@ -128,7 +128,7 @@ Governance event replay reconstructs semantic governance state from append-only 
 
 Replay should be able to answer:
 
-- which authority version was active
+- which authority version was active according to replayed publication and lifecycle events
 - which receipt was present
 - which projections were fresh, stale, or invalidated
 - which continuity posture applied
@@ -157,11 +157,10 @@ Common triggers:
 
 - impact reviewed
 - bundle exported
-- authority registered
+- publication receipt generated
 - authority superseded
 - authority revoked
 - diagnostics refreshed
-- registry state loaded
 - lineage recalculated
 
 ## Invalidation Propagation Triggers
@@ -180,7 +179,7 @@ Common triggers:
 - replay posture invalidated
 - diagnostics stale
 - lineage changed
-- registry event appended
+- governance source changed
 
 Invalidation must not delete historical projections. It only changes their current operational posture.
 

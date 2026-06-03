@@ -15,8 +15,8 @@ EVENT_CATEGORIES = {
     "replay",
     "lineage",
     "drift",
-    "registry",
-    "workspace",
+    "publication",
+    "source",
 }
 
 SEVERITIES = {

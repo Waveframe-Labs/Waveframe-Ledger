@@ -27,8 +27,6 @@ summary: >
 
 # Governance-Ledger
 
-![Waveframe Labs Governance Ledger](ui/assets/branding/canon_wf_logo_extended.png)
-
 Governance-Ledger turns governed source text and authority contracts into deterministic, reviewable, publishable governance authority. It is best understood as **Governance Compiler + Semantic Derivation Infrastructure**.
 
 Ledger is not an AI policy interpreter, workflow automation layer, orchestration engine, cloud operations layer, or runtime execution system. It does not guess meaning from policy language. It normalizes supported governance statements, emits semantic diagnostics for unsafe or ambiguous structure, derives deterministic governance meaning from structured authority artifacts, gates publication, preserves lineage, and makes governance authority replayable.
@@ -45,8 +43,6 @@ Ledger is not an AI policy interpreter, workflow automation layer, orchestration
 - Replay tooling for compilation and admissibility evidence.
 - Deterministic snapshots, rollback artifacts, diffs, and review lifecycle state.
 - Canonical semantic artifacts for previews, diff impacts, review packets, and authority bundles.
-- A local Ledger UI for governance authority authoring, operational impact review, bundle export, local registration, registry coherence, and chronology replay posture.
-- Local registry projections for workspace state, authority lifecycle, continuity, reconciliation, active authority, registry health, governance timelines, and activity.
 - Governance chronology replay and replay diff infrastructure for reconstructing authority posture from append-only events.
 - Canonical schemas for generated governance, diagnostics, replay, publication, review, registry, snapshot, and semantic artifacts.
 
@@ -109,20 +105,6 @@ Replay tooling reproduces compilation evidence from source governance and can re
 **Deterministic governance operationalization**
 
 Ledger records governance state transitions and publication artifacts with deterministic identifiers, hashes, normalized paths, immutable publication outputs, and rollback-capable snapshots.
-
-**Local Ledger UI**
-
-Ledger includes a focused local UI for governance authoring and semantic publication. The UI is an artifact renderer and authoring workflow, not a Cloud substitute. It supports drafting authorities, reviewing operational impact, exporting `authority_bundle.v1`, generating `publication_receipt.v1`, registering authorities locally, inspecting registry coherence, and viewing lifecycle, continuity, replay posture, freshness, and chronology replay state.
-
-Run the local UI from a checkout:
-
-```powershell
-py -m governance_ledger.ui_server
-```
-
-Then open:
-
-[http://127.0.0.1:8785](http://127.0.0.1:8785)
 
 **Governance chronology replay**
 
@@ -251,9 +233,6 @@ snapshots/     deterministic governance state snapshots
 schemas/       canonical JSON schemas
 governance_ledger/semantics/
                canonical semantic derivation layer
-governance_ledger/local_registry/
-               local registry state, projections, events, and chronology replay
-ui/            local Ledger authority workspace
 ```
 
 Publication produces:
@@ -361,19 +340,7 @@ Canonical schemas live in [schemas/](schemas/), including:
 - [governance_review_packet.v1.json](schemas/governance_review_packet.v1.json): governance review packets.
 - [authority_bundle.v1.json](schemas/authority_bundle.v1.json): authority bundles.
 - [publication_receipt.v1.json](schemas/publication_receipt.v1.json): publication receipts.
-- [authority_bundle_registry.v1.json](schemas/authority_bundle_registry.v1.json): local published bundle registries.
-- [draft_authority_session.v1.json](schemas/draft_authority_session.v1.json): local draft authority sessions.
 - [authority_lifecycle_event.v1.json](schemas/authority_lifecycle_event.v1.json): append-only authority lifecycle events.
-- [authority_registry_entry.v1.json](schemas/authority_registry_entry.v1.json): local registry authority entries.
-- [authority_workspace_projection.v1.json](schemas/authority_workspace_projection.v1.json): workspace projection state.
-- [authority_operational_summary.v1.json](schemas/authority_operational_summary.v1.json): operational authority summaries.
-- [authority_lineage_projection.v1.json](schemas/authority_lineage_projection.v1.json): authority lineage projections.
-- [governance_activity_projection.v1.json](schemas/governance_activity_projection.v1.json): governance activity projections.
-- [governance_continuity_projection.v1.json](schemas/governance_continuity_projection.v1.json): governance continuity projections.
-- [governance_reconciliation_projection.v1.json](schemas/governance_reconciliation_projection.v1.json): governance reconciliation projections.
-- [governance_timeline_projection.v1.json](schemas/governance_timeline_projection.v1.json): governance chronology projections.
-- [registry_health_projection.v1.json](schemas/registry_health_projection.v1.json): registry health projections.
-- [active_authority_projection.v1.json](schemas/active_authority_projection.v1.json): active authority projections.
 - [governance_event.v1.json](schemas/governance_event.v1.json): base governance event envelope.
 - [projection_generation_event.v1.json](schemas/projection_generation_event.v1.json): projection generation events.
 - [projection_invalidation_event.v1.json](schemas/projection_invalidation_event.v1.json): projection invalidation events.
@@ -390,16 +357,12 @@ Canonical schemas live in [schemas/](schemas/), including:
 ## Documentation
 
 - [CHANGELOG.md](CHANGELOG.md)
-- [LEDGER_UI_ARCHITECTURE.md](LEDGER_UI_ARCHITECTURE.md)
-- [LOCAL_REGISTRY_STATE.md](LOCAL_REGISTRY_STATE.md)
 - [PROJECTION_OWNERSHIP.md](PROJECTION_OWNERSHIP.md)
 - [PROJECTION_DEPENDENCY_GRAPH.md](PROJECTION_DEPENDENCY_GRAPH.md)
 - [SEMANTIC_GOVERNANCE_MODEL.md](SEMANTIC_GOVERNANCE_MODEL.md)
 - [GOVERNANCE_EVENT_MODEL.md](GOVERNANCE_EVENT_MODEL.md)
 - [GOVERNANCE_CHRONOLOGY_REPLAY.md](GOVERNANCE_CHRONOLOGY_REPLAY.md)
 - [EVENT_ORDERING_SEMANTICS.md](EVENT_ORDERING_SEMANTICS.md)
-- [UI_STATE_INVARIANTS.md](UI_STATE_INVARIANTS.md)
-- [LEDGER_OPERATIONAL_MILESTONE.md](LEDGER_OPERATIONAL_MILESTONE.md)
 - [GOVERNANCE_OBJECT_MODEL.md](GOVERNANCE_OBJECT_MODEL.md)
 - [SEMANTICS.md](SEMANTICS.md)
 - [LIFECYCLE.md](LIFECYCLE.md)

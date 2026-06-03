@@ -44,14 +44,19 @@ def test_semantic_governance_model_locks_projection_and_severity_taxonomy():
     text = MODEL.read_text(encoding="utf-8")
 
     for projection in (
-        "authority_operational_summary.v1",
-        "governance_activity_projection.v1",
-        "governance_continuity_projection.v1",
-        "authority_lineage_projection.v1",
-        "governance_reconciliation_projection.v1",
-        "registry_health_projection.v1",
-        "authority_workspace_projection.v1",
-        "governance_timeline_projection.v1",
+        "governance_impact_preview.v1",
+        "authority_diff_impact.v1",
+        "governance_review_packet.v1",
+        "governance_semantic_extraction.v1",
+        "semantic_reconciliation_projection.v1",
+        "semantic_stability_projection.v1",
+        "compiled_authority_contract.v1",
+        "authority_execution_projection.v1",
+        "authority_bundle.v1",
+        "publication_receipt.v1",
+        "governance_replay_state.v1",
+        "governance_replay_diff.v1",
+        "semantic_lifecycle_enforcement_projection.v1",
     ):
         assert projection in text
 

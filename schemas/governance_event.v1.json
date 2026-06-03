@@ -42,8 +42,8 @@
         "replay",
         "lineage",
         "drift",
-        "registry",
-        "workspace"
+        "publication",
+        "source"
       ]
     },
     "immutability_posture": { "const": "append_only" },

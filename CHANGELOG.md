@@ -4,9 +4,6 @@
 
 ### Added
 
-- Local Ledger UI authority workspace for drafting authorities, reviewing operational impact, exporting `authority_bundle.v1`, generating `publication_receipt.v1`, registering authorities locally, and inspecting registry posture.
-- Local registry state model and projection families for workspace, active authority, lineage, operational summary, activity, health, continuity, reconciliation, timeline, and projection invalidation.
-- Governance coherence surface in the UI, including projection freshness, continuity risk, replay degradation, authority conflict, and draft invalidation posture.
 - Governance event architecture with canonical event schemas:
   - `governance_event.v1`
   - `projection_generation_event.v1`
@@ -14,16 +11,15 @@
   - `continuity_transition_event.v1`
 - Deterministic governance chronology replay via `governance_replay_state.v1`.
 - Governance replay diff via `governance_replay_diff.v1`.
-- Architecture docs for UI ownership, local registry state, projection ownership, dependency graph, semantic governance model, governance event model, chronology replay, event ordering semantics, UI state invariants, and operational milestone boundaries.
+- Architecture docs for projection ownership, dependency graph, semantic governance model, governance event model, chronology replay, and event ordering semantics.
 
 ### Changed
 
-- README now documents the Ledger UI, local registry projections, governance event architecture, chronology replay, and new canonical schemas.
-- UI state behavior now explicitly preserves mutation boundaries: viewing artifacts does not review, export, register, or mutate lifecycle state.
+- README now documents governance event architecture, chronology replay, and new canonical public schemas.
 
 ### Verification
 
-- Full test suite passes with `198` tests.
+- Full public-core test suite passes with `198` tests after private workspace staging.
 
 ## 0.3.0 - 2026-05-24
 

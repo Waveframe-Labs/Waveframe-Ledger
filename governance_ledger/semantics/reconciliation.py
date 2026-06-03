@@ -16,7 +16,7 @@ def build_semantic_interpretation_decision(
     field: str | None = None,
     selected_interpretation: Any | None = None,
     rejected_interpretations: list[Any] | None = None,
-    operator: str = "local-ledger-ui",
+    operator: str = "governance-ledger",
     timestamp: str | None = None,
     justification: str | None = None,
 ) -> dict[str, Any]:
