@@ -407,6 +407,9 @@ def test_reconciliation_workspace_records_operator_decisions_and_blocks_unresolv
     assert "interpretationComparisonPanel" in render_body
     assert "decisionRevisionHistory" in render_body
     assert "reconciliationDivergencePanel" in render_body
+    assert "ambiguityGovernanceClass" in render_body
+    assert "interpretationConfidencePosture" in render_body
+    assert "interpretationConsequencePreview" in render_body
     assert "Operator rationale is required" in source
     assert "reconciliationIsComplete()" in commit_gate
     assert "Resolve or explicitly clear all reconciliation blockers" in commit_body
@@ -438,6 +441,37 @@ def test_reconciliation_tiers_lower_informational_friction_and_gate_high_impact(
     assert 'tier === "informational" ? "Optional rationale"' in source
     assert 'tier === "high-impact" && !rationale' in save_body
     assert 'tier === "high-impact" && !attested' in save_body
+
+
+def test_reconciliation_surfaces_interpretation_authority_and_consequence_preview():
+    source = APP_JS.read_text(encoding="utf-8")
+    css = STYLES_CSS.read_text(encoding="utf-8")
+    class_body = _function_body(source, "ambiguityGovernanceClass")
+    confidence_body = _function_body(source, "interpretationConfidencePosture")
+    decision_body = _function_body(source, "buildInterpretationDecision")
+    consequences_body = _function_body(source, "interpretationConsequencesForChoice")
+
+    for label in (
+        "lexical ambiguity",
+        "semantic ambiguity",
+        "operational ambiguity",
+        "continuity ambiguity",
+        "authority ambiguity",
+        "admissibility ambiguity",
+    ):
+        assert label in class_body
+
+    for posture in ("stable", "sensitive", "fragile", "unsafe"):
+        assert posture in confidence_body
+
+    assert "governance_class: ambiguityGovernanceClass(ambiguity)" in decision_body
+    assert "interpretation_confidence_posture: interpretationConfidencePosture(ambiguity)" in decision_body
+    assert "interpretation_consequences: interpretationConsequencesForChoice(ambiguity, choice)" in decision_body
+    assert "Guard projection changes approval verification requirements." in consequences_body
+    assert "Admissibility, continuity, and escalation projections may change." in consequences_body
+    assert "interpretation-consequence-preview" in css
+    assert "reconciliation-classification" in css
+    assert "reconciliation-badge" in css
 
 
 def test_manual_fields_have_explicit_provenance_and_no_restore_hydration():

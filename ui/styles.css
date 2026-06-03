@@ -1136,6 +1136,7 @@ h3 {
 }
 
 .interpretation-comparison,
+.interpretation-consequence-preview,
 .decision-revision-history,
 .semantic-divergence-panel {
   margin: 8px 0;
@@ -1145,7 +1146,48 @@ h3 {
   background: #fbfaf7;
 }
 
+.reconciliation-classification {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 6px 0;
+}
+
+.reconciliation-badge {
+  display: inline-grid;
+  grid-template-columns: auto auto;
+  gap: 5px;
+  align-items: baseline;
+  padding: 4px 7px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #fbfaf7;
+  font-size: 0.72rem;
+}
+
+.reconciliation-badge em {
+  color: var(--muted);
+  font-style: normal;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.reconciliation-badge strong {
+  color: var(--green);
+}
+
+.reconciliation-badge.fragile strong,
+.reconciliation-badge.authority-ambiguity strong,
+.reconciliation-badge.admissibility-ambiguity strong {
+  color: var(--brand-dark);
+}
+
+.reconciliation-badge.unsafe strong {
+  color: #7a2f25;
+}
+
 .interpretation-comparison ul,
+.interpretation-consequence-preview ul,
 .decision-revision-history ul {
   display: grid;
   gap: 6px;
@@ -1159,6 +1201,13 @@ h3 {
   gap: 3px;
   padding: 7px;
   border-left: 3px solid #d9d2c8;
+}
+
+.interpretation-consequence-preview li {
+  padding-left: 12px;
+  border-left: 3px solid #efb28e;
+  color: var(--muted);
+  font-size: 0.84rem;
 }
 
 .interpretation-comparison li.selected {

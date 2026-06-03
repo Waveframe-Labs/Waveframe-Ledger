@@ -633,6 +633,8 @@ function renderReconciliationWorkflow(selector, ambiguities) {
   for (const [index, ambiguity] of list.entries()) {
     const normalized = semanticAmbiguity(ambiguity, index + 1);
     const tier = ambiguityTier(normalized);
+    const governanceClass = ambiguityGovernanceClass(normalized);
+    const confidencePosture = interpretationConfidencePosture(normalized);
     const existingDecision = interpretationDecisions.find((decision) => decision.ambiguity_id === normalized.ambiguity_id);
     const existingBlock = unresolvedReconciliationBlocks.find((block) => block.ambiguity_id === normalized.ambiguity_id);
     const item = document.createElement("div");
@@ -643,9 +645,11 @@ function renderReconciliationWorkflow(selector, ambiguities) {
     const severity = document.createElement("span");
     severity.className = `ambiguity-severity ${tier}`;
     severity.textContent = formatLabel(tier);
+    const classification = reconciliationClassificationStrip(governanceClass, confidencePosture);
     const summary = document.createElement("p");
     summary.textContent = reconciliationTierSummary(tier, normalized.summary || "Operator interpretation is required.");
     const comparison = interpretationComparisonPanel(ambiguity, existingDecision);
+    const consequencePreview = interpretationConsequencePreview(normalized, existingDecision);
     const choices = document.createElement("div");
     choices.className = "resolution-choices";
     for (const choice of resolutionChoicesForAmbiguity(ambiguity)) {
@@ -697,7 +701,7 @@ function renderReconciliationWorkflow(selector, ambiguities) {
       save.disabled = true;
       status.textContent = "Blocking ambiguity. Resolve policy language before semantic commitment.";
     }
-    item.append(title, severity, summary, comparison, choices, rationale);
+    item.append(title, severity, classification, summary, comparison, consequencePreview, choices, rationale);
     if (attestation) item.appendChild(attestation);
     item.append(actions, status, history);
     node.appendChild(item);
@@ -727,6 +731,48 @@ function ambiguityTier(ambiguity) {
   if (["contradictory_approval_semantics", "mutually_exclusive_lifecycle_behavior", "unresolved_governed_action"].includes(type)) return "blocking";
   if (["approval_independence_ambiguity", "undefined_threshold", "scope_expansion_ambiguity", "replay_invalidation_ambiguity"].includes(type)) return "high-impact";
   return "informational";
+}
+
+function ambiguityGovernanceClass(ambiguity) {
+  const type = ambiguity.ambiguity_type || "";
+  if (["contradictory_approval_semantics", "unresolved_governed_action"].includes(type)) return "admissibility ambiguity";
+  if (type === "mutually_exclusive_lifecycle_behavior") return "authority ambiguity";
+  if (["approval_independence_ambiguity", "undefined_threshold"].includes(type)) return "admissibility ambiguity";
+  if (["scope_expansion_ambiguity", "delegation_boundary_unspecified", "renewal_authority_unspecified"].includes(type)) return "authority ambiguity";
+  if (["replay_invalidation_ambiguity", "state_snapshot_subject_unspecified"].includes(type)) return "continuity ambiguity";
+  if (type === "timestamp_source_unspecified") return "operational ambiguity";
+  if (["soft_continuity_language", "vague_delegation_wording"].includes(type)) return "semantic ambiguity";
+  return "lexical ambiguity";
+}
+
+function interpretationConfidencePosture(ambiguity) {
+  const governanceClass = ambiguityGovernanceClass(ambiguity);
+  const tier = ambiguityTier(ambiguity);
+  if (tier === "blocking") return "unsafe";
+  if (governanceClass === "admissibility ambiguity" || governanceClass === "authority ambiguity") return "fragile";
+  if (governanceClass === "continuity ambiguity" || governanceClass === "operational ambiguity") return "sensitive";
+  return "stable";
+}
+
+function reconciliationClassificationStrip(governanceClass, confidencePosture) {
+  const strip = document.createElement("div");
+  strip.className = "reconciliation-classification";
+  strip.append(
+    reconciliationBadge("Governance class", governanceClass),
+    reconciliationBadge("Confidence posture", confidencePosture),
+  );
+  return strip;
+}
+
+function reconciliationBadge(label, value) {
+  const badge = document.createElement("span");
+  badge.className = `reconciliation-badge ${String(value).replaceAll(" ", "-")}`;
+  const labelNode = document.createElement("em");
+  labelNode.textContent = label;
+  const valueNode = document.createElement("strong");
+  valueNode.textContent = formatLabel(value);
+  badge.append(labelNode, valueNode);
+  return badge;
 }
 
 function ambiguitySeverity(ambiguity) {
@@ -759,6 +805,22 @@ function interpretationComparisonPanel(ambiguity, existingDecision) {
   return panel;
 }
 
+function interpretationConsequencePreview(ambiguity, existingDecision) {
+  const panel = document.createElement("div");
+  panel.className = "interpretation-consequence-preview";
+  const title = document.createElement("strong");
+  title.textContent = "If this interpretation is selected";
+  const selected = existingDecision?.selected_interpretation || resolutionChoicesForAmbiguity(ambiguity)[0];
+  const list = document.createElement("ul");
+  for (const consequence of interpretationConsequencesForChoice(ambiguity, selected)) {
+    const item = document.createElement("li");
+    item.textContent = consequence;
+    list.appendChild(item);
+  }
+  panel.append(title, list);
+  return panel;
+}
+
 function interpretationOptionMeaning(ambiguity, choice) {
   const type = ambiguity.ambiguity_type || ambiguity.type || "";
   if (/unresolved|block publication/i.test(choice)) return "Keeps semantic commitment blocked until an operator resolves the ambiguity.";
@@ -769,6 +831,62 @@ function interpretationOptionMeaning(ambiguity, choice) {
   if (type === "scope_expansion_ambiguity") return "Additional governed targets become part of the authority surface and require continuity review.";
   if (type === "replay_invalidation_ambiguity") return "Existing replay evidence may need revalidation before resumed workflows continue.";
   return "The selected interpretation becomes deterministic governance meaning after semantic commitment.";
+}
+
+function interpretationConsequencesForChoice(ambiguity, choice) {
+  const type = ambiguity.ambiguity_type || ambiguity.type || "";
+  if (/unresolved|block publication/i.test(choice)) {
+    return [
+      "Semantic commitment remains blocked.",
+      "Operational impact, compilation, publication, and Guard projection stay unavailable.",
+    ];
+  }
+  if (type === "timestamp_source_unspecified") {
+    return [
+      "Replay evidence expectation binds to the selected timestamp source.",
+      "Runtime enforcement remains Guard/Cloud-owned.",
+    ];
+  }
+  if (type === "state_snapshot_subject_unspecified") {
+    return [
+      "Resume validation uses the selected governance snapshot subject.",
+      "Continuity drift detection changes when the snapshot subject changes.",
+    ];
+  }
+  if (type === "approval_independence_ambiguity") {
+    return [
+      "Admissibility requires approval evidence matching the selected independence boundary.",
+      "Guard projection changes approval verification requirements.",
+    ];
+  }
+  if (type === "undefined_threshold") {
+    return [
+      "Escalation behavior changes for executions crossing the resolved threshold.",
+      "Operational impact narratives and Guard projection thresholds update.",
+    ];
+  }
+  if (type === "scope_expansion_ambiguity") {
+    return [
+      "Governed targets and mutation scope change.",
+      "Continuity and replay review may expand to additional operational surfaces.",
+    ];
+  }
+  if (type === "replay_invalidation_ambiguity") {
+    return [
+      "Existing workflow replay posture may require revalidation.",
+      "Receipt-backed continuity expectations change for resumed execution.",
+    ];
+  }
+  if (type === "renewal_authority_unspecified" || type === "delegation_boundary_unspecified") {
+    return [
+      "Execution authority changes for renewal or delegation behavior.",
+      "Admissibility, continuity, and escalation projections may change.",
+    ];
+  }
+  return [
+    "Committed semantics will record this interpretation as deterministic authority meaning.",
+    "Operational impact can be regenerated after semantic commitment.",
+  ];
 }
 
 function decisionRevisionHistory(ambiguityId) {
@@ -903,6 +1021,9 @@ function buildInterpretationDecision(ambiguity, choice, rationale) {
     timestamp: stableDecisionTimestamp(hash),
     justification: rationale,
     decision_posture: "operator_reviewed",
+    governance_class: ambiguityGovernanceClass(ambiguity),
+    interpretation_confidence_posture: interpretationConfidencePosture(ambiguity),
+    interpretation_consequences: interpretationConsequencesForChoice(ambiguity, choice),
   };
 }
 
