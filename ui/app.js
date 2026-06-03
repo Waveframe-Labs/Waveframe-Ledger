@@ -648,6 +648,7 @@ function renderReconciliationWorkflow(selector, ambiguities) {
     const classification = reconciliationClassificationStrip(governanceClass, confidencePosture);
     const summary = document.createElement("p");
     summary.textContent = reconciliationTierSummary(tier, normalized.summary || "Operator interpretation is required.");
+    const strategyProvenance = reconciliationStrategyProvenancePanel(normalized);
     const comparison = interpretationComparisonPanel(ambiguity, existingDecision);
     const consequencePreview = interpretationConsequencePreview(normalized, existingDecision);
     const choices = document.createElement("div");
@@ -682,7 +683,7 @@ function renderReconciliationWorkflow(selector, ambiguities) {
     save.type = "button";
     save.className = "tertiary-action";
     save.dataset.saveResolution = normalized.ambiguity_id;
-    save.textContent = tier === "informational" ? "Quick acknowledge" : "Save interpretation decision";
+    save.textContent = tier === "informational" ? "Accept informational posture" : "Save interpretation decision";
     const unresolved = document.createElement("button");
     unresolved.type = "button";
     unresolved.className = "tertiary-action";
@@ -692,7 +693,7 @@ function renderReconciliationWorkflow(selector, ambiguities) {
     const status = document.createElement("p");
     status.className = "resolution-status";
     status.textContent = existingDecision
-      ? `Resolved by ${existingDecision.operator}: ${existingDecision.selected_interpretation}`
+      ? `${formatLabel(existingDecision.ambiguity_resolution_state || "interpreted")} by ${existingDecision.operator}: ${existingDecision.selected_interpretation}`
       : existingBlock
         ? `Unresolved blocker: ${existingBlock.rationale || existingBlock.selected_interpretation}`
         : "Decision required before semantic commitment.";
@@ -701,7 +702,7 @@ function renderReconciliationWorkflow(selector, ambiguities) {
       save.disabled = true;
       status.textContent = "Blocking ambiguity. Resolve policy language before semantic commitment.";
     }
-    item.append(title, severity, classification, summary, comparison, consequencePreview, choices, rationale);
+    item.append(title, severity, classification, summary, strategyProvenance, comparison, consequencePreview, choices, rationale);
     if (attestation) item.appendChild(attestation);
     item.append(actions, status, history);
     node.appendChild(item);
@@ -731,6 +732,23 @@ function ambiguityTier(ambiguity) {
   if (["contradictory_approval_semantics", "mutually_exclusive_lifecycle_behavior", "unresolved_governed_action"].includes(type)) return "blocking";
   if (["approval_independence_ambiguity", "undefined_threshold", "scope_expansion_ambiguity", "replay_invalidation_ambiguity"].includes(type)) return "high-impact";
   return "informational";
+}
+
+function ambiguityResolutionState(ambiguity) {
+  const decision = interpretationDecisions.find((item) => item.ambiguity_id === ambiguity.ambiguity_id);
+  const unresolved = unresolvedReconciliationBlocks.find((item) => item.ambiguity_id === ambiguity.ambiguity_id);
+  if (unresolved) return "unresolved";
+  if (!decision) return "pending";
+  if (decision.decision_posture === "operator_acknowledged") return "acknowledged";
+  if (decision.decision_posture === "superseded") return "superseded";
+  return "interpreted";
+}
+
+function ambiguityResolvedForProgression(ambiguity) {
+  const state = ambiguityResolutionState(ambiguity);
+  if (state === "unresolved" || state === "pending") return false;
+  if (state === "acknowledged") return ambiguityTier(ambiguity) === "informational";
+  return state === "interpreted";
 }
 
 function ambiguityGovernanceClass(ambiguity) {
@@ -780,9 +798,24 @@ function ambiguitySeverity(ambiguity) {
 }
 
 function reconciliationTierSummary(tier, summary) {
-  if (tier === "informational") return `${summary} Quick acknowledgement is allowed; rationale is optional.`;
+  if (tier === "informational") return `${summary} Accepting the informational posture records operator acknowledgement and allows semantic progression.`;
   if (tier === "high-impact") return `${summary} Explicit interpretation, rationale, and operator attestation are required.`;
   return `${summary} This blocks semantic commitment until the source policy or governed action is clarified.`;
+}
+
+function reconciliationStrategyProvenancePanel(ambiguity) {
+  const panel = document.createElement("div");
+  panel.className = "reconciliation-strategy-provenance";
+  const title = document.createElement("strong");
+  title.textContent = "Why this requires interpretation";
+  const list = document.createElement("ul");
+  for (const source of reconciliationStrategySources(ambiguity)) {
+    const item = document.createElement("li");
+    item.textContent = source;
+    list.appendChild(item);
+  }
+  panel.append(title, list);
+  return panel;
 }
 
 function interpretationComparisonPanel(ambiguity, existingDecision) {
@@ -791,12 +824,13 @@ function interpretationComparisonPanel(ambiguity, existingDecision) {
   const heading = document.createElement("strong");
   heading.textContent = "Interpretation options";
   const list = document.createElement("ul");
-  for (const choice of resolutionChoicesForAmbiguity(ambiguity)) {
+  for (const strategy of reconciliationStrategiesForAmbiguity(ambiguity)) {
+    const choice = strategy.choice;
     const item = document.createElement("li");
     const label = document.createElement("span");
     label.textContent = choice;
     const meaning = document.createElement("small");
-    meaning.textContent = interpretationOptionMeaning(ambiguity, choice);
+    meaning.textContent = `${interpretationOptionMeaning(ambiguity, choice)} Strategy source: ${strategy.sources.join(", ")}.`;
     item.classList.toggle("selected", choice === existingDecision?.selected_interpretation);
     item.append(label, meaning);
     list.appendChild(item);
@@ -819,6 +853,20 @@ function interpretationConsequencePreview(ambiguity, existingDecision) {
   }
   panel.append(title, list);
   return panel;
+}
+
+function reconciliationStrategySources(ambiguity) {
+  const type = ambiguity.ambiguity_type || ambiguity.type || "";
+  const text = `${ambiguity.text || ""} ${ambiguity.summary || ""}`.toLowerCase();
+  const sources = [];
+  if (/\b(must|may|unless|required|cannot|shall)\b/.test(text)) sources.push("policy modality");
+  if (/revoke|supersede|expire|renew|lifecycle/.test(text) || ["mutually_exclusive_lifecycle_behavior", "renewal_authority_unspecified"].includes(type)) sources.push("lifecycle semantics");
+  if (/replay|snapshot|resume|continuity/.test(text) || ["replay_invalidation_ambiguity", "state_snapshot_subject_unspecified"].includes(type)) sources.push("continuity semantics");
+  if (/delegate|approve|attest|authority|reviewer|role/.test(text) || ["approval_independence_ambiguity", "delegation_boundary_unspecified"].includes(type)) sources.push("authority semantics");
+  if (/allow|block|admissible|threshold|escalation/.test(text) || ["undefined_threshold", "unresolved_governed_action"].includes(type)) sources.push("admissibility semantics");
+  if (/expire|valid|hour|day|timestamp|time/.test(text) || type === "timestamp_source_unspecified") sources.push("temporal semantics");
+  if (/receipt|trace|evidence|attestation/.test(text)) sources.push("evidence semantics");
+  return sources.length ? [...new Set(sources)] : ["semantic extraction boundary"];
 }
 
 function interpretationOptionMeaning(ambiguity, choice) {
@@ -921,18 +969,58 @@ function reconciliationDivergencePanel() {
   return panel;
 }
 
-function resolutionChoicesForAmbiguity(ambiguity) {
+function reconciliationStrategiesForAmbiguity(ambiguity) {
   const type = ambiguity.ambiguity_type || ambiguity.type || "";
+  const sources = reconciliationStrategySources(ambiguity);
+  const strategy = (choice, extraSources = []) => ({
+    choice,
+    sources: [...new Set([...sources, ...extraSources])],
+  });
+  if (ambiguityTier(ambiguity) === "informational") {
+    return [
+      strategy("Accept informational posture"),
+      strategy("Mark unresolved ambiguity"),
+    ];
+  }
   if (type === "timestamp_source_unspecified") {
-    return ["Block publication", "Assume orchestrator timestamp", "Require signed authority timestamp", "Mark unresolved ambiguity"];
+    return [
+      strategy("Block publication", ["temporal semantics"]),
+      strategy("Assume orchestrator timestamp", ["evidence semantics"]),
+      strategy("Require signed authority timestamp", ["temporal semantics", "evidence semantics"]),
+      strategy("Mark unresolved ambiguity"),
+    ];
   }
   if (type === "state_snapshot_subject_unspecified") {
-    return ["Require active governance state snapshot", "Require current policy version snapshot", "Mark unresolved ambiguity"];
+    return [
+      strategy("Require active governance state snapshot", ["continuity semantics"]),
+      strategy("Require current policy version snapshot", ["continuity semantics", "lifecycle semantics"]),
+      strategy("Mark unresolved ambiguity"),
+    ];
   }
   if (type === "approval_independence_ambiguity") {
-    return ["Require independent actors", "Define reviewer roles", "Mark unresolved ambiguity"];
+    return [
+      strategy("Require independent actors", ["authority semantics", "admissibility semantics"]),
+      strategy("Define reviewer roles", ["authority semantics"]),
+      strategy("Mark unresolved ambiguity"),
+    ];
   }
-  return ["Resolve interpretation", "Reject candidate meaning", "Mark unresolved ambiguity"];
+  if (type === "delegation_boundary_unspecified" || type === "renewal_authority_unspecified") {
+    return [
+      strategy("Prohibit delegation", ["authority semantics"]),
+      strategy("Constrain delegation to explicit role binding", ["authority semantics", "admissibility semantics"]),
+      strategy("Require governance renewal review", ["lifecycle semantics", "temporal semantics"]),
+      strategy("Mark unresolved ambiguity"),
+    ];
+  }
+  return [
+    strategy("Resolve interpretation"),
+    strategy("Reject candidate meaning"),
+    strategy("Mark unresolved ambiguity"),
+  ];
+}
+
+function resolutionChoicesForAmbiguity(ambiguity) {
+  return reconciliationStrategiesForAmbiguity(ambiguity).map((strategy) => strategy.choice);
 }
 
 function semanticAmbiguity(item, index = 1) {
@@ -997,6 +1085,9 @@ function buildInterpretationDecision(ambiguity, choice, rationale) {
   const decisionType = decisionTypeForAmbiguity(ambiguity);
   const resolvedValue = resolvedValueForChoice(ambiguity, choice);
   const field = fieldForDecisionType(decisionType);
+  const resolutionState = ambiguityTier(ambiguity) === "informational" && choice === "Accept informational posture"
+    ? "acknowledged"
+    : "interpreted";
   const rejected = resolutionChoicesForAmbiguity(ambiguity).filter((candidate) => candidate !== choice);
   const stablePayload = {
     decision_type: decisionType,
@@ -1020,7 +1111,8 @@ function buildInterpretationDecision(ambiguity, choice, rationale) {
     operator: "local-ledger-ui",
     timestamp: stableDecisionTimestamp(hash),
     justification: rationale,
-    decision_posture: "operator_reviewed",
+    decision_posture: resolutionState === "acknowledged" ? "operator_acknowledged" : "operator_reviewed",
+    ambiguity_resolution_state: resolutionState,
     governance_class: ambiguityGovernanceClass(ambiguity),
     interpretation_confidence_posture: interpretationConfidencePosture(ambiguity),
     interpretation_consequences: interpretationConsequencesForChoice(ambiguity, choice),
@@ -1048,11 +1140,15 @@ function recordInterpretationAudit(action, summary, details = {}) {
 function buildGovernanceSemanticReconciliation() {
   if (!currentExtraction) return null;
   const ambiguities = requiredSemanticAmbiguities();
-  const blockingIds = new Set(blockingSemanticAmbiguities().map((ambiguity) => ambiguity.ambiguity_id));
-  const resolvedIds = new Set(interpretationDecisions.map((decision) => decision.ambiguity_id));
-  const blockedIds = new Set(unresolvedReconciliationBlocks.map((block) => block.ambiguity_id));
-  const unresolved = ambiguities.filter((ambiguity) => blockingIds.has(ambiguity.ambiguity_id) || !resolvedIds.has(ambiguity.ambiguity_id) || blockedIds.has(ambiguity.ambiguity_id));
+  const unresolved = ambiguities.filter((ambiguity) => !ambiguityResolvedForProgression(ambiguity));
   const normalized = unresolved.length ? {} : normalizedAuthorityFromDecisions(currentExtraction.candidate_authority || {});
+  const states = ambiguities.map((ambiguity) => ({
+    ambiguity_id: ambiguity.ambiguity_id,
+    ambiguity_type: ambiguity.ambiguity_type,
+    resolution_state: ambiguityResolutionState(ambiguity),
+    governance_class: ambiguityGovernanceClass(ambiguity),
+    confidence_posture: interpretationConfidencePosture(ambiguity),
+  }));
   return {
     schema_version: "governance_semantic_reconciliation.v1",
     source_id: currentExtraction.source_id,
@@ -1064,9 +1160,10 @@ function buildGovernanceSemanticReconciliation() {
     normalization_decisions: normalizationDecisions(),
     rejected_candidates: unresolvedReconciliationBlocks,
     semantic_conflicts: [],
+    ambiguity_resolution_states: states,
     unresolved_ambiguities: unresolved,
     final_normalized_semantic_meaning: normalized,
-    interpretation_completeness_posture: blockingIds.size ? "blocked" : unresolved.length ? "operator_required" : "complete",
+    interpretation_completeness_posture: unresolved.some((ambiguity) => ambiguityTier(ambiguity) === "blocking" || ambiguityResolutionState(ambiguity) === "unresolved") ? "blocked" : unresolved.length ? "operator_required" : "complete",
     interpretation_audit_trail: interpretationAuditTrail,
   };
 }
@@ -1178,6 +1275,7 @@ function commitSemanticInterpretation() {
       source_id: currentReconciliation.source_id,
       unresolved_ambiguities: currentReconciliation.unresolved_ambiguities,
       operator_reviewed_interpretations: currentReconciliation.operator_interpretation_decisions,
+      ambiguity_resolution_states: currentReconciliation.ambiguity_resolution_states,
       conflicting_extracted_semantics: currentReconciliation.semantic_conflicts,
       normalization_decisions: currentReconciliation.normalization_decisions,
       interpretation_completeness_posture: currentReconciliation.interpretation_completeness_posture,
@@ -1291,9 +1389,11 @@ function handleReconciliationInteraction(event) {
 function saveInterpretationDecision(ambiguityId) {
   const item = document.querySelector(`[data-ambiguity-id="${ambiguityId}"]`);
   const ambiguity = requiredSemanticAmbiguities().find((candidate) => candidate.ambiguity_id === ambiguityId);
-  const choice = item?.dataset.selectedChoice || item?.querySelector("[data-resolution-choice].selected")?.dataset.resolutionChoice;
   const rationale = item?.querySelector("[data-resolution-rationale]")?.value?.trim() || "";
   const tier = ambiguity ? ambiguityTier(ambiguity) : "informational";
+  const choice = tier === "informational"
+    ? "Accept informational posture"
+    : item?.dataset.selectedChoice || item?.querySelector("[data-resolution-choice].selected")?.dataset.resolutionChoice;
   const attested = Boolean(item?.querySelector("[data-resolution-attestation]")?.checked);
   const status = item?.querySelector(".resolution-status");
   if (!ambiguity || !choice) {
@@ -1316,16 +1416,16 @@ function saveInterpretationDecision(ambiguityId) {
     markInterpretationUnresolved(ambiguityId, choice, rationale);
     return;
   }
-  const decision = buildInterpretationDecision(ambiguity, choice, rationale || "Acknowledged informational interpretation.");
+  const decision = buildInterpretationDecision(ambiguity, choice, rationale || "Acknowledged informational posture.");
   interpretationDecisions = [
     ...interpretationDecisions.filter((item) => item.ambiguity_id !== ambiguityId),
     decision,
   ];
   unresolvedReconciliationBlocks = unresolvedReconciliationBlocks.filter((item) => item.ambiguity_id !== ambiguityId);
   recordInterpretationAudit(
-    "interpretation_decision_saved",
-    `${formatLabel(ambiguity.ambiguity_type)} resolved as ${choice}.`,
-    { ambiguity_id: ambiguityId, decision_id: decision.decision_id },
+    decision.ambiguity_resolution_state === "acknowledged" ? "ambiguity_acknowledged" : "interpretation_decision_saved",
+    `${formatLabel(ambiguity.ambiguity_type)} ${decision.ambiguity_resolution_state === "acknowledged" ? "acknowledged" : `resolved as ${choice}`}.`,
+    { ambiguity_id: ambiguityId, decision_id: decision.decision_id, resolution_state: decision.ambiguity_resolution_state },
   );
   updateReconciliationState();
   renderReconciliationWorkflow("#reconciliation-workflow", currentExtraction.ambiguities);
@@ -1351,6 +1451,7 @@ function markInterpretationUnresolved(ambiguityId, selectedInterpretation = "Mar
       selected_interpretation: selectedInterpretation,
       rationale: enteredRationale || "Acknowledged as unresolved informational ambiguity.",
       operator: "local-ledger-ui",
+      ambiguity_resolution_state: "unresolved",
     },
   ];
   interpretationDecisions = interpretationDecisions.filter((decision) => decision.ambiguity_id !== ambiguityId);

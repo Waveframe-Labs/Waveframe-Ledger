@@ -437,10 +437,29 @@ def test_reconciliation_tiers_lower_informational_friction_and_gate_high_impact(
     assert "approval_independence_ambiguity" in tier_body
     assert "undefined_threshold" in tier_body
     assert "contradictory_approval_semantics" in tier_body
-    assert 'tier === "informational" ? "Quick acknowledge"' in source
+    assert 'tier === "informational" ? "Accept informational posture"' in source
     assert 'tier === "informational" ? "Optional rationale"' in source
     assert 'tier === "high-impact" && !rationale' in save_body
     assert 'tier === "high-impact" && !attested' in save_body
+
+
+def test_reconciliation_uses_explicit_ambiguity_resolution_states():
+    source = APP_JS.read_text(encoding="utf-8")
+    reconciliation_body = _function_body(source, "buildGovernanceSemanticReconciliation")
+    decision_body = _function_body(source, "buildInterpretationDecision")
+    save_body = _function_body(source, "saveInterpretationDecision")
+    progression_body = _function_body(source, "ambiguityResolvedForProgression")
+
+    for state in ("pending", "acknowledged", "interpreted", "unresolved", "superseded"):
+        assert state in source
+
+    assert 'choice = tier === "informational"' in save_body
+    assert '"Accept informational posture"' in save_body
+    assert 'decision_posture: resolutionState === "acknowledged" ? "operator_acknowledged" : "operator_reviewed"' in decision_body
+    assert "ambiguity_resolution_state: resolutionState" in decision_body
+    assert 'state === "acknowledged") return ambiguityTier(ambiguity) === "informational"' in progression_body
+    assert "ambiguity_resolution_states: states" in reconciliation_body
+    assert "!ambiguityResolvedForProgression(ambiguity)" in reconciliation_body
 
 
 def test_reconciliation_surfaces_interpretation_authority_and_consequence_preview():
@@ -472,6 +491,32 @@ def test_reconciliation_surfaces_interpretation_authority_and_consequence_previe
     assert "interpretation-consequence-preview" in css
     assert "reconciliation-classification" in css
     assert "reconciliation-badge" in css
+
+
+def test_reconciliation_options_have_deterministic_strategy_provenance():
+    source = APP_JS.read_text(encoding="utf-8")
+    css = STYLES_CSS.read_text(encoding="utf-8")
+    strategies_body = _function_body(source, "reconciliationStrategiesForAmbiguity")
+    sources_body = _function_body(source, "reconciliationStrategySources")
+    comparison_body = _function_body(source, "interpretationComparisonPanel")
+
+    for label in (
+        "policy modality",
+        "lifecycle semantics",
+        "continuity semantics",
+        "authority semantics",
+        "admissibility semantics",
+        "temporal semantics",
+        "evidence semantics",
+    ):
+        assert label in sources_body
+
+    assert "reconciliationStrategyProvenancePanel" in source
+    assert "Strategy source:" in comparison_body
+    assert "Prohibit delegation" in strategies_body
+    assert "Constrain delegation to explicit role binding" in strategies_body
+    assert "Require governance renewal review" in strategies_body
+    assert "reconciliation-strategy-provenance" in css
 
 
 def test_manual_fields_have_explicit_provenance_and_no_restore_hydration():

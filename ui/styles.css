@@ -1137,6 +1137,7 @@ h3 {
 
 .interpretation-comparison,
 .interpretation-consequence-preview,
+.reconciliation-strategy-provenance,
 .decision-revision-history,
 .semantic-divergence-panel {
   margin: 8px 0;
@@ -1188,12 +1189,26 @@ h3 {
 
 .interpretation-comparison ul,
 .interpretation-consequence-preview ul,
+.reconciliation-strategy-provenance ul,
 .decision-revision-history ul {
   display: grid;
   gap: 6px;
   margin: 8px 0 0;
   padding: 0;
   list-style: none;
+}
+
+.reconciliation-strategy-provenance li {
+  display: inline-flex;
+  width: fit-content;
+  margin-right: 5px;
+  padding: 3px 7px;
+  border: 1px solid #d9d2c8;
+  border-radius: 999px;
+  color: var(--muted);
+  background: #fff;
+  font-size: 0.72rem;
+  font-weight: 780;
 }
 
 .interpretation-comparison li {
