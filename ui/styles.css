@@ -1742,6 +1742,65 @@ textarea {
   font-size: 1.25rem;
 }
 
+.activation-checkpoint {
+  display: grid;
+  gap: 15px;
+  margin: 0 0 18px;
+  padding: 18px;
+  border: 1px solid #24211f;
+  border-left: 4px solid var(--brand);
+  border-radius: 8px;
+  color: #f6f2ee;
+  background: #111;
+  box-shadow: 0 18px 38px rgba(0, 0, 0, 0.2);
+}
+
+.activation-checkpoint .section-kicker {
+  color: #ff9d5f;
+}
+
+.activation-checkpoint h3 {
+  font-size: 1.28rem;
+}
+
+.activation-checkpoint-header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.activation-checkpoint-grid,
+.receipt-evidence-drilldown {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.activation-checkpoint-grid div {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid #35302d;
+  border-radius: 7px;
+  background: #171717;
+}
+
+.activation-checkpoint-grid span {
+  display: block;
+  margin-bottom: 7px;
+  color: #b8b1aa;
+  font-size: 0.68rem;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.activation-checkpoint-grid strong {
+  display: block;
+  overflow-wrap: anywhere;
+  font-size: 0.9rem;
+  line-height: 1.25;
+}
+
 .release-impact-grid,
 .forensic-grid,
 .change-review-grid {
@@ -1965,6 +2024,10 @@ textarea {
   font-size: 0.76rem;
   overflow-wrap: anywhere;
   word-break: break-word;
+}
+
+.receipt-evidence-drilldown {
+  margin: 14px 0;
 }
 
 .hash-list {
@@ -2897,6 +2960,8 @@ textarea {
   .registry-controls,
   .extraction-review,
   .compiled-contract-grid,
+  .activation-checkpoint-grid,
+  .receipt-evidence-drilldown,
   .authority-meta,
   .registry-detail-grid,
   .registry-scope-strip,

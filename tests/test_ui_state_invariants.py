@@ -757,6 +757,59 @@ def test_publication_surface_uses_activation_language():
     assert "Activation creates a replayable governance authority" in html
     assert "Bind reviewed authority meaning to replayable publication evidence." in source
     assert "Ledger created activation evidence. Register locally to record the authority lifecycle posture." in source
+    assert "Review impact before activation." in html
+    assert "Review impact before activation." in source
+    assert "Review impact before publishing." not in html
+
+
+def test_publication_has_governance_activation_boundary_checkpoint():
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    css = STYLES_CSS.read_text(encoding="utf-8")
+    source = APP_JS.read_text(encoding="utf-8")
+    checkpoint_body = _function_body(source, "renderActivationCheckpoint")
+
+    assert 'id="activation-checkpoint"' in html
+    assert "Governance activation boundary" in html
+    assert "This becomes operational governance now." in html
+    assert 'id="activation-contract-fingerprint"' in html
+    assert 'id="activation-continuity-binding"' in html
+    assert 'id="activation-replay-obligations"' in html
+    assert 'id="activation-runtime-consequence"' in html
+    assert "function renderActivationCheckpoint" in source
+    assert "compiledContinuitySummary(continuityRules, replayObligations)" in checkpoint_body
+    assert "replayObligationSummary(compiled, executionProjection)" in checkpoint_body
+    assert "activationRuntimeConsequence(ready, projection, executionProjection)" in checkpoint_body
+    assert ".activation-checkpoint" in css
+    assert ".activation-checkpoint-grid" in css
+
+
+def test_registry_hardening_filters_and_receipt_drilldown_are_present():
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    css = STYLES_CSS.read_text(encoding="utf-8")
+    source = APP_JS.read_text(encoding="utf-8")
+    filter_body = _function_body(source, "filterRegistryEntries")
+    receipt_body = _function_body(source, "receiptEvidenceDrilldown")
+
+    for filter_id in (
+        "registry-lineage-filter",
+        "registry-replay-filter",
+        "registry-drift-filter",
+    ):
+        assert f'id="{filter_id}"' in html
+        assert f'$("#{filter_id}").addEventListener("change", renderBundleRegistry)' in source
+
+    assert "normalizeRegistrySearch" in filter_body
+    assert "lineageChainText(entry, registry)" in filter_body
+    assert 'lineage === "supersession"' in filter_body
+    assert 'replay === "receipt-backed"' in filter_body
+    assert 'drift === "continuity-sensitive"' in filter_body
+    assert 'drift === "authority-conflict"' in filter_body
+    assert "function receiptEvidenceDrilldown" in source
+    assert "Receipt evidence" in receipt_body
+    assert "Bundle binding" in receipt_body
+    assert "Semantic hashes" in receipt_body
+    assert "Replay binding" in receipt_body
+    assert ".receipt-evidence-drilldown" in css
 
 
 def test_normalized_pages_surface_operator_confidence_posture():

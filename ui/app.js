@@ -1853,6 +1853,7 @@ function renderCompiledContractBoundary(compiled, executionProjection) {
     admissibility.textContent = "pending";
     continuity.textContent = "pending";
     renderGuardPreviewItems(guardList, ["Compilation required before Guard-facing requirements can be projected."]);
+    renderActivationCheckpoint(authorityWorkspaceProjection(), null, null);
     return;
   }
 
@@ -1875,6 +1876,7 @@ function renderCompiledContractBoundary(compiled, executionProjection) {
     guardList,
     guardProjectionItems(guardRequirements, admissibilityProjection, requirementProjection),
   );
+  renderActivationCheckpoint(authorityWorkspaceProjection(), compiled, executionProjection);
 }
 
 function compiledAdmissibilitySummary(approval, requirementProjection) {
@@ -2409,12 +2411,58 @@ function publicationRegistryPosture(registryEntry) {
 }
 
 function renderPublicationProjection(projection) {
-  $("#release-headline").textContent = projection?.publication_meaning || "Review impact before publishing.";
-  $("#release-summary").textContent = projection?.publication_summary || "Create or restore an authority draft to see what publishing changes operationally.";
-  $("#release-operational").textContent = projection?.operational_change || "Pending impact review.";
-  $("#release-continuity").textContent = projection?.continuity_posture || "Pending impact review.";
-  $("#release-lifecycle").textContent = projection?.lifecycle_effect || "Pending impact review.";
+  $("#release-headline").textContent = projection?.publication_meaning || "Review impact before activation.";
+  $("#release-summary").textContent = projection?.publication_summary || "Create or restore an authority draft to see what activation changes operationally.";
+  $("#release-operational").textContent = projection?.operational_change || "Impact review required.";
+  $("#release-continuity").textContent = projection?.continuity_posture || "Impact review required.";
+  $("#release-lifecycle").textContent = projection?.lifecycle_effect || "Impact review required.";
   $("#release-registration").textContent = projection?.registry_posture || "Bundle not exported.";
+  renderActivationCheckpoint(projection, currentCompiledAuthorityContract, currentAuthorityExecutionProjection);
+}
+
+function renderActivationCheckpoint(projection, compiled, executionProjection) {
+  const status = $("#activation-checkpoint-status");
+  const fingerprint = $("#activation-contract-fingerprint");
+  const continuity = $("#activation-continuity-binding");
+  const replay = $("#activation-replay-obligations");
+  const consequence = $("#activation-runtime-consequence");
+  if (!status || !fingerprint || !continuity || !replay || !consequence) return;
+  const ready = Boolean(compiled && workflowState.impactReviewed && semanticStateMachine.impact_state === "valid");
+  status.textContent = workflowState.authorityRegistered
+    ? "Registered"
+    : workflowState.receiptGenerated
+      ? "Receipt ready"
+      : ready
+        ? "Activation ready"
+        : "Blocked";
+  status.classList.toggle("compiled", ready || workflowState.receiptGenerated || workflowState.authorityRegistered);
+  fingerprint.textContent = compiled?.contract_hash ? shortHash(compiled.contract_hash) : "Compile contract required";
+  const continuityRules = compiled?.continuity_requirements || {};
+  const replayObligations = Array.isArray(compiled?.replay_obligations) ? compiled.replay_obligations : [];
+  continuity.textContent = compiled
+    ? compiledContinuitySummary(continuityRules, replayObligations)
+    : projection?.continuity_posture || "Impact review required";
+  replay.textContent = replayObligationSummary(compiled, executionProjection);
+  consequence.textContent = activationRuntimeConsequence(ready, projection, executionProjection);
+}
+
+function replayObligationSummary(compiled, executionProjection) {
+  const obligations = Array.isArray(compiled?.replay_obligations) ? compiled.replay_obligations : [];
+  const guardObligations = executionProjection?.guard_enforcement_projection?.replay_obligations || [];
+  const count = obligations.length || guardObligations.length;
+  if (workflowState.receiptGenerated) return "publication receipt evidence created";
+  if (count) return `${count} replay obligation${count === 1 ? "" : "s"}`;
+  if (compiled) return "lineage evidence binding";
+  return "Pending compiled contract";
+}
+
+function activationRuntimeConsequence(ready, projection, executionProjection) {
+  if (workflowState.authorityRegistered) return "Authority posture is registered locally for lifecycle continuity.";
+  if (workflowState.receiptGenerated) return "Receipt evidence can bind future replay review to this authority.";
+  if (!ready) return "Authority is not ready for activation.";
+  const admissibility = executionProjection?.execution_admissibility_projection;
+  if (admissibility?.operator_summary) return admissibility.operator_summary;
+  return projection?.publication_summary || "Reviewed authority meaning is ready to become receipt-backed governance.";
 }
 
 function renderCompiledContractPanel(compiled) {
@@ -3698,28 +3746,59 @@ function renderActivityItems(selector, items, empty) {
 }
 
 function filterRegistryEntries(entries) {
-  const search = ($("#registry-search")?.value || "").trim().toLowerCase();
+  const search = normalizeRegistrySearch($("#registry-search")?.value || "");
   const status = $("#registry-status-filter")?.value || "all";
   const continuity = $("#registry-continuity-filter")?.value || "all";
+  const lineage = $("#registry-lineage-filter")?.value || "all";
+  const replay = $("#registry-replay-filter")?.value || "all";
+  const drift = $("#registry-drift-filter")?.value || "all";
+  const registry = loadBundleRegistry();
   return entries.filter((entry) => {
+    const coherence = authorityCoherenceProjection(entry, registry);
     const haystack = [
       entry.authority_ref,
+      authorityFamily(entry.authority_ref),
+      entry.authority_version,
       entryProtectedResource(entry),
       entry.governed_action,
+      entry.status,
       entry.continuity_posture,
       entry.escalation_threshold,
       entry.semantic_integrity_posture,
       entry.replay_readiness,
+      entry.supersedes,
+      entry.superseded_by,
+      entry.latest_receipt_hash,
+      entry.publication_receipt?.receipt_hash,
+      lineageChainText(entry, registry),
+      ...registryLifecycleEvents(entry).map((event) => lifecycleEventType(event)),
     ]
-      .join(" ")
-      .toLowerCase();
+      .map((value) => normalizeRegistrySearch(value || ""))
+      .join(" ");
+    const continuityPosture = String(entry.continuity_posture || "");
     if (search && !haystack.includes(search)) return false;
     if (status !== "all" && entry.status !== status) return false;
-    if (continuity === "revalidation" && !entry.continuity_posture.includes("revalidation")) return false;
-    if (continuity === "revocation" && !entry.continuity_posture.includes("revocation")) return false;
-    if (continuity === "review" && !entry.continuity_posture.includes("review recommended")) return false;
+    if (continuity === "revalidation" && !continuityPosture.includes("revalidation")) return false;
+    if (continuity === "revocation" && !continuityPosture.includes("revocation")) return false;
+    if (continuity === "review" && !continuityPosture.includes("review recommended")) return false;
+    if (lineage === "active" && !(entry.status === "registered" && !entry.superseded_by)) return false;
+    if (lineage === "supersession" && !(entry.status === "superseded" || entry.supersedes || entry.superseded_by)) return false;
+    if (lineage === "revoked" && entry.status !== "revoked") return false;
+    if (replay === "receipt-backed" && !(entry.latest_receipt_hash || entry.publication_receipt?.receipt_hash)) return false;
+    if (replay === "receipt-pending" && (entry.latest_receipt_hash || entry.publication_receipt?.receipt_hash)) return false;
+    if (drift === "continuity-sensitive" && coherence.severity !== "continuity_risk") return false;
+    if (drift === "replay-sensitive" && coherence.severity !== "replay_risk") return false;
+    if (drift === "authority-conflict" && coherence.severity !== "authority_conflict") return false;
+    if (drift === "clear" && coherence.severity !== "healthy") return false;
     return true;
   });
+}
+
+function normalizeRegistrySearch(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
 }
 
 function registryMetric(label, value) {
@@ -3992,7 +4071,26 @@ function renderBundleDetail(entry, mode = "summary") {
     );
   }
   details.append(detailsSummary, body);
-  detail.append(title, text, summary, details);
+  if (mode === "receipt") {
+    detail.append(title, text, summary, receiptEvidenceDrilldown(entry), details);
+  } else {
+    detail.append(title, text, summary, details);
+  }
+}
+
+function receiptEvidenceDrilldown(entry) {
+  const panel = document.createElement("div");
+  panel.className = "receipt-evidence-drilldown";
+  const receipt = entry.publication_receipt || {};
+  const bundleHash = receipt.bundle_hash || entry.latest_bundle_hash || entry.bundle?.bundle_hash || "not recorded";
+  const receiptHash = receipt.receipt_hash || entry.latest_receipt_hash || "not recorded";
+  panel.append(
+    registryDetailMetric("Receipt evidence", receipt.receipt_hash ? "receipt-backed" : "receipt missing", receipt.receipt_hash ? shortHash(receipt.receipt_hash) : "Export receipt not attached"),
+    registryDetailMetric("Bundle binding", shortHash(bundleHash), "Authority bundle hash"),
+    registryDetailMetric("Semantic hashes", receipt.semantic_artifact_hashes ? "recorded" : "not recorded", "Preview, diff, and review packet evidence"),
+    registryDetailMetric("Replay binding", receipt.receipt_hash ? "available" : "incomplete", "Future replay review can bind to receipt evidence"),
+  );
+  return panel;
 }
 
 function renderRegistryDetailSummary(detail, entry) {
@@ -5315,6 +5413,9 @@ $("#bundle-registry").addEventListener("click", handleRegistryAction);
 $("#registry-search").addEventListener("input", renderBundleRegistry);
 $("#registry-status-filter").addEventListener("change", renderBundleRegistry);
 $("#registry-continuity-filter").addEventListener("change", renderBundleRegistry);
+$("#registry-lineage-filter").addEventListener("change", renderBundleRegistry);
+$("#registry-replay-filter").addEventListener("change", renderBundleRegistry);
+$("#registry-drift-filter").addEventListener("change", renderBundleRegistry);
 
 document.querySelectorAll("[data-page-link]").forEach((link) => {
   link.addEventListener("click", (event) => {

@@ -526,22 +526,50 @@
           </div>
           <section id="publication-confidence-surface" class="operator-confidence-surface" aria-label="Publication confidence posture"></section>
 
+          <article id="activation-checkpoint" class="activation-checkpoint" aria-label="Governance activation boundary">
+            <div class="activation-checkpoint-header">
+              <div>
+                <div class="section-kicker">Governance activation boundary</div>
+                <h3>This becomes operational governance now.</h3>
+              </div>
+              <span id="activation-checkpoint-status" class="contract-posture-chip">Blocked</span>
+            </div>
+            <div class="activation-checkpoint-grid">
+              <div>
+                <span>Deterministic contract fingerprint</span>
+                <strong id="activation-contract-fingerprint">Compile contract required</strong>
+              </div>
+              <div>
+                <span>Continuity binding</span>
+                <strong id="activation-continuity-binding">Impact review required</strong>
+              </div>
+              <div>
+                <span>Replay obligations</span>
+                <strong id="activation-replay-obligations">Pending compiled contract</strong>
+              </div>
+              <div>
+                <span>Runtime consequence</span>
+                <strong id="activation-runtime-consequence">Authority is not ready for activation.</strong>
+              </div>
+            </div>
+          </article>
+
           <article class="release-narrative">
             <div class="section-kicker">Activation meaning</div>
-            <h3 id="release-headline">Review impact before publishing.</h3>
-            <p id="release-summary" class="quiet">Create or restore an authority draft to see what publishing changes operationally.</p>
+            <h3 id="release-headline">Review impact before activation.</h3>
+            <p id="release-summary" class="quiet">Create or restore an authority draft to see what activation changes operationally.</p>
             <div class="release-impact-grid">
               <div>
                 <span>Operational change</span>
-                <strong id="release-operational">Pending impact review.</strong>
+                <strong id="release-operational">Impact review required.</strong>
               </div>
               <div>
                 <span>Continuity posture</span>
-                <strong id="release-continuity">Pending impact review.</strong>
+                <strong id="release-continuity">Impact review required.</strong>
               </div>
               <div>
                 <span>Lifecycle effect</span>
-                <strong id="release-lifecycle">Pending impact review.</strong>
+                <strong id="release-lifecycle">Impact review required.</strong>
               </div>
               <div>
                 <span>Registration state</span>
@@ -710,6 +738,33 @@
                 <option value="revalidation">Requires revalidation</option>
                 <option value="revocation">Revocation invalidates resume</option>
                 <option value="review">Review recommended</option>
+              </select>
+            </label>
+            <label>
+              <span>Lineage</span>
+              <select id="registry-lineage-filter">
+                <option value="all">All lineage states</option>
+                <option value="active">Active lineage</option>
+                <option value="supersession">Supersession chain</option>
+                <option value="revoked">Revoked lineage</option>
+              </select>
+            </label>
+            <label>
+              <span>Replay</span>
+              <select id="registry-replay-filter">
+                <option value="all">All replay postures</option>
+                <option value="receipt-backed">Receipt-backed</option>
+                <option value="receipt-pending">Receipt pending</option>
+              </select>
+            </label>
+            <label>
+              <span>Drift</span>
+              <select id="registry-drift-filter">
+                <option value="all">All drift postures</option>
+                <option value="continuity-sensitive">Continuity-sensitive</option>
+                <option value="replay-sensitive">Replay-sensitive</option>
+                <option value="authority-conflict">Authority conflict</option>
+                <option value="clear">No elevated drift</option>
               </select>
             </label>
           </div>
