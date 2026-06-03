@@ -1297,6 +1297,26 @@ h3 {
   background: #fbfaf7;
 }
 
+.semantic-commit-readiness {
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--brand);
+  border-radius: 7px;
+  background: #fff7f1;
+}
+
+.semantic-commit-readiness.ready {
+  border-left-color: var(--green);
+  background: #f6faf6;
+}
+
+.semantic-commit-readiness ul {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
 .reconciliation-audit-trail ul {
   margin: 8px 0 0;
   padding-left: 18px;

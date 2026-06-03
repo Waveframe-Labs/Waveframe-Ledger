@@ -717,6 +717,7 @@ function renderReconciliationWorkflow(selector, ambiguities) {
     item.append(actions, status, history);
     node.appendChild(item);
   }
+  renderSemanticCommitReadiness(node);
   const divergence = reconciliationDivergencePanel();
   node.appendChild(divergence);
   const audit = document.createElement("div");
@@ -749,6 +750,7 @@ function ambiguityResolutionState(ambiguity) {
   const unresolved = unresolvedReconciliationBlocks.find((item) => item.ambiguity_id === ambiguity.ambiguity_id);
   if (unresolved) return "unresolved";
   if (!decision) return "pending";
+  if (decision.ambiguity_resolution_state) return decision.ambiguity_resolution_state;
   if (decision.decision_posture === "operator_acknowledged") return "acknowledged";
   if (decision.decision_posture === "superseded") return "superseded";
   return "interpreted";
@@ -760,6 +762,53 @@ function ambiguityResolvedForProgression(ambiguity) {
   if (state === "unresolved" || state === "pending") return false;
   if (state === "acknowledged") return ambiguityTier(ambiguity) === "informational";
   return state === "interpreted";
+}
+
+function semanticCommitReadiness() {
+  if (!currentExtraction?.candidate_authority) {
+    return {
+      schema_version: "semantic_commit_readiness.v1",
+      semantic_commit_ready: false,
+      blocking_reasons: [{
+        reason: "candidate_authority_missing",
+        detail: "No extracted authority candidate is available for semantic commitment.",
+      }],
+    };
+  }
+  const blockingReasons = requiredSemanticAmbiguities()
+    .map((ambiguity) => {
+      const state = ambiguityResolutionState(ambiguity);
+      const severity = ambiguityTier(ambiguity);
+      if (severity === "blocking") {
+        return semanticCommitBlocker(ambiguity, state, "blocking_severity");
+      }
+      if (state === "pending") {
+        return semanticCommitBlocker(ambiguity, state, "resolution_state_pending");
+      }
+      if (state === "unresolved") {
+        return semanticCommitBlocker(ambiguity, state, "resolution_state_unresolved");
+      }
+      if (state === "acknowledged" && severity !== "informational") {
+        return semanticCommitBlocker(ambiguity, state, "acknowledgement_only_allowed_for_informational");
+      }
+      return null;
+    })
+    .filter(Boolean);
+  return {
+    schema_version: "semantic_commit_readiness.v1",
+    semantic_commit_ready: blockingReasons.length === 0,
+    blocking_reasons: blockingReasons,
+  };
+}
+
+function semanticCommitBlocker(ambiguity, state, reason) {
+  return {
+    ambiguity_id: ambiguity.ambiguity_id,
+    ambiguity_type: ambiguity.ambiguity_type,
+    severity: ambiguityTier(ambiguity),
+    resolution_state: state,
+    reason,
+  };
 }
 
 function ambiguityGovernanceClass(ambiguity) {
@@ -1172,11 +1221,34 @@ function buildGovernanceSemanticReconciliation() {
     rejected_candidates: unresolvedReconciliationBlocks,
     semantic_conflicts: [],
     ambiguity_resolution_states: states,
+    semantic_commit_readiness: semanticCommitReadiness(),
     unresolved_ambiguities: unresolved,
     final_normalized_semantic_meaning: normalized,
     interpretation_completeness_posture: unresolved.some((ambiguity) => ambiguityTier(ambiguity) === "blocking" || ambiguityResolutionState(ambiguity) === "unresolved") ? "blocked" : unresolved.length ? "operator_required" : "complete",
     interpretation_audit_trail: interpretationAuditTrail,
   };
+}
+
+function renderSemanticCommitReadiness(node) {
+  const readiness = semanticCommitReadiness();
+  const panel = document.createElement("div");
+  panel.id = "semantic-commit-readiness";
+  panel.className = `semantic-commit-readiness ${readiness.semantic_commit_ready ? "ready" : "blocked"}`;
+  const title = document.createElement("strong");
+  title.textContent = readiness.semantic_commit_ready ? "Semantic commit ready" : "Semantic commit blockers";
+  const list = document.createElement("ul");
+  const items = readiness.blocking_reasons.length
+    ? readiness.blocking_reasons
+    : [{ ambiguity_id: "none", reason: "all_required_ambiguities_resolved", resolution_state: "ready", severity: "none" }];
+  for (const item of items) {
+    const line = document.createElement("li");
+    line.textContent = item.ambiguity_id === "none"
+      ? "All required ambiguities are acknowledged or interpreted."
+      : `${item.ambiguity_id} -> ${item.resolution_state}; ${formatLabel(item.reason)}.`;
+    list.appendChild(line);
+  }
+  panel.append(title, list);
+  node.appendChild(panel);
 }
 
 function normalizedAuthorityFromDecisions(candidate) {
@@ -1225,8 +1297,7 @@ function updateReconciliationState() {
 
 function reconciliationIsComplete() {
   if (!currentExtraction) return false;
-  const reconciliation = currentReconciliation || buildGovernanceSemanticReconciliation();
-  return reconciliation?.interpretation_completeness_posture === "complete";
+  return semanticCommitReadiness().semantic_commit_ready;
 }
 
 function summarizeArray(values) {
@@ -1270,8 +1341,9 @@ function renderProvenanceList(selector, items) {
 function commitSemanticInterpretation() {
   currentReconciliation = currentReconciliation || buildGovernanceSemanticReconciliation();
   if (!currentExtraction?.candidate_authority || !reconciliationIsComplete()) {
+    renderReconciliationWorkflow("#reconciliation-workflow", currentExtraction?.ambiguities || []);
     openReconciliationReview();
-    $("#extraction-status").textContent = "Resolve or explicitly clear all reconciliation blockers before committing semantic interpretation.";
+    $("#extraction-status").textContent = "Semantic commit is blocked. Review the Semantic commit blockers panel for the exact unresolved ambiguity state.";
     return;
   }
   recordInterpretationAudit("semantic_interpretation_committed", "Semantic interpretation committed as deterministic draft meaning.");
@@ -1287,6 +1359,7 @@ function commitSemanticInterpretation() {
       unresolved_ambiguities: currentReconciliation.unresolved_ambiguities,
       operator_reviewed_interpretations: currentReconciliation.operator_interpretation_decisions,
       ambiguity_resolution_states: currentReconciliation.ambiguity_resolution_states,
+      semantic_commit_readiness: currentReconciliation.semantic_commit_readiness,
       conflicting_extracted_semantics: currentReconciliation.semantic_conflicts,
       normalization_decisions: currentReconciliation.normalization_decisions,
       interpretation_completeness_posture: currentReconciliation.interpretation_completeness_posture,

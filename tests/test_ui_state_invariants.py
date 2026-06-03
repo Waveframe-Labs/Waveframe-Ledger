@@ -412,7 +412,7 @@ def test_reconciliation_workspace_records_operator_decisions_and_blocks_unresolv
     assert "interpretationConsequencePreview" in render_body
     assert "Operator rationale is required" in source
     assert "reconciliationIsComplete()" in commit_gate
-    assert "Resolve or explicitly clear all reconciliation blockers" in commit_body
+    assert "Semantic commit is blocked. Review the Semantic commit blockers panel" in commit_body
     assert "governance_semantic_reconciliation" in commit_body
     assert "semantic_reconciliation_projection" in commit_body
 
@@ -450,6 +450,8 @@ def test_reconciliation_uses_explicit_ambiguity_resolution_states():
     decision_body = _function_body(source, "buildInterpretationDecision")
     save_body = _function_body(source, "saveInterpretationDecision")
     progression_body = _function_body(source, "ambiguityResolvedForProgression")
+    readiness_body = _function_body(source, "semanticCommitReadiness")
+    gate_body = _function_body(source, "reconciliationIsComplete")
 
     for state in ("pending", "acknowledged", "interpreted", "unresolved", "superseded"):
         assert state in source
@@ -468,6 +470,27 @@ def test_reconciliation_uses_explicit_ambiguity_resolution_states():
     assert 'state === "acknowledged") return ambiguityTier(ambiguity) === "informational"' in progression_body
     assert "ambiguity_resolution_states: states" in reconciliation_body
     assert "!ambiguityResolvedForProgression(ambiguity)" in reconciliation_body
+    assert "semantic_commit_readiness: semanticCommitReadiness()" in reconciliation_body
+    assert "semantic_commit_readiness: currentReconciliation.semantic_commit_readiness" in source
+    assert "schema_version: \"semantic_commit_readiness.v1\"" in readiness_body
+    assert "semantic_commit_ready: blockingReasons.length === 0" in readiness_body
+    assert "resolution_state_pending" in readiness_body
+    assert "resolution_state_unresolved" in readiness_body
+    assert "semanticCommitReadiness().semantic_commit_ready" in gate_body
+
+
+def test_reconciliation_renders_semantic_commit_blocker_observability():
+    source = APP_JS.read_text(encoding="utf-8")
+    css = STYLES_CSS.read_text(encoding="utf-8")
+    render_body = _function_body(source, "renderReconciliationWorkflow")
+    readiness_render_body = _function_body(source, "renderSemanticCommitReadiness")
+
+    assert "renderSemanticCommitReadiness(node)" in render_body
+    assert 'panel.id = "semantic-commit-readiness"' in readiness_render_body
+    assert "Semantic commit blockers" in readiness_render_body
+    assert "All required ambiguities are acknowledged or interpreted." in readiness_render_body
+    assert "${item.ambiguity_id} -> ${item.resolution_state}" in readiness_render_body
+    assert ".semantic-commit-readiness" in css
 
 
 def test_reconciliation_surfaces_interpretation_authority_and_consequence_preview():
