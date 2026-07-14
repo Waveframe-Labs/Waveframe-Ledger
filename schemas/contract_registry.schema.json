@@ -1,13 +1,11 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/Waveframe-Labs/Governance-Ledger/schemas/contract_registry.schema.json",
-  "title": "Governance-Ledger Contract Registry",
+  "$id": "https://github.com/Waveframe-Labs/Waveframe-Ledger/schemas/contract_registry.schema.json",
+  "title": "Waveframe Ledger Contract Registry",
   "type": "object",
   "required": ["schema_version", "generated_at", "contracts", "latest", "registry_hash"],
   "properties": {
-    "schema_version": {
-      "const": "contract_registry.v1"
-    },
+    "schema_version": {"const": "contract_registry.v1"},
     "generated_at": {"type": "string"},
     "contracts": {
       "type": "array",
@@ -32,47 +30,22 @@
           "contract_version": {"type": "string"},
           "authority_ref": {"type": "string"},
           "contract_ref": {"type": "string"},
-          "contract_hash": {
-            "type": "string",
-            "pattern": "^sha256:[A-Fa-f0-9]{64}$"
-          },
-          "path": {
-            "type": "string",
-            "minLength": 1,
-            "pattern": "^[^\\\\]*$"
-          },
-          "bundle_path": {
-            "type": "string",
-            "minLength": 1,
-            "pattern": "^[^\\\\]*$"
-          },
-          "bundle_hash": {
-            "type": "string",
-            "pattern": "^sha256:[A-Fa-f0-9]{64}$"
-          },
-          "lifecycle_state": {
-            "enum": ["active", "superseded", "revoked"]
-          },
+          "contract_hash": {"type": "string", "pattern": "^sha256:[A-Fa-f0-9]{64}$"},
+          "path": {"type": "string", "minLength": 1, "pattern": "^[^\\\\]*$"},
+          "bundle_path": {"type": "string", "minLength": 1, "pattern": "^[^\\\\]*$"},
+          "bundle_hash": {"type": "string", "pattern": "^sha256:[A-Fa-f0-9]{64}$"},
+          "lifecycle_state": {"enum": ["active", "superseded", "revoked"]},
           "publication_id": {"type": "string"},
           "published_at": {"type": "string"},
           "published_by": {"type": "string"},
-          "source_hash": {
-            "type": "string",
-            "pattern": "^sha256:[A-Fa-f0-9]{64}$"
-          },
-          "compilation_report_hash": {
-            "type": "string",
-            "pattern": "^sha256:[A-Fa-f0-9]{64}$"
-          }
+          "source_hash": {"type": "string", "pattern": "^sha256:[A-Fa-f0-9]{64}$"},
+          "compilation_report_hash": {"type": "string", "pattern": "^sha256:[A-Fa-f0-9]{64}$"}
         },
         "additionalProperties": false
       }
     },
     "latest": {"type": "object"},
-    "registry_hash": {
-      "type": "string",
-      "pattern": "^sha256:[A-Fa-f0-9]{64}$"
-    }
+    "registry_hash": {"type": "string", "pattern": "^sha256:[A-Fa-f0-9]{64}$"}
   },
   "additionalProperties": false
 }

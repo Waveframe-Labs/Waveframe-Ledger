@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.5.0 - 2026-07-13
+
+Waveframe Ledger v0.5.0 closes the Published Authority publication path so approved governance can be resolved by explicit, immutable authority identity.
+
+### Added
+
+- Transactional publication of `authority_bundle.v1` and `publication_receipt.v1` alongside the compiled contract, deployed review, snapshot, publication manifest, and registry update.
+- Explicit authority resolution through `governance-ledger resolve <authority-id>@<version>`.
+- Registry bundle identity through `bundle_path` and `bundle_hash`.
+- Registry lifecycle state through `active`, `superseded`, and `revoked`.
+- Duplicate identity protection for conflicting contract or authority-bundle hashes.
+- Canonical Published Authority specification in `docs/PUBLISHED_AUTHORITY_SPEC.md`.
+
+### Changed
+
+- Registry updates now require complete Published Authority identity rather than contract-only entries.
+- Invalid lifecycle states fail closed instead of being coerced to `active`.
+- Registry schema identity now uses the Waveframe Ledger repository name.
+- Package version bumped to `0.5.0` while retaining the `governance-ledger` PyPI distribution and CLI names for compatibility.
+
+### Verification
+
+- Full public-core test suite passes with `200` tests before release cleanup.
+- Added direct invariant coverage for conflicting bundle identity and invalid lifecycle state.
+
 ## 0.4.0 - 2026-06-03
 
 Governance-Ledger v0.4.0 formalizes the public deterministic governance object layer, governance event architecture, chronology replay contracts, semantic reconciliation, compiled authority contracts, and execution-facing projection boundaries.
