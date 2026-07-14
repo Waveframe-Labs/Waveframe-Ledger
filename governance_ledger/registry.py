@@ -11,6 +11,9 @@ from governance_ledger.paths import artifact_path
 from governance_ledger.schema_versions import CONTRACT_REGISTRY_V1
 
 
+_LIFECYCLE_STATES = {"active", "superseded", "revoked"}
+
+
 def update_contract_registry(
     contracts_dir: str | Path,
     *,
@@ -48,6 +51,42 @@ def update_contract_registry(
 def load_contract_registry(contracts_dir: str | Path = "contracts") -> dict[str, Any]:
     """Load contracts/index.json, returning an empty registry if absent."""
     return _read_registry(Path(contracts_dir) / "index.json")
+
+
+def resolve_authority_ref(
+    authority_ref: str,
+    *,
+    contracts_dir: str | Path = "contracts",
+) -> dict[str, Any]:
+    """Resolve an explicit versioned authority reference from the local registry."""
+    if not _is_explicit_authority_ref(authority_ref):
+        raise ValueError("Authority resolution requires an explicit versioned reference like name@1.2.0.")
+
+    registry = load_contract_registry(contracts_dir)
+    validate_registry_hash(registry)
+    matches = [
+        entry
+        for entry in registry.get("contracts", [])
+        if entry.get("authority_ref") == authority_ref
+    ]
+    if not matches:
+        raise ValueError(f"Authority reference not found: {authority_ref}")
+    if len(matches) > 1:
+        raise ValueError(f"Registry contains duplicate entries for {authority_ref}.")
+    entry = matches[0]
+    if not entry.get("bundle_path") or not entry.get("bundle_hash"):
+        raise ValueError(f"Registry entry for {authority_ref} does not identify a canonical authority bundle.")
+    return {
+        "authority_ref": entry["authority_ref"],
+        "lifecycle_state": entry.get("lifecycle_state", "active"),
+        "publication_id": entry.get("publication_id"),
+        "contract_hash": entry.get("contract_hash"),
+        "bundle_hash": entry.get("bundle_hash"),
+        "bundle_path": entry.get("bundle_path"),
+        "contract_path": entry.get("path"),
+        "published_at": entry.get("published_at"),
+        "published_by": entry.get("published_by"),
+    }
 
 
 def _registry_entry(
@@ -95,6 +134,22 @@ def build_contract_registry(
     return registry
 
 
+def validate_registry_identity(
+    existing_registry: dict[str, Any],
+    new_entry: dict[str, Any],
+) -> None:
+    """Reject same authority_ref with different immutable publication identity."""
+    authority_ref = new_entry.get("authority_ref")
+    for existing in existing_registry.get("contracts", []):
+        if existing.get("authority_ref") != authority_ref:
+            continue
+        for field in ("contract_hash", "bundle_hash"):
+            if existing.get(field) != new_entry.get(field):
+                raise ValueError(
+                    f"Refusing to republish {authority_ref} with different {field}."
+                )
+
+
 def compute_registry_hash(registry: dict[str, Any]) -> str:
     """Compute registry hash over canonical JSON excluding registry_hash."""
     canonical_registry = {
@@ -122,7 +177,7 @@ def _normalize_registry_entry(entry: dict[str, Any]) -> dict[str, Any]:
     contract_hash = entry["contract_hash"]
     if not contract_hash.startswith("sha256:"):
         contract_hash = f"sha256:{contract_hash}"
-    return {
+    normalized = {
         **entry,
         "contract_id": contract_id,
         "contract_version": contract_version,
@@ -131,6 +186,11 @@ def _normalize_registry_entry(entry: dict[str, Any]) -> dict[str, Any]:
         "contract_hash": contract_hash,
         "path": artifact_path(entry["path"]),
     }
+    if "bundle_path" in normalized:
+        normalized["bundle_path"] = artifact_path(normalized["bundle_path"])
+    if normalized.get("lifecycle_state") not in _LIFECYCLE_STATES:
+        normalized["lifecycle_state"] = "active"
+    return normalized
 
 
 def _latest_by_contract(contracts: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
@@ -157,6 +217,18 @@ def _same_contract(left: dict[str, Any], right: dict[str, Any]) -> bool:
         left.get("contract_id") == right.get("contract_id")
         and left.get("contract_version") == right.get("contract_version")
     )
+
+
+def _is_explicit_authority_ref(value: str) -> bool:
+    if not isinstance(value, str) or value.count("@") != 1:
+        return False
+    authority_id, version = value.split("@", 1)
+    if not authority_id or version in {"latest", "active"}:
+        return False
+    parts = version.split(".")
+    if len(parts) != 3:
+        return False
+    return all(part.isdigit() for part in parts)
 
 
 def _read_registry(path: Path) -> dict[str, Any]:

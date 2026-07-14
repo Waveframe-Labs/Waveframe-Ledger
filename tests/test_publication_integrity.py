@@ -133,7 +133,7 @@ def test_publish_rolls_back_when_immutable_contract_would_change(tmp_path):
         timestamp="2026-05-13T13:00:00Z",
     )
 
-    with pytest.raises(ValueError, match="Refusing to overwrite immutable publication output"):
+    with pytest.raises(ValueError, match="Refusing to republish finance-policy@0.1.0 with different contract_hash"):
         publish_review_file(
             changed_review_path,
             generated_dir=paths["generated"],

@@ -4,7 +4,8 @@ from pathlib import Path
 import pytest
 
 from governance_ledger.publish import approve_review_file, publish_review_file
-from governance_ledger.registry import update_contract_registry
+from governance_ledger.cli import main as governance_cli
+from governance_ledger.registry import resolve_authority_ref, update_contract_registry
 from governance_ledger.runner import run_policy_directory
 from governance_ledger.checks import check_validation_directory, format_check_summary
 from governance_ledger.inspect import format_artifact, format_contract_list, list_contracts, show_artifact
@@ -115,6 +116,8 @@ def test_approve_then_publish_creates_contract_review_and_snapshot_artifacts(tmp
     assert approved_review["approved_at"] == "2026-05-09T12:00:00Z"
     assert approved_review["approval_note"] == "Approved finance governance."
     assert Path(result["contract"]).parent == contracts_dir
+    assert Path(result["authority_bundle"]).parent == contracts_dir
+    assert Path(result["publication_receipt"]).parent == contracts_dir
     assert Path(result["deployed_review"]).parent == reviews_dir
     assert Path(result["manifest"]).parent == contracts_dir
     assert Path(result["registry"]).parent == contracts_dir
@@ -137,12 +140,17 @@ def test_approve_then_publish_creates_contract_review_and_snapshot_artifacts(tmp
     assert "\\" not in manifest["snapshots"][0]["path"]
 
     registry = json.loads(Path(result["registry"]).read_text())
+    authority_bundle = json.loads(Path(result["authority_bundle"]).read_text())
+    publication_receipt = json.loads(Path(result["publication_receipt"]).read_text())
     assert registry["contracts"][0]["contract_id"] == "finance-policy"
     assert registry["contracts"][0]["contract_version"] == "0.1.0"
     assert registry["contracts"][0]["authority_ref"] == "finance-policy@0.1.0"
     assert registry["contracts"][0]["contract_ref"] == "finance-policy@0.1.0"
     assert registry["contracts"][0]["contract_hash"] == manifest["contracts"][0]["contract_hash"]
     assert registry["contracts"][0]["path"] == Path(result["contract"]).as_posix()
+    assert registry["contracts"][0]["bundle_path"] == Path(result["authority_bundle"]).as_posix()
+    assert registry["contracts"][0]["bundle_hash"] == publication_receipt["bundle_hash"]
+    assert registry["contracts"][0]["lifecycle_state"] == "active"
     assert registry["contracts"][0]["publication_id"] == "pub_20260509_0001"
     assert registry["contracts"][0]["published_at"] == "2026-05-09T12:30:00Z"
     assert registry["contracts"][0]["published_by"] == "governance-team"
@@ -151,6 +159,28 @@ def test_approve_then_publish_creates_contract_review_and_snapshot_artifacts(tmp
         registry["contracts"][0]["compilation_report_hash"]
         == deployed_review["compilation_report"]["report_hash"]
     )
+    assert authority_bundle["schema_version"] == "authority_bundle.v1"
+    assert authority_bundle["authority_ref"] == "finance-policy@0.1.0"
+    assert authority_bundle["publication_id"] == "pub_20260509_0001"
+    assert authority_bundle["contract_hash"] == manifest["contracts"][0]["contract_hash"]
+    assert authority_bundle["publication_manifest"] == manifest
+    assert publication_receipt["schema_version"] == "publication_receipt.v1"
+    assert publication_receipt["authority_ref"] == "finance-policy@0.1.0"
+    assert publication_receipt["publication_id"] == "pub_20260509_0001"
+    assert publication_receipt["bundle_hash"] == result["authority_bundle_hash"]
+
+    resolved = resolve_authority_ref("finance-policy@0.1.0", contracts_dir=contracts_dir)
+    assert resolved == {
+        "authority_ref": "finance-policy@0.1.0",
+        "lifecycle_state": "active",
+        "publication_id": "pub_20260509_0001",
+        "contract_hash": manifest["contracts"][0]["contract_hash"],
+        "bundle_hash": publication_receipt["bundle_hash"],
+        "bundle_path": Path(result["authority_bundle"]).as_posix(),
+        "contract_path": Path(result["contract"]).as_posix(),
+        "published_at": "2026-05-09T12:30:00Z",
+        "published_by": "governance-team",
+    }
 
 
 def test_publish_without_timestamp_records_effective_publication_time(tmp_path):
@@ -314,6 +344,86 @@ def test_publish_refuses_to_overwrite_immutable_contract_output(tmp_path):
             snapshots_dir=snapshots_dir,
             timestamp="2026-05-09T12:30:00Z",
         )
+
+
+def test_publish_rejects_same_authority_ref_with_different_identity(tmp_path):
+    policies_dir, generated_dir, reviews_dir, contracts_dir, snapshots_dir = _draft_policy(tmp_path)
+    review_path = reviews_dir / "finance_policy.review.json"
+    approve_review_file(
+        review_path,
+        actor="governance-team",
+        timestamp="2026-05-09T12:00:00Z",
+    )
+    publish_review_file(
+        review_path,
+        generated_dir=generated_dir,
+        contracts_dir=contracts_dir,
+        reviews_dir=reviews_dir,
+        snapshots_dir=snapshots_dir,
+        timestamp="2026-05-09T12:30:00Z",
+    )
+    (policies_dir / "finance_policy.txt").write_text(
+        "Transfers above $1M require director approval.\n"
+        "Proposer and approver must be separate.\n",
+        encoding="utf-8",
+    )
+    run_policy_directory(
+        policies_dir,
+        generated_dir=generated_dir,
+        reviews_dir=reviews_dir,
+    )
+    approve_review_file(
+        review_path,
+        actor="governance-team",
+        timestamp="2026-05-09T13:00:00Z",
+    )
+
+    with pytest.raises(ValueError, match="Refusing to republish finance-policy@0.1.0"):
+        publish_review_file(
+            review_path,
+            generated_dir=generated_dir,
+            contracts_dir=contracts_dir,
+            reviews_dir=reviews_dir,
+            snapshots_dir=snapshots_dir,
+            timestamp="2026-05-09T13:30:00Z",
+        )
+
+
+def test_cli_resolve_requires_explicit_versioned_authority_ref(tmp_path, capsys):
+    policies_dir, generated_dir, reviews_dir, contracts_dir, snapshots_dir = _draft_policy(tmp_path)
+    review_path = reviews_dir / "finance_policy.review.json"
+    approve_review_file(
+        review_path,
+        actor="governance-team",
+        timestamp="2026-05-09T12:00:00Z",
+    )
+    publish_review_file(
+        review_path,
+        generated_dir=generated_dir,
+        contracts_dir=contracts_dir,
+        reviews_dir=reviews_dir,
+        snapshots_dir=snapshots_dir,
+        timestamp="2026-05-09T12:30:00Z",
+    )
+
+    exit_code = governance_cli(
+        [
+            "resolve",
+            "finance-policy@0.1.0",
+            "--contracts-dir",
+            str(contracts_dir),
+        ]
+    )
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert "Authority:     finance-policy@0.1.0" in captured.out
+    assert "State:         active" in captured.out
+    assert "Publication:   pub_20260509_0001" in captured.out
+    assert "Bundle:        " in captured.out
+
+    with pytest.raises(ValueError, match="explicit versioned reference"):
+        resolve_authority_ref("finance-policy@latest", contracts_dir=contracts_dir)
 
 
 def test_list_contracts_and_show_artifact(tmp_path):

@@ -54,15 +54,21 @@ def _status_message(result: dict[str, Any]) -> str:
 
 def format_publish_summary(result: dict[str, str]) -> str:
     """Format publish output for terminal visibility."""
-    return "\n".join(
+    lines = [
+        "[Governance Ledger]",
+        "",
+        "Publication:",
+        "  published approved governance review",
+        "",
+        "Contract:",
+        f"  {artifact_path(result['contract'])}",
+    ]
+    if result.get("authority_bundle"):
+        lines.extend(["", "Authority Bundle:", f"  {artifact_path(result['authority_bundle'])}"])
+    if result.get("publication_receipt"):
+        lines.extend(["", "Publication Receipt:", f"  {artifact_path(result['publication_receipt'])}"])
+    lines.extend(
         [
-            "[Governance Ledger]",
-            "",
-            "Publication:",
-            "  published approved governance review",
-            "",
-            "Contract:",
-            f"  {artifact_path(result['contract'])}",
             "",
             "Review:",
             f"  {artifact_path(result['deployed_review'])}",
@@ -75,6 +81,23 @@ def format_publish_summary(result: dict[str, str]) -> str:
             "",
             "Snapshot:",
             f"  {artifact_path(result['snapshot'])}",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def format_resolution_summary(result: dict[str, Any]) -> str:
+    """Format an explicit authority resolution for terminal visibility."""
+    return "\n".join(
+        [
+            "[Governance Ledger]",
+            "",
+            f"Authority:     {result['authority_ref']}",
+            f"State:         {result['lifecycle_state']}",
+            f"Publication:   {result['publication_id']}",
+            f"Contract hash: {result['contract_hash']}",
+            f"Bundle hash:   {result['bundle_hash']}",
+            f"Bundle:        {artifact_path(result['bundle_path'])}",
         ]
     )
 

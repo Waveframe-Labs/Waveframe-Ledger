@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Sequence
 
 from governance_ledger.publish import approve_review_file, publish_review_file
+from governance_ledger.registry import resolve_authority_ref
 from governance_ledger.runner import run_policy_directory
 from governance_ledger.checks import check_validation_directory, format_check_summary
 from governance_ledger.inspect import (
@@ -46,6 +47,7 @@ from governance_ledger.semantics.publication import (
 from governance_ledger.summary import (
     build_pr_summary,
     format_publish_summary,
+    format_resolution_summary,
     format_run_summary,
 )
 
@@ -95,6 +97,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     show_parser = subparsers.add_parser("show", help="show a governance artifact")
     show_parser.add_argument("path")
     show_parser.add_argument("--json", action="store_true")
+
+    resolve_parser = subparsers.add_parser(
+        "resolve",
+        help="resolve an explicit versioned authority reference",
+    )
+    resolve_parser.add_argument("authority_ref")
+    resolve_parser.add_argument("--contracts-dir", default="contracts")
+    resolve_parser.add_argument("--json", action="store_true")
 
     preview_parser = subparsers.add_parser(
         "preview",
@@ -236,6 +246,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         result = check_validation_directory(args.generated_dir)
     elif args.command == "list":
         result = list_contracts(args.contracts_dir)
+    elif args.command == "resolve":
+        result = resolve_authority_ref(
+            args.authority_ref,
+            contracts_dir=args.contracts_dir,
+        )
     elif args.command == "replay-authority":
         result = replay_governance_compilation(
             source_text=Path(args.source).read_text(encoding="utf-8"),
@@ -341,6 +356,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 1 if result["error_count"] else 0
     elif args.command == "list":
         print(format_contract_list(result))
+    elif args.command == "resolve":
+        print(format_resolution_summary(result))
     elif args.command == "show":
         print(format_artifact(args.path, result))
     elif args.command == "preview":

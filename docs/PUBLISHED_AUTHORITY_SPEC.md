@@ -236,10 +236,11 @@ A registry entry MUST include:
 - `authority_id`
 - `authority_version`
 - `contract_hash`
+- `bundle_hash`
+- `bundle_path` or equivalent retrieval identifier
 - `publication_id`
 - `published_at`
 - `lifecycle_state`
-- a deterministic location or retrieval identifier for the canonical authority bundle
 
 ### 7.2 Lifecycle state
 

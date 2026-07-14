@@ -149,6 +149,7 @@ Inspect published authority:
 
 ```powershell
 governance-ledger list contracts
+governance-ledger resolve finance-policy@0.1.0
 governance-ledger show contracts/finance-policy-0.1.0.contract.json
 ```
 
@@ -199,6 +200,8 @@ governance-ledger authority-bundle `
   --output generated/finance-policy.authority-bundle.json
 ```
 
+`publish` now emits the canonical local authority bundle automatically. The `authority-bundle` command remains available for deterministic derivation and inspection workflows.
+
 ## Artifact Layout
 
 ```text
@@ -215,12 +218,28 @@ governance_ledger/semantics/
 Publication produces:
 
 - `contracts/<contract-id>-<version>.contract.json`
+- `contracts/<contract-id>-<version>.authority-bundle.json`
+- `contracts/<contract-id>-<version>.publication-receipt.json`
 - `contracts/<policy>.publication_manifest.json`
 - `contracts/index.json`
 - `reviews/<policy>.deployed.review.json`
 - `snapshots/<snapshot-id>.json`
 
 Publication artifacts use normalized POSIX-style paths such as `contracts/finance-policy-0.1.0.contract.json`, even on Windows.
+
+The registry entry for a published authority includes deterministic bundle identity:
+
+```json
+{
+  "authority_ref": "finance-policy@0.1.0",
+  "contract_hash": "sha256:...",
+  "bundle_path": "contracts/finance-policy-0.1.0.authority-bundle.json",
+  "bundle_hash": "sha256:...",
+  "lifecycle_state": "active"
+}
+```
+
+`governance-ledger resolve <authority-ref>` accepts only explicit versioned references such as `finance-policy@0.1.0` and resolves them to the canonical local authority bundle.
 
 Semantic artifacts are deterministic derivations. They may be exported under `generated/` for review or packaging, but they are not runtime evaluations and do not change execution outcomes.
 
@@ -300,9 +319,9 @@ Published authority contracts include lineage:
 }
 ```
 
-Publication manifests and registries carry source and report hashes so consumers can verify the authority chain without trusting local build state.
+Publication manifests, receipts, and registries carry source and report hashes so consumers can verify the authority chain without trusting local build state.
 
-Semantic artifacts also carry immutable input hashes. Authority bundles bind contract, manifest, preview, optional diff impact, and optional review packets into a single publishable governance object that Cloud can ingest, validate, store, replay, and operate without reconstructing governance context.
+Semantic artifacts also carry immutable input hashes. Authority bundles bind contract, manifest, preview, optional diff impact, and optional review packets into a single publishable governance object that Cloud can ingest, validate, store, replay, and operate without reconstructing governance context. Local publication receipts are deterministic Ledger evidence for the publication record; hosted Cloud receipts can preserve the same authority durably but are not interchangeable with local publication state.
 
 ## Schemas
 

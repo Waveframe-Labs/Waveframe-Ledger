@@ -16,8 +16,11 @@ from governance_ledger.schema_versions import PUBLICATION_MANIFEST_V1
 from governance_ledger.provenance import _utc_now
 from governance_ledger.registry import (
     build_contract_registry,
+    validate_registry_identity,
     validate_registry_hash,
 )
+from governance_ledger.semantics.preview import build_governance_impact_preview
+from governance_ledger.semantics.publication import build_authority_bundle, build_publication_receipt
 from governance_ledger.snapshot import create_snapshot
 from governance_ledger.validation import has_validation_errors, validate_compiler_policy
 
@@ -106,7 +109,12 @@ def publish_review_file(
         lineage=_publication_lineage(review),
     )
     contract_path = Path(contracts_dir) / _contract_filename(compiled_contract)
-    publication_id = _publication_id(published_at, contracts_dir=Path(contracts_dir))
+    manifest_path = Path(contracts_dir) / f"{policy_stem}.publication_manifest.json"
+    publication_id = _publication_id(
+        published_at,
+        contracts_dir=Path(contracts_dir),
+        manifest_path=manifest_path,
+    )
 
     compiled_review = attach_compiled_contract(
         review,
@@ -140,13 +148,30 @@ def publish_review_file(
         published_at=published_at,
         published_by=actor,
     )
-    manifest_path = Path(contracts_dir) / f"{policy_stem}.publication_manifest.json"
+    authority_ref = f"{compiled_contract['contract_id']}@{compiled_contract['contract_version']}"
+    authority_stem = f"{compiled_contract['contract_id']}-{compiled_contract['contract_version']}"
+    bundle_path = Path(contracts_dir) / f"{authority_stem}.authority-bundle.json"
+    receipt_path = Path(contracts_dir) / f"{authority_stem}.publication-receipt.json"
+
+    governance_impact_preview = build_governance_impact_preview(compiled_contract)
+    authority_bundle = build_authority_bundle(
+        authority_contract=compiled_contract,
+        publication_manifest=manifest,
+        governance_impact_preview=governance_impact_preview,
+    )
+    publication_receipt = build_publication_receipt(
+        authority_bundle=authority_bundle,
+        published_at=published_at,
+    )
+    bundle_hash = publication_receipt["bundle_hash"]
 
     registry_path = Path(contracts_dir) / "index.json"
     registry = _build_next_registry(
         registry_path,
         compiled_contract=compiled_contract,
         contract_path=contract_path,
+        bundle_path=bundle_path,
+        bundle_hash=bundle_hash,
         publication_id=publication_id,
         published_at=published_at,
         published_by=actor,
@@ -156,6 +181,7 @@ def publish_review_file(
     try:
         _validate_publication_payloads(
             compiled_contract=compiled_contract,
+            authority_bundle=authority_bundle,
             registry=registry,
             manifest=manifest,
         )
@@ -163,6 +189,8 @@ def publish_review_file(
         transaction.stage_json(deployed_review_path, deployed_review)
         transaction.stage_json(snapshot_path, snapshot)
         transaction.stage_json(manifest_path, manifest, immutable=True)
+        transaction.stage_json(bundle_path, authority_bundle, immutable=True)
+        transaction.stage_json(receipt_path, publication_receipt, immutable=True)
         transaction.stage_json(registry_path, registry)
         transaction.commit()
         validate_registry_hash(_read_json(registry_path))
@@ -172,9 +200,13 @@ def publish_review_file(
 
     return {
         "contract": str(contract_path),
+        "authority": authority_ref,
+        "authority_bundle": str(bundle_path),
+        "authority_bundle_hash": bundle_hash,
         "deployed_review": str(deployed_review_path),
         "manifest": str(manifest_path),
         "publication_id": publication_id,
+        "publication_receipt": str(receipt_path),
         "publication_status": "COMMITTED",
         "registry": str(registry_path),
         "registry_hash": registry["registry_hash"],
@@ -286,7 +318,16 @@ def _policy_stem_from_review_path(review_path: Path) -> str:
     return review_path.stem
 
 
-def _publication_id(published_at: str, *, contracts_dir: Path) -> str:
+def _publication_id(
+    published_at: str,
+    *,
+    contracts_dir: Path,
+    manifest_path: Path | None = None,
+) -> str:
+    if manifest_path is not None and manifest_path.exists():
+        existing = _read_json(manifest_path).get("publication_id")
+        if isinstance(existing, str) and existing:
+            return existing
     timestamp = "".join(character for character in published_at if character.isdigit())
     date = (timestamp[:8] or "00000000").ljust(8, "0")
     next_sequence = _next_publication_sequence(contracts_dir, date)
@@ -314,6 +355,8 @@ def _build_next_registry(
     *,
     compiled_contract: dict[str, Any],
     contract_path: Path,
+    bundle_path: Path,
+    bundle_hash: str,
     publication_id: str,
     published_at: str,
     published_by: str,
@@ -340,11 +383,20 @@ def _build_next_registry(
         "contract_ref": f"{contract_id}@{contract_version}",
         "contract_hash": contract_hash,
         "path": artifact_path(contract_path),
+        "bundle_path": artifact_path(bundle_path),
+        "bundle_hash": bundle_hash,
+        "lifecycle_state": "active",
         "publication_id": publication_id,
         "published_at": published_at,
         "published_by": published_by,
     }
     _attach_lineage_metadata(registry_entry, compiled_contract)
+    validate_registry_identity(existing_registry, registry_entry)
+    contracts = [
+        entry
+        for entry in contracts
+        if entry.get("authority_ref") != registry_entry["authority_ref"]
+    ]
     contracts.append(registry_entry)
     return build_contract_registry(contracts, generated_at=published_at)
 
@@ -359,6 +411,7 @@ def _attach_lineage_metadata(target: dict[str, Any], compiled_contract: dict[str
 def _validate_publication_payloads(
     *,
     compiled_contract: dict[str, Any],
+    authority_bundle: dict[str, Any],
     registry: dict[str, Any],
     manifest: dict[str, Any],
 ) -> None:
@@ -369,9 +422,13 @@ def _validate_publication_payloads(
         raise ValueError("Publication requires contract_id, contract_version, and contract_hash.")
     if not manifest.get("publication_id"):
         raise ValueError("Publication manifest missing publication_id.")
-
     normalized_hash = contract_hash if contract_hash.startswith("sha256:") else f"sha256:{contract_hash}"
     authority_ref = f"{contract_id}@{contract_version}"
+    if authority_bundle.get("authority_ref") != authority_ref:
+        raise ValueError(f"Authority bundle reference does not match compiled contract for {authority_ref}.")
+    if authority_bundle.get("contract_hash") != normalized_hash:
+        raise ValueError(f"Authority bundle hash entry does not match compiled contract for {authority_ref}.")
+
     validate_registry_hash(registry)
     matches = [
         entry
@@ -382,6 +439,10 @@ def _validate_publication_payloads(
         raise ValueError(f"Registry must contain exactly one entry for {authority_ref}.")
     if matches[0].get("contract_hash") != normalized_hash:
         raise ValueError(f"Registry hash entry does not match compiled contract for {authority_ref}.")
+    if matches[0].get("bundle_path") is None or matches[0].get("bundle_hash") is None:
+        raise ValueError(f"Registry entry must identify the canonical authority bundle for {authority_ref}.")
+    if matches[0].get("lifecycle_state") not in {"active", "superseded", "revoked"}:
+        raise ValueError(f"Registry lifecycle_state is invalid for {authority_ref}.")
 
 
 class _PublicationTransaction:
