@@ -1,0 +1,70 @@
+{
+  "authority_ref": "finance-policy@1.0.0",
+  "bundle_hash": "sha256:db63dd6d796f4f44f861427c1aa81e3907c54893edca64798b1602c41485c9d6",
+  "compatibility_posture": {
+    "artifacts": {
+      "authority_contract": "authority_contract.v1",
+      "authority_diff_impact": null,
+      "compiled_authority_contract": null,
+      "governance_impact_preview": "governance_impact_preview.v1",
+      "governance_review_packets": [],
+      "publication_manifest": "publication_manifest.v1",
+      "semantic_commit_bundle": null
+    },
+    "compatibility_mode": "additive_v1",
+    "compatible": true,
+    "expected": {
+      "authority_diff_impact": null,
+      "compiled_authority_contract": null,
+      "governance_impact_preview": "governance_impact_preview.v1",
+      "governance_review_packets": [],
+      "publication_manifest": "publication_manifest.v1",
+      "semantic_commit_bundle": null
+    }
+  },
+  "compiled_contract_hash": null,
+  "contract_hash": "sha256:3bd442fc699ef42643e0b22c42935f5a14e037473f05a1bc20757c0f565756f9",
+  "immutable_inputs": {
+    "authority_hash": "sha256:3bd442fc699ef42643e0b22c42935f5a14e037473f05a1bc20757c0f565756f9",
+    "bundle_hash": "sha256:db63dd6d796f4f44f861427c1aa81e3907c54893edca64798b1602c41485c9d6",
+    "compiled_contract_hash": null,
+    "diff_hash": null,
+    "manifest_hash": "sha256:dd5920b8f58e5ab3c804c547e609bd53b98477041bf772906868ad87662dda4a",
+    "preview_hash": "sha256:95f2ec01ee837f82ff9b103ab82f18a4cb3bc23f3a48c1e7416fda88037b79ce",
+    "semantic_commit_hash": null
+  },
+  "lineage_continuity": {
+    "compilation_report_hash_present": true,
+    "lineage_complete": true,
+    "source_hash_present": true
+  },
+  "manifest_hash": "sha256:dd5920b8f58e5ab3c804c547e609bd53b98477041bf772906868ad87662dda4a",
+  "non_goals": [
+    "does_not_deploy_authority",
+    "does_not_approve_authority",
+    "does_not_reject_publication",
+    "does_not_call_guard",
+    "does_not_call_cloud",
+    "does_not_evaluate_admissibility"
+  ],
+  "publication_id": "pub_20260717_0001",
+  "publication_notes": [],
+  "published_at": "2026-07-17T16:00:00+00:00",
+  "published_by": "waveframe-governance",
+  "readiness_confirmations": {
+    "continuity_posture_reviewed": false,
+    "lifecycle_implications_acknowledged": false,
+    "lineage_validated": false,
+    "replay_implications_reviewed": false,
+    "semantic_diagnostics_reviewed": false
+  },
+  "receipt_hash": "sha256:58b9f788d4bcf51bcafcd620356e0ec645ba5add88d84bd81eae87b4ad611f91",
+  "receipt_id": "receipt_82c55c24d25a",
+  "review_packet_hashes": [],
+  "schema_version": "publication_receipt.v1",
+  "semantic_artifact_hashes": {
+    "governance_impact_preview.v1": "sha256:95f2ec01ee837f82ff9b103ab82f18a4cb3bc23f3a48c1e7416fda88037b79ce"
+  },
+  "semantic_commit_hash": null,
+  "semantic_compatibility_warnings": []
+}
