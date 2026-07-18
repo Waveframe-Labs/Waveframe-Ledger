@@ -8,6 +8,7 @@ import shutil
 from pathlib import Path
 from typing import Any
 
+from governance_ledger.authority_contract import with_authority_identity
 from governance_ledger.contract_linkage import attach_compiled_contract
 from governance_ledger.deployment import attach_deployment
 from governance_ledger.lifecycle import transition_review_status
@@ -229,43 +230,14 @@ def _compile_policy(
         compiler_input["lineage"] = lineage
     compiled_contract = compile_policy(compiler_input)
     if lineage is not None:
-        compiled_contract = _with_authority_lineage(compiled_contract, lineage)
+        compiled_contract = with_authority_identity(
+            compiled_contract,
+            lineage,
+            schema_version=COMPILED_AUTHORITY_CONTRACT_V1,
+        )
     if not compiled_contract.get("contract_id") or not compiled_contract.get("contract_version"):
         raise ValueError("Canonical compiler output missing contract identity fields.")
     return compiled_contract
-
-
-def _with_authority_lineage(
-    compiled_contract: dict[str, Any],
-    lineage: dict[str, Any],
-) -> dict[str, Any]:
-    contract = dict(compiled_contract)
-    schema_version = contract.get("schema_version")
-    if schema_version not in {None, COMPILED_AUTHORITY_CONTRACT_V1}:
-        raise ValueError(
-            "Canonical compiler output has unsupported schema_version: "
-            f"{schema_version}"
-        )
-    changed = False
-    if schema_version is None:
-        contract["schema_version"] = COMPILED_AUTHORITY_CONTRACT_V1
-        changed = True
-    if contract.get("lineage") != lineage:
-        contract["lineage"] = dict(lineage)
-        changed = True
-    if changed:
-        contract["contract_hash"] = _compute_contract_hash(contract)
-    return contract
-
-
-def _compute_contract_hash(compiled_contract: dict[str, Any]) -> str:
-    canonical_contract = {
-        key: value
-        for key, value in compiled_contract.items()
-        if key != "contract_hash"
-    }
-    canonical = json.dumps(canonical_contract, sort_keys=True, separators=(",", ":"))
-    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
 def _publication_lineage(review: dict[str, Any]) -> dict[str, Any]:

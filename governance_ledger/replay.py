@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 import copy
-import hashlib
-import json
 from typing import Any
 
+from governance_ledger.authority_contract import with_authority_identity
 from governance_ledger.diagnostics import build_diagnostic
 from governance_ledger.extract import extract_constraints
 from governance_ledger.provenance import source_governance_identity
@@ -19,7 +18,11 @@ def replay_governance_compilation(
 ) -> dict[str, Any]:
     policy = extract_constraints(source_text)
     review = build_review_report(source_text, policy)
-    compiled_contract = _compile_policy(policy, lineage=_expected_lineage(expected_contract))
+    compiled_contract = _compile_policy(
+        policy,
+        lineage=_expected_lineage(expected_contract),
+        schema_version=_expected_schema_version(expected_contract),
+    )
     report = review["compilation_report"]
     source_identity = source_governance_identity(source_text)
     diagnostics: list[dict[str, Any]] = []
@@ -158,7 +161,19 @@ def _expected_lineage(expected_contract: dict[str, Any] | None) -> dict[str, Any
     return copy.deepcopy(lineage) if isinstance(lineage, dict) else None
 
 
-def _compile_policy(policy: dict[str, Any], *, lineage: dict[str, Any] | None = None) -> dict[str, Any]:
+def _expected_schema_version(expected_contract: dict[str, Any] | None) -> str | None:
+    if expected_contract is None:
+        return None
+    schema_version = expected_contract.get("schema_version")
+    return schema_version if isinstance(schema_version, str) else None
+
+
+def _compile_policy(
+    policy: dict[str, Any],
+    *,
+    lineage: dict[str, Any] | None = None,
+    schema_version: str | None = None,
+) -> dict[str, Any]:
     from compiler.compile_policy import compile_policy
 
     compiler_input = copy.deepcopy(policy)
@@ -166,29 +181,12 @@ def _compile_policy(policy: dict[str, Any], *, lineage: dict[str, Any] | None = 
         compiler_input["lineage"] = lineage
     compiled_contract = compile_policy(compiler_input)
     if lineage is not None:
-        compiled_contract = _with_authority_lineage(compiled_contract, lineage)
+        compiled_contract = with_authority_identity(
+            compiled_contract,
+            lineage,
+            schema_version=schema_version,
+        )
     return compiled_contract
-
-
-def _with_authority_lineage(
-    compiled_contract: dict[str, Any],
-    lineage: dict[str, Any],
-) -> dict[str, Any]:
-    contract = copy.deepcopy(compiled_contract)
-    if contract.get("lineage") != lineage:
-        contract["lineage"] = copy.deepcopy(lineage)
-        contract["contract_hash"] = _compute_contract_hash(contract)
-    return contract
-
-
-def _compute_contract_hash(compiled_contract: dict[str, Any]) -> str:
-    canonical_contract = {
-        key: value
-        for key, value in compiled_contract.items()
-        if key != "contract_hash"
-    }
-    canonical = json.dumps(canonical_contract, sort_keys=True, separators=(",", ":"))
-    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 def _authority_ref(authority_contract: dict[str, Any]) -> str | None:
     contract_id = authority_contract.get("contract_id")
