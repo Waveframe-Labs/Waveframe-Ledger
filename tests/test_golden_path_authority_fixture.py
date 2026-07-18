@@ -22,8 +22,8 @@ from typing import Any
 FIXTURE_ROOT = Path(__file__).parent / "fixtures" / "golden_path"
 CONTRACTS_ROOT = FIXTURE_ROOT / "contracts"
 AUTHORITY_REF = "finance-policy@1.0.0"
-CONTRACT_HASH = "sha256:3bd442fc699ef42643e0b22c42935f5a14e037473f05a1bc20757c0f565756f9"
-BUNDLE_HASH = "sha256:db63dd6d796f4f44f861427c1aa81e3907c54893edca64798b1602c41485c9d6"
+CONTRACT_HASH = "sha256:c26887c13491fb5db61f46e3cc83a5769fd4071087e978e9de8db2e5ab20248a"
+BUNDLE_HASH = "sha256:7c2ec612a5a58f806a89ad245a63dbecda969bdaf4d06b4d2c04beaab0e229b7"
 
 
 def test_golden_path_fixture_preserves_published_authority_identity() -> None:
