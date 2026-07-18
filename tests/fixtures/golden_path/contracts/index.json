@@ -1,0 +1,41 @@
+{
+  "contracts": [
+    {
+      "authority_ref": "finance-policy@1.0.0",
+      "bundle_hash": "sha256:db63dd6d796f4f44f861427c1aa81e3907c54893edca64798b1602c41485c9d6",
+      "bundle_path": "contracts/finance-policy-1.0.0.authority-bundle.json",
+      "compilation_report_hash": "sha256:5ffb7ae6eea3a350f61ed5fcf52c357fb073446d6e13df9d935a04c1c47bd117",
+      "contract_hash": "sha256:3bd442fc699ef42643e0b22c42935f5a14e037473f05a1bc20757c0f565756f9",
+      "contract_id": "finance-policy",
+      "contract_ref": "finance-policy@1.0.0",
+      "contract_version": "1.0.0",
+      "lifecycle_state": "active",
+      "path": "contracts/finance-policy-1.0.0.contract.json",
+      "publication_id": "pub_20260717_0001",
+      "published_at": "2026-07-17T16:00:00+00:00",
+      "published_by": "waveframe-governance",
+      "source_hash": "sha256:cb6740ea72ac0687d6642e19058e33ecba203424c5084765cf0cea78e41d48c0"
+    }
+  ],
+  "generated_at": "2026-07-17T16:00:00+00:00",
+  "latest": {
+    "finance-policy": {
+      "authority_ref": "finance-policy@1.0.0",
+      "bundle_hash": "sha256:db63dd6d796f4f44f861427c1aa81e3907c54893edca64798b1602c41485c9d6",
+      "bundle_path": "contracts/finance-policy-1.0.0.authority-bundle.json",
+      "compilation_report_hash": "sha256:5ffb7ae6eea3a350f61ed5fcf52c357fb073446d6e13df9d935a04c1c47bd117",
+      "contract_hash": "sha256:3bd442fc699ef42643e0b22c42935f5a14e037473f05a1bc20757c0f565756f9",
+      "contract_id": "finance-policy",
+      "contract_ref": "finance-policy@1.0.0",
+      "contract_version": "1.0.0",
+      "lifecycle_state": "active",
+      "path": "contracts/finance-policy-1.0.0.contract.json",
+      "publication_id": "pub_20260717_0001",
+      "published_at": "2026-07-17T16:00:00+00:00",
+      "published_by": "waveframe-governance",
+      "source_hash": "sha256:cb6740ea72ac0687d6642e19058e33ecba203424c5084765cf0cea78e41d48c0"
+    }
+  },
+  "registry_hash": "sha256:58ded64bd005cf63fce29ca75b8bb2d6e2cd92da60ddc220ce3bd564bc449f64",
+  "schema_version": "contract_registry.v1"
+}
