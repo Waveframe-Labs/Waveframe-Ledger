@@ -49,6 +49,7 @@ def test_publish_commits_authority_transaction_with_registry_integrity(tmp_path)
     assert manifest["schema_version"] == "publication_manifest.v1"
     assert manifest["publication_id"] == publication["publication_id"]
     assert deployed_review["publication_id"] == publication["publication_id"]
+    assert contract["schema_version"] == "compiled_authority_contract.v1"
     assert contract["lineage"]["schema_version"] == "governance_authority_lineage.v1"
     assert contract["lineage"]["source_hash"] == deployed_review["source_hash"]
     assert contract["lineage"]["compilation_report_hash"] == deployed_review["compilation_report"]["report_hash"]
@@ -98,6 +99,7 @@ def test_publish_stamps_lineage_when_installed_compiler_drops_unknown_fields(tmp
     registry = _read_json(Path(publication["registry"]))
     deployed_review = _read_json(Path(publication["deployed_review"]))
 
+    assert contract["schema_version"] == "compiled_authority_contract.v1"
     assert contract["lineage"]["source_hash"] == deployed_review["source_hash"]
     assert contract["lineage"]["compilation_report_hash"] == deployed_review["compilation_report"]["report_hash"]
     assert contract["contract_hash"] != "compiler-hash-without-lineage"
