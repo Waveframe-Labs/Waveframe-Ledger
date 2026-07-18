@@ -5,4 +5,4 @@ AUTHORITY_DIFF_IMPACT_V1 = "authority_diff_impact.v1"
 GOVERNANCE_REVIEW_PACKET_V1 = "governance_review_packet.v1"
 AUTHORITY_BUNDLE_V1 = "authority_bundle.v1"
 PUBLICATION_RECEIPT_V1 = "publication_receipt.v1"
-
+COMPILED_AUTHORITY_CONTRACT_V1 = "compiled_authority_contract.v1"

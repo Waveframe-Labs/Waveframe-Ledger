@@ -111,6 +111,7 @@ def test_replay_reproduces_published_authority_lineage(tmp_path):
     )
 
     assert replay["replay_verified"] is True
+    assert replay["compiled_contract"]["schema_version"] == "compiled_authority_contract.v1"
     assert replay["compiled_contract"]["lineage"]["source_hash"] == review["source_hash"]
     assert replay["compiled_contract"]["contract_hash"] == contract["contract_hash"]
 
