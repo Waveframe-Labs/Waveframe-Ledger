@@ -12,7 +12,10 @@ from governance_ledger.contract_linkage import attach_compiled_contract
 from governance_ledger.deployment import attach_deployment
 from governance_ledger.lifecycle import transition_review_status
 from governance_ledger.paths import artifact_path
-from governance_ledger.schema_versions import PUBLICATION_MANIFEST_V1
+from governance_ledger.schema_versions import (
+    COMPILED_AUTHORITY_CONTRACT_V1,
+    PUBLICATION_MANIFEST_V1,
+)
 from governance_ledger.provenance import _utc_now
 from governance_ledger.registry import (
     build_contract_registry,
@@ -237,8 +240,20 @@ def _with_authority_lineage(
     lineage: dict[str, Any],
 ) -> dict[str, Any]:
     contract = dict(compiled_contract)
+    schema_version = contract.get("schema_version")
+    if schema_version not in {None, COMPILED_AUTHORITY_CONTRACT_V1}:
+        raise ValueError(
+            "Canonical compiler output has unsupported schema_version: "
+            f"{schema_version}"
+        )
+    changed = False
+    if schema_version is None:
+        contract["schema_version"] = COMPILED_AUTHORITY_CONTRACT_V1
+        changed = True
     if contract.get("lineage") != lineage:
         contract["lineage"] = dict(lineage)
+        changed = True
+    if changed:
         contract["contract_hash"] = _compute_contract_hash(contract)
     return contract
 
