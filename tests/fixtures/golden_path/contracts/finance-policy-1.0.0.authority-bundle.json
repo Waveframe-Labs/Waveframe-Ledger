@@ -16,7 +16,7 @@
         "manager"
       ]
     },
-    "contract_hash": "3bd442fc699ef42643e0b22c42935f5a14e037473f05a1bc20757c0f565756f9",
+    "contract_hash": "c26887c13491fb5db61f46e3cc83a5769fd4071087e978e9de8db2e5ab20248a",
     "contract_id": "finance-policy",
     "contract_version": "1.0.0",
     "invariants": {},
@@ -26,6 +26,7 @@
       "schema_version": "governance_authority_lineage.v1",
       "source_hash": "sha256:cb6740ea72ac0687d6642e19058e33ecba203424c5084765cf0cea78e41d48c0"
     },
+    "schema_version": "compiled_authority_contract.v1",
     "stage_requirements": {}
   },
   "authority_diff_impact": null,
@@ -35,10 +36,10 @@
   "continuity_implications": [
     "Lifecycle continuity follows the authority contract without additional stage constraints."
   ],
-  "contract_hash": "sha256:3bd442fc699ef42643e0b22c42935f5a14e037473f05a1bc20757c0f565756f9",
+  "contract_hash": "sha256:c26887c13491fb5db61f46e3cc83a5769fd4071087e978e9de8db2e5ab20248a",
   "governance_impact_preview": {
     "authority_ref": "finance-policy@1.0.0",
-    "contract_hash": "3bd442fc699ef42643e0b22c42935f5a14e037473f05a1bc20757c0f565756f9",
+    "contract_hash": "c26887c13491fb5db61f46e3cc83a5769fd4071087e978e9de8db2e5ab20248a",
     "contract_id": "finance-policy",
     "contract_version": "1.0.0",
     "enforcement_behavior": [
@@ -70,11 +71,11 @@
   },
   "governance_review_packets": [],
   "immutable_inputs": {
-    "authority_hash": "sha256:3bd442fc699ef42643e0b22c42935f5a14e037473f05a1bc20757c0f565756f9",
+    "authority_hash": "sha256:c26887c13491fb5db61f46e3cc83a5769fd4071087e978e9de8db2e5ab20248a",
     "compiled_contract_hash": null,
     "diff_hash": null,
-    "manifest_hash": "sha256:dd5920b8f58e5ab3c804c547e609bd53b98477041bf772906868ad87662dda4a",
-    "preview_hash": "sha256:95f2ec01ee837f82ff9b103ab82f18a4cb3bc23f3a48c1e7416fda88037b79ce",
+    "manifest_hash": "sha256:fdc5650c827575cb1dc0689eacd48147680713f28965243aa621c837585a568b",
+    "preview_hash": "sha256:8e9555cb307bbb562722f0b1330aa22a7c009804833319ee7a922002ec4ed04f",
     "review_packet_hashes": [],
     "semantic_commit_hash": null
   },
@@ -88,7 +89,7 @@
     "compilation_report_hash": "sha256:5ffb7ae6eea3a350f61ed5fcf52c357fb073446d6e13df9d935a04c1c47bd117",
     "manifest_contract": {
       "compilation_report_hash": "sha256:5ffb7ae6eea3a350f61ed5fcf52c357fb073446d6e13df9d935a04c1c47bd117",
-      "contract_hash": "sha256:3bd442fc699ef42643e0b22c42935f5a14e037473f05a1bc20757c0f565756f9",
+      "contract_hash": "sha256:c26887c13491fb5db61f46e3cc83a5769fd4071087e978e9de8db2e5ab20248a",
       "contract_id": "finance-policy",
       "contract_version": "1.0.0",
       "path": "contracts/finance-policy-1.0.0.contract.json",
@@ -120,7 +121,7 @@
     "contracts": [
       {
         "compilation_report_hash": "sha256:5ffb7ae6eea3a350f61ed5fcf52c357fb073446d6e13df9d935a04c1c47bd117",
-        "contract_hash": "sha256:3bd442fc699ef42643e0b22c42935f5a14e037473f05a1bc20757c0f565756f9",
+        "contract_hash": "sha256:c26887c13491fb5db61f46e3cc83a5769fd4071087e978e9de8db2e5ab20248a",
         "contract_id": "finance-policy",
         "contract_version": "1.0.0",
         "path": "contracts/finance-policy-1.0.0.contract.json",
@@ -138,7 +139,7 @@
     "schema_version": "publication_manifest.v1",
     "snapshots": [
       {
-        "path": "snapshots/snapshot-fbc9f8e97a57.json"
+        "path": "snapshots/snapshot-d7efe4fe0cb7.json"
       }
     ]
   },
@@ -146,7 +147,7 @@
   "review_packets": [],
   "schema_compatibility": {
     "artifacts": {
-      "authority_contract": "authority_contract.v1",
+      "authority_contract": "compiled_authority_contract.v1",
       "authority_diff_impact": null,
       "compiled_authority_contract": null,
       "governance_impact_preview": "governance_impact_preview.v1",
@@ -168,7 +169,7 @@
   "schema_version": "authority_bundle.v1",
   "semantic_artifacts": [
     {
-      "artifact_hash": "sha256:95f2ec01ee837f82ff9b103ab82f18a4cb3bc23f3a48c1e7416fda88037b79ce",
+      "artifact_hash": "sha256:8e9555cb307bbb562722f0b1330aa22a7c009804833319ee7a922002ec4ed04f",
       "artifact_type": "governance_impact_preview.v1"
     }
   ],
