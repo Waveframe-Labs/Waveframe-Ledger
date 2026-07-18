@@ -2,10 +2,10 @@
   "contracts": [
     {
       "authority_ref": "finance-policy@1.0.0",
-      "bundle_hash": "sha256:db63dd6d796f4f44f861427c1aa81e3907c54893edca64798b1602c41485c9d6",
+      "bundle_hash": "sha256:7c2ec612a5a58f806a89ad245a63dbecda969bdaf4d06b4d2c04beaab0e229b7",
       "bundle_path": "contracts/finance-policy-1.0.0.authority-bundle.json",
       "compilation_report_hash": "sha256:5ffb7ae6eea3a350f61ed5fcf52c357fb073446d6e13df9d935a04c1c47bd117",
-      "contract_hash": "sha256:3bd442fc699ef42643e0b22c42935f5a14e037473f05a1bc20757c0f565756f9",
+      "contract_hash": "sha256:c26887c13491fb5db61f46e3cc83a5769fd4071087e978e9de8db2e5ab20248a",
       "contract_id": "finance-policy",
       "contract_ref": "finance-policy@1.0.0",
       "contract_version": "1.0.0",
@@ -21,10 +21,10 @@
   "latest": {
     "finance-policy": {
       "authority_ref": "finance-policy@1.0.0",
-      "bundle_hash": "sha256:db63dd6d796f4f44f861427c1aa81e3907c54893edca64798b1602c41485c9d6",
+      "bundle_hash": "sha256:7c2ec612a5a58f806a89ad245a63dbecda969bdaf4d06b4d2c04beaab0e229b7",
       "bundle_path": "contracts/finance-policy-1.0.0.authority-bundle.json",
       "compilation_report_hash": "sha256:5ffb7ae6eea3a350f61ed5fcf52c357fb073446d6e13df9d935a04c1c47bd117",
-      "contract_hash": "sha256:3bd442fc699ef42643e0b22c42935f5a14e037473f05a1bc20757c0f565756f9",
+      "contract_hash": "sha256:c26887c13491fb5db61f46e3cc83a5769fd4071087e978e9de8db2e5ab20248a",
       "contract_id": "finance-policy",
       "contract_ref": "finance-policy@1.0.0",
       "contract_version": "1.0.0",
@@ -36,6 +36,6 @@
       "source_hash": "sha256:cb6740ea72ac0687d6642e19058e33ecba203424c5084765cf0cea78e41d48c0"
     }
   },
-  "registry_hash": "sha256:58ded64bd005cf63fce29ca75b8bb2d6e2cd92da60ddc220ce3bd564bc449f64",
+  "registry_hash": "sha256:794dba5cf275a0cb52fb73cdfbdcdd0adb0b6896f8ea10017368969736a53c12",
   "schema_version": "contract_registry.v1"
 }
