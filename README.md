@@ -125,9 +125,9 @@ pip install "governance-ledger[guard]"
 ```
 
 The `guard` extra selects `waveframe-guard==0.15.0`, matching the released Guard
-compatibility metadata that tests Guard 0.15.0 with Ledger 0.5.0. Applications such
-as Cloud can instead inject a compatible evaluator without installing Guard in
-Ledger's environment:
+compatibility metadata that tests Guard 0.15.0 with Ledger 0.5.0; the Ledger v0.6.0
+release matrix revalidates that same Guard version. Applications such as Cloud can
+instead inject a compatible evaluator without installing Guard in Ledger's environment:
 
 ```python
 from governance_ledger.replay import replay_admissibility
