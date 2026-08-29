@@ -6,7 +6,7 @@
 
 Governance-Ledger turns governed source text and authority contracts into deterministic, reviewable, publishable governance authority. It is best understood as **Governance Compiler + Semantic Derivation Infrastructure**.
 
-Ledger is not an AI policy interpreter, workflow automation layer, orchestration engine, cloud operations layer, or runtime execution system. It does not guess meaning from policy language. It normalizes supported governance statements, emits semantic diagnostics for unsafe or ambiguous structure, derives deterministic governance meaning from structured authority artifacts, gates publication, preserves lineage, and makes governance authority replayable.
+Ledger is not an AI or general-purpose policy interpreter, workflow automation layer, orchestration engine, cloud operations layer, or runtime execution system. It does not guess meaning from policy language. It recognizes only a published deterministic sentence grammar, preserves everything else as informational, unsupported, or requiring resolution, derives deterministic governance meaning, gates publication, preserves lineage, and makes governance authority replayable.
 
 ## What It Provides
 
@@ -114,7 +114,7 @@ pip install governance-ledger
 
 Ledger relies on installed package contracts for integration behavior:
 
-- `cricore-contract-compiler>=0.3.0`
+- `cricore-contract-compiler>=0.4.0` (the first released compiler contract with exact/prefix target rules)
 
 The base install does not install Waveframe Guard. Install the tested optional
 admissibility integration explicitly when Ledger should delegate execution replay
@@ -146,6 +146,58 @@ and verifies authority evidence; Guard evaluates runtime admissibility. Enforcem
 logic remains outside Ledger.
 
 Local checkout path resolution is not part of production behavior.
+
+## Plain Customer-Policy Service
+
+Cloud and other callers can use the stable, pure service boundary without a repository checkout, filesystem state, subprocess, Cloud import, or Guard import:
+
+```python
+from governance_ledger import (
+    finalize_customer_policy_authority,
+    interpret_customer_policy,
+)
+
+draft = interpret_customer_policy(
+    exact_policy_bytes,
+    source_policy_id="repository-change-policy",
+    source_revision="rev-17",
+    authority_id="repository-change-authority",
+    authority_version="6.0.0",
+)
+
+publication = finalize_customer_policy_authority(
+    draft,
+    resolutions=[],
+    approval_id="approval-001",
+    approved_by="policy-owner@example.com",
+    approved_at="2026-08-29T13:58:00Z",
+    committed_by="policy-owner@example.com",
+    committed_at="2026-08-29T13:59:00Z",
+    publication_id="publication-001",
+    published_by="publisher@example.com",
+    published_at="2026-08-29T14:00:00Z",
+)
+```
+
+`interpret_customer_policy_text(...)` is a convenience wrapper that performs only `text.encode("utf-8")`. Neither entry point normalizes newlines, Unicode, whitespace, or punctuation. Finalization reconstructs the draft from its embedded exact bytes and identities, so caller-edited classifications, rules, mappings, spans, or hashes are rejected.
+
+The v0.6 grammar recognizes only these case-sensitive, period-terminated forms:
+
+- `<subject> may be made only by <plural-role>.` — required actor role; the plural role must end in `s`, which is removed before lower-case hyphenation.
+- `Agents may modify <exact-path>.`
+- `Agents must not modify <exact-path>.`
+- `Agents may modify files under <prefix-path/>.`
+- `Agents must not modify files under <prefix-path/>.`
+- `<Transfers|Purchases|Payments|Invoices|Requests> <above|over|at least|below|under> $<number> require <role> approval.`
+- `Requester and approver must be separate.` (an initial `The ` is also accepted).
+
+Exact and prefix targets must be repository-relative forward-slash paths. Absolute, drive-qualified, traversal, backslash, control-character, unsafe empty-segment, and malformed trailing-slash targets fail closed. Duplicate and overlapping allow/deny meanings become bounded ambiguities; Ledger never invents precedence.
+
+Normative text outside this exact grammar is `unsupported`. Non-normative text is `informational`. Normative statements containing terms such as `normally`, `appropriate`, `unless necessary`, or other documented ambiguous qualifiers are `requires_resolution`. When removing exactly one recognized modifier produces exactly one valid grammar rule, Ledger offers that specific enforcement consequence alongside `unsupported` and `informational`; otherwise only the two non-enforcement choices are available. A resolution can select only an interpreter-produced option. Unsupported text remains visible in the approved interpretation.
+
+Statement classification is complete once every source statement has one classification; interpretation remains incomplete while any ambiguity is unresolved. A draft is ready for finalization only when no ambiguity remains and at least one enforceable rule is present. Informational/unsupported-only drafts remain inspectable but cannot publish, and Ledger invents neither allow-all nor implicit deny-all semantics.
+
+Finalization requires explicit resolution, approval, commit, and publication identities and canonical UTC timestamps. Chronology is enforced as every `resolved_at` ≤ `approved_at` ≤ `committed_at` ≤ `published_at`, with equality allowed and supplied resolution order preserved. Required actor roles, conditional approval thresholds, target rules, and separation-of-duties constraints remain distinct when projected into the installed CRI-CORE Contract Compiler. Finalization then returns the validated interpretation, resolution set, approval record, semantic commit, compiler input, canonical compiled contract, impact preview, manifest, provenance-complete `authority_bundle.v1`, and `publication_receipt.v1`. Source revision and authority version are independent and are hash-bound by `publishes_as`.
 
 ## Command Workflow
 

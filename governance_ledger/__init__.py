@@ -2,6 +2,11 @@
 
 from governance_ledger.checks import check_validation_directory, format_check_summary
 from governance_ledger.contract_linkage import attach_compiled_contract
+from governance_ledger.customer_policy import (
+    finalize_customer_policy_authority,
+    interpret_customer_policy,
+    interpret_customer_policy_text,
+)
 from governance_ledger.deployment import attach_deployment
 from governance_ledger.diff import diff_reviews
 from governance_ledger.extract import extract_constraints
@@ -44,6 +49,9 @@ __all__ = [
     "format_resolution_summary",
     "format_run_summary",
     "format_check_summary",
+    "finalize_customer_policy_authority",
+    "interpret_customer_policy",
+    "interpret_customer_policy_text",
     "list_contracts",
     "load_contract_registry",
     "publish_review_file",

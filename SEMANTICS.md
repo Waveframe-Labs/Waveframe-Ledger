@@ -55,6 +55,10 @@ Guard owns governance admissibility:
 - execution-state evaluation
 - enforcement traces
 
+The plain customer-policy boundary is also Ledger-owned but intentionally narrow. `interpret_customer_policy(...)` is a pure deterministic recognizer for the published v0.6 sentence grammar, not general natural-language interpretation. `finalize_customer_policy_authority(...)` reconstructs and validates that interpretation, applies only bounded interpreter-produced resolution options, binds explicit human approval, and sends canonical structured input to the installed contract compiler. Cloud may orchestrate these calls and persist their returned artifacts, but it does not redefine their meaning.
+
+Customer-policy publication requires at least one confirmed enforceable rule. Required acting roles, conditional approval thresholds, target allow/deny rules, and separation-of-duties constraints are separate semantic categories. Ledger validates their equivalence across final normalized meaning, semantic commit, compiler input, and compiled contract before returning publication-ready artifacts; an acting role is never projected as an approver role.
+
 ## Canonical Artifacts
 
 `governance_impact_preview.v1`
@@ -76,6 +80,8 @@ Builds the publishable governance object from authority contract, publication ma
 ## Deterministic Guarantees
 
 Semantic artifacts are stable for identical structured inputs.
+
+Plain-policy drafts are stable for identical exact bytes and identities. Final semantic commits, compiled contracts, authority bundles, and receipts are stable for identical complete interpretation, resolution, approval, commit, and publication inputs. Exact bytes remain distinct across LF/CRLF, trailing-newline, Unicode normalization-form, whitespace, and punctuation differences.
 
 They are derived only from supplied artifact fields. They must not:
 
