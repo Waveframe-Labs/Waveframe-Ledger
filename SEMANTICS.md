@@ -57,6 +57,8 @@ Guard owns governance admissibility:
 
 The plain customer-policy boundary is also Ledger-owned but intentionally narrow. `interpret_customer_policy(...)` is a pure deterministic recognizer for the published v0.6 sentence grammar, not general natural-language interpretation. `finalize_customer_policy_authority(...)` reconstructs and validates that interpretation, applies only bounded interpreter-produced resolution options, binds explicit human approval, and sends canonical structured input to the installed contract compiler. Cloud may orchestrate these calls and persist their returned artifacts, but it does not redefine their meaning.
 
+Customer-policy publication requires at least one confirmed enforceable rule. Required acting roles, conditional approval thresholds, target allow/deny rules, and separation-of-duties constraints are separate semantic categories. Ledger validates their equivalence across final normalized meaning, semantic commit, compiler input, and compiled contract before returning publication-ready artifacts; an acting role is never projected as an approver role.
+
 ## Canonical Artifacts
 
 `governance_impact_preview.v1`

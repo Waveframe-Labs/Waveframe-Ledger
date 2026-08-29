@@ -15,6 +15,7 @@
 - Waveframe Guard is no longer a mandatory Ledger dependency; core imports and workflows remain Guard-independent, while omitted evaluator/integration failures use an actionable Ledger-owned exception.
 - Legacy `authority_bundle.v1` artifacts remain readable and are classified as `legacy_provenance_incomplete`; missing historical lineage is never inferred.
 - The minimum CRI-CORE Contract Compiler dependency is now `0.4.0`, whose released contract supports canonical exact and prefix target requirements.
+- Customer-policy finalization now rejects zero-rule authority, separates acting roles from approval semantics, enforces resolution-to-publication chronology, offers safe bounded enforcement clarification, and reports interpretation readiness without overclaiming unresolved drafts.
 
 ## 0.5.0 - 2026-07-13
 

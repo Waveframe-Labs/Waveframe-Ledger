@@ -116,7 +116,7 @@ def interpret_customer_policy(
         }
         statements.append(statement)
         if classification == "requires_resolution":
-            ambiguities.append(_lexical_ambiguity(statement_id, text))
+            ambiguities.append(_lexical_ambiguity(statement_id, text, proposed))
 
     _require_unique_rules(rules)
     conflicts = _conflict_components(statements, rule_by_statement)
@@ -133,6 +133,10 @@ def interpret_customer_policy(
     if len(mappings) > MAX_STATEMENT_MAPPINGS:
         raise ValueError(f"policy exceeds maximum of {MAX_STATEMENT_MAPPINGS} statement mappings")
 
+    unresolved_ambiguity_count = len(ambiguities)
+    enforceable_rule_count = len(
+        {rule_id for mapping in mappings for rule_id in mapping["rule_ids"]}
+    )
     draft: dict[str, Any] = {
         "schema_version": INTERPRETATION_DRAFT_V1,
         "source_policy": {
@@ -158,11 +162,16 @@ def interpret_customer_policy(
         "statement_rule_mappings": mappings,
         "ambiguities": ambiguities,
         "status": {
-            "interpretation_complete": True,
+            "statement_classification_complete": True,
+            "interpretation_complete": unresolved_ambiguity_count == 0,
             "requires_resolution_count": sum(
                 statement["classification"] == "requires_resolution" for statement in statements
             ),
-            "ready_for_finalization": not ambiguities,
+            "unresolved_ambiguity_count": unresolved_ambiguity_count,
+            "enforceable_rule_count": enforceable_rule_count,
+            "ready_for_finalization": (
+                unresolved_ambiguity_count == 0 and enforceable_rule_count > 0
+            ),
             "publication_ready": False,
         },
     }
@@ -200,6 +209,10 @@ def finalize_customer_policy_authority(
     final_statements, confirmed_rules, resolution_records = _apply_resolutions(
         reconstructed, supplied_resolutions
     )
+    if not confirmed_rules:
+        raise ValueError(
+            "customer-policy authority cannot publish without at least one enforceable confirmed rule"
+        )
     mappings = _mappings(final_statements)
     if {rule_id for mapping in mappings for rule_id in mapping["rule_ids"]} != {
         rule["rule_id"] for rule in confirmed_rules
@@ -233,7 +246,19 @@ def finalize_customer_policy_authority(
         "resolution_id": resolution["resolution_id"],
         "resolution_hash": resolution["resolution_hash"],
     }
+    approved_at = _utc(approved_at, "approved_at")
+    committed_at = _utc(committed_at, "committed_at")
+    published_at = _utc(published_at, "published_at")
+    _validate_publication_chronology(
+        resolution_records,
+        approved_at=approved_at,
+        committed_at=committed_at,
+        published_at=published_at,
+    )
     compiler_input = _compiler_input(authority, confirmed_rules)
+    normalized_meaning = _normalized_semantic_meaning(
+        authority, confirmed_rules, compiler_input
+    )
     reconciliation = {
         "schema_version": "governance_semantic_reconciliation.v1",
         "source_id": source["source_policy_id"],
@@ -243,33 +268,26 @@ def finalize_customer_policy_authority(
         "unresolved_ambiguities": [],
         "semantic_conflicts": [],
         "interpretation_completeness_posture": "complete",
-        "final_normalized_semantic_meaning": {
-            "contract_id": authority["authority_id"],
-            "contract_version": authority["authority_version"],
-            "governed_targets": sorted(
-                rule["value"] for rule in confirmed_rules if rule["rule_type"] == "target"
-            ),
-            "governed_operations": ["modify"] if any(
-                rule["rule_type"] == "target" for rule in confirmed_rules
-            ) else [],
-            "approver_roles": sorted(
-                rule["role"] for rule in confirmed_rules if rule["rule_type"] == "required_actor_role"
-            ),
-            "confirmed_rules": confirmed_rules,
-            "canonical_compiler_input": compiler_input,
-        },
+        "final_normalized_semantic_meaning": normalized_meaning,
     }
     semantic_commit = build_semantic_commit_bundle(
         reconciliation,
         committed_by=_nonempty(committed_by, "committed_by"),
-        committed_at=_utc(committed_at, "committed_at"),
+        committed_at=committed_at,
         provenance_bindings=semantic_bindings,
     )
     compiled = _compile(compiler_input, semantic_commit, reconstructed)
+    _validate_cross_artifact_rule_equivalence(
+        confirmed_rules=confirmed_rules,
+        normalized_meaning=normalized_meaning,
+        semantic_commit=semantic_commit,
+        compiler_input=compiler_input,
+        compiled_contract=compiled,
+    )
     approval_record = {
         "approval_id": _identity(approval_id, "approval_id"),
         "approved_by": _nonempty(approved_by, "approved_by"),
-        "approved_at": _utc(approved_at, "approved_at"),
+        "approved_at": approved_at,
         "approved_semantic_commit_hash": semantic_commit["semantic_commit_hash"],
     }
     approval_record["approval_record_hash"] = canonical_sha256(approval_record)
@@ -287,7 +305,6 @@ def finalize_customer_policy_authority(
     }
     publication_id = _identity(publication_id, "publication_id")
     published_by = _nonempty(published_by, "published_by")
-    published_at = _utc(published_at, "published_at")
     manifest = {
         "schema_version": "publication_manifest.v1",
         "publication_id": publication_id,
@@ -321,8 +338,11 @@ def finalize_customer_policy_authority(
     validated_interpretation["source_statements"] = final_statements
     validated_interpretation["statement_rule_mappings"] = final_mappings
     validated_interpretation["status"] = {
+        "statement_classification_complete": True,
         "interpretation_complete": True,
         "requires_resolution_count": 0,
+        "unresolved_ambiguity_count": 0,
+        "enforceable_rule_count": len(confirmed_rules),
         "ready_for_finalization": True,
         "publication_ready": True,
     }
@@ -331,7 +351,13 @@ def finalize_customer_policy_authority(
     )
     return {
         "schema_version": FINALIZATION_RESULT_V1,
-        "status": {"provenance_complete": True, "publication_ready": True},
+        "status": {
+            "statement_classification_complete": True,
+            "interpretation_complete": True,
+            "ready_for_finalization": True,
+            "provenance_complete": True,
+            "publication_ready": True,
+        },
         "validated_interpretation": validated_interpretation,
         "resolution_set": resolution,
         "approval_record": approval_record,
@@ -398,13 +424,41 @@ def _nonempty(value: str, label: str) -> str:
 
 
 def _utc(value: str, label: str) -> str:
+    _utc_datetime(value, label)
+    return value
+
+
+def _utc_datetime(value: str, label: str) -> datetime:
     if not isinstance(value, str) or not _CANONICAL_UTC.fullmatch(value):
         raise ValueError(f"{label} must be canonical UTC (YYYY-MM-DDTHH:MM:SSZ)")
     try:
-        datetime.fromisoformat(value[:-1] + "+00:00")
+        return datetime.fromisoformat(value[:-1] + "+00:00")
     except ValueError as exc:
         raise ValueError(f"{label} must be canonical UTC (YYYY-MM-DDTHH:MM:SSZ)") from exc
-    return value
+
+
+def _validate_publication_chronology(
+    resolution_records: list[dict[str, Any]],
+    *,
+    approved_at: str,
+    committed_at: str,
+    published_at: str,
+) -> None:
+    approval_time = _utc_datetime(approved_at, "approved_at")
+    commit_time = _utc_datetime(committed_at, "committed_at")
+    publication_time = _utc_datetime(published_at, "published_at")
+    for index, record in enumerate(resolution_records):
+        resolution_time = _utc_datetime(
+            record["resolved_at"], f"resolutions[{index}].resolved_at"
+        )
+        if resolution_time > approval_time:
+            raise ValueError(
+                f"resolutions[{index}].resolved_at must be less than or equal to approved_at"
+            )
+    if approval_time > commit_time:
+        raise ValueError("approved_at must be less than or equal to committed_at")
+    if commit_time > publication_time:
+        raise ValueError("committed_at must be less than or equal to published_at")
 
 
 def _partition_source(source: bytes) -> list[tuple[int, int]]:
@@ -431,7 +485,11 @@ def _partition_source(source: bytes) -> list[tuple[int, int]]:
 
 def _interpret_statement(text: str) -> tuple[str, list[dict[str, Any]]]:
     if _AMBIGUOUS.search(text) and _NORMATIVE.search(text):
-        return "requires_resolution", []
+        return "requires_resolution", _recover_ambiguous_rules(text)
+    return _interpret_supported_statement(text)
+
+
+def _interpret_supported_statement(text: str) -> tuple[str, list[dict[str, Any]]]:
     match = _ROLE.fullmatch(text)
     if match:
         role = _role_slug(match.group(2)[:-1])
@@ -463,6 +521,24 @@ def _interpret_statement(text: str) -> tuple[str, list[dict[str, Any]]]:
     if _SOD.fullmatch(text):
         return "enforced", [{"rule_type": "separation_of_duties", "roles": ["requester", "approver"]}]
     return ("unsupported", []) if _NORMATIVE.search(text) else ("informational", [])
+
+
+def _recover_ambiguous_rules(text: str) -> list[dict[str, Any]]:
+    modifiers = list(_AMBIGUOUS.finditer(text))
+    if len(modifiers) != 1:
+        return []
+    modifier = modifiers[0]
+    start, end = modifier.span()
+    if end < len(text) and text[end] == " ":
+        end += 1
+    elif start > 0 and text[start - 1] == " ":
+        start -= 1
+    candidate = text[:start] + text[end:]
+    try:
+        classification, rules = _interpret_supported_statement(candidate)
+    except ValueError:
+        return []
+    return rules if classification == "enforced" and len(rules) == 1 else []
 
 
 def _role_slug(value: str) -> str:
@@ -524,22 +600,53 @@ def _mappings(statements: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return result
 
 
-def _lexical_ambiguity(statement_id: str, text: str) -> dict[str, Any]:
+def _lexical_ambiguity(
+    statement_id: str,
+    text: str,
+    proposed_rules: list[dict[str, Any]],
+) -> dict[str, Any]:
     core = {"ambiguity_type": "ambiguous_language", "statement_ids": [statement_id], "text_hash": canonical_sha256(text)}
     ambiguity_id = "ambiguity-" + canonical_sha256(core).removeprefix("sha256:")
-    outcomes = [
-        ("retain_unsupported", "Retain as unsupported", "unsupported"),
-        ("retain_informational", "Retain as informational", "informational"),
-    ]
+    options = []
+    if len(proposed_rules) == 1:
+        rule = proposed_rules[0]
+        options.append(
+            _option(
+                ambiguity_id,
+                "enforce_unqualified_meaning",
+                "Enforce the deterministically recovered unqualified meaning",
+                [{
+                    "statement_id": statement_id,
+                    "classification": "enforced",
+                    "rule_ids": [rule["rule_id"]],
+                }],
+                _rule_consequence(rule),
+            )
+        )
+    options.extend(
+        [
+            _option(
+                ambiguity_id,
+                "retain_unsupported",
+                "Retain as unsupported",
+                [{"statement_id": statement_id, "classification": "unsupported", "rule_ids": []}],
+                "No enforceable rule is produced; the statement remains visible as unsupported.",
+            ),
+            _option(
+                ambiguity_id,
+                "retain_informational",
+                "Retain as informational",
+                [{"statement_id": statement_id, "classification": "informational", "rule_ids": []}],
+                "No enforceable rule is produced; the statement remains visible as informational.",
+            ),
+        ]
+    )
     return {
         "ambiguity_id": ambiguity_id,
         "ambiguity_type": "ambiguous_language",
         "statement_ids": [statement_id],
         "summary": "Normative language contains a term whose meaning is outside the deterministic grammar.",
-        "options": [
-            _option(ambiguity_id, key, label, [{"statement_id": statement_id, "classification": classification, "rule_ids": []}])
-            for key, label, classification in outcomes
-        ],
+        "options": options,
     }
 
 
@@ -561,7 +668,12 @@ def _conflict_components(
     statements: list[dict[str, Any]], rule_by_statement: dict[str, list[dict[str, Any]]]
 ) -> list[set[str]]:
     edges: dict[str, set[str]] = {}
-    candidates = [(s["statement_id"], r) for s in statements for r in rule_by_statement[s["statement_id"]]]
+    candidates = [
+        (statement["statement_id"], rule)
+        for statement in statements
+        if statement["classification"] == "enforced"
+        for rule in rule_by_statement[statement["statement_id"]]
+    ]
     for index, (left_id, left) in enumerate(candidates):
         for right_id, right in candidates[index + 1 :]:
             if left_id != right_id and _rules_conflict(left, right):
@@ -600,12 +712,24 @@ def _conflict_ambiguity(
             }
             for statement_id in ordered
         ]
-        options.append(_option(ambiguity_id, f"retain_{retained}", "Retain one stated meaning", outcomes))
+        retained_rules = rule_by_statement[retained]
+        options.append(
+            _option(
+                ambiguity_id,
+                f"retain_{retained}",
+                "Retain one stated meaning",
+                outcomes,
+                "Enforce only: " + "; ".join(
+                    _rule_consequence(rule) for rule in retained_rules
+                ),
+            )
+        )
     options.append(_option(
         ambiguity_id,
         "retain_none",
         "Retain every conflicting statement as unsupported",
         [{"statement_id": statement_id, "classification": "unsupported", "rule_ids": []} for statement_id in ordered],
+        "No enforceable rule is produced by the conflicting statements.",
     ))
     return {
         "ambiguity_id": ambiguity_id,
@@ -616,9 +740,36 @@ def _conflict_ambiguity(
     }
 
 
-def _option(ambiguity_id: str, key: str, label: str, outcomes: list[dict[str, Any]]) -> dict[str, Any]:
+def _option(
+    ambiguity_id: str,
+    key: str,
+    label: str,
+    outcomes: list[dict[str, Any]],
+    enforcement_consequence: str,
+) -> dict[str, Any]:
     option_id = "option-" + canonical_sha256({"ambiguity_id": ambiguity_id, "key": key, "statement_outcomes": outcomes}).removeprefix("sha256:")
-    return {"option_id": option_id, "label": label, "statement_outcomes": outcomes}
+    return {
+        "option_id": option_id,
+        "label": label,
+        "enforcement_consequence": enforcement_consequence,
+        "statement_outcomes": outcomes,
+    }
+
+
+def _rule_consequence(rule: dict[str, Any]) -> str:
+    rule_type = rule["rule_type"]
+    if rule_type == "target":
+        return f"Enforce {rule['match']} {rule['effect']} for {rule['value']}."
+    if rule_type == "required_actor_role":
+        return f"Require acting role {rule['role']}."
+    if rule_type == "approval_threshold":
+        return (
+            f"Require {rule['requires_role']} approval when {rule['field']} "
+            f"{rule['operator']} {rule['value']}."
+        )
+    if rule_type == "separation_of_duties":
+        return "Require separation of duties for " + ", ".join(rule["roles"]) + "."
+    raise ValueError(f"unsupported rule consequence type: {rule_type}")
 
 
 def _reconstruct_draft(draft: dict[str, Any]) -> dict[str, Any]:
@@ -663,8 +814,8 @@ def _apply_resolutions(
     by_id = {item["statement_id"]: item for item in statements}
     rule_index = {rule["rule_id"]: rule for rule in draft["proposed_rules"]}
     records = []
-    for ambiguity in draft["ambiguities"]:
-        supplied_record = supplied[ambiguity["ambiguity_id"]]
+    for supplied_record in resolutions:
+        ambiguity = expected[supplied_record["ambiguity_id"]]
         option_id = _nonempty(supplied_record["selected_option_id"], "selected_option_id")
         options = {item["option_id"]: item for item in ambiguity["options"]}
         if option_id not in options:
@@ -706,33 +857,124 @@ def _require_no_rule_conflicts(rules: list[dict[str, Any]]) -> None:
                 raise ValueError("confirmed rules contain an unresolved duplicate or contradiction")
 
 
+def _rule_model(rules: list[dict[str, Any]]) -> dict[str, Any]:
+    return {
+        "required_actor_roles": sorted(
+            rule["role"]
+            for rule in rules
+            if rule["rule_type"] == "required_actor_role"
+        ),
+        "target_rules": {
+            "allow": [
+                {"match": rule["match"], "value": rule["value"]}
+                for rule in rules
+                if rule["rule_type"] == "target" and rule["effect"] == "allow"
+            ],
+            "deny": [
+                {"match": rule["match"], "value": rule["value"]}
+                for rule in rules
+                if rule["rule_type"] == "target" and rule["effect"] == "deny"
+            ],
+        },
+        "approval_thresholds": [
+            {key: rule[key] for key in ("field", "operator", "value", "requires_role")}
+            for rule in rules
+            if rule["rule_type"] == "approval_threshold"
+        ],
+        "separation_of_duties_constraints": [
+            list(rule["roles"])
+            for rule in rules
+            if rule["rule_type"] == "separation_of_duties"
+        ],
+    }
+
+
+def _normalized_semantic_meaning(
+    authority: dict[str, Any],
+    confirmed_rules: list[dict[str, Any]],
+    compiler_input: dict[str, Any],
+) -> dict[str, Any]:
+    model = _rule_model(confirmed_rules)
+    return {
+        "contract_id": authority["authority_id"],
+        "contract_version": authority["authority_version"],
+        "governed_targets": sorted(
+            rule["value"]
+            for rule in confirmed_rules
+            if rule["rule_type"] == "target"
+        ),
+        "governed_operations": ["modify"]
+        if model["target_rules"]["allow"] or model["target_rules"]["deny"]
+        else [],
+        **model,
+        "confirmed_rules": copy.deepcopy(confirmed_rules),
+        "canonical_compiler_input": copy.deepcopy(compiler_input),
+    }
+
+
+def _validate_cross_artifact_rule_equivalence(
+    *,
+    confirmed_rules: list[dict[str, Any]],
+    normalized_meaning: dict[str, Any],
+    semantic_commit: dict[str, Any],
+    compiler_input: dict[str, Any],
+    compiled_contract: dict[str, Any],
+) -> None:
+    model = _rule_model(confirmed_rules)
+    if normalized_meaning.get("confirmed_rules") != confirmed_rules:
+        raise ValueError("normalized semantic meaning does not match confirmed rules")
+    if normalized_meaning.get("canonical_compiler_input") != compiler_input:
+        raise ValueError("normalized semantic meaning does not match canonical compiler input")
+    for field, expected in model.items():
+        if normalized_meaning.get(field) != expected:
+            raise ValueError(f"normalized semantic meaning {field} is inconsistent")
+    if "approver_roles" in normalized_meaning:
+        raise ValueError("required actor roles must not be projected into approver_roles")
+    if semantic_commit.get("committed_semantic_meaning") != normalized_meaning:
+        raise ValueError("semantic commit meaning is inconsistent with normalized meaning")
+
+    compiled_actor_roles = (
+        compiled_contract.get("authority_requirements") or {}
+    ).get("required_roles", [])
+    if compiled_actor_roles != model["required_actor_roles"]:
+        raise ValueError("compiled actor roles are inconsistent with confirmed rules")
+    compiled_targets = compiled_contract.get("target_requirements") or {
+        "allow": [],
+        "deny": [],
+    }
+    if compiled_targets != model["target_rules"]:
+        raise ValueError("compiled target requirements are inconsistent with confirmed rules")
+    compiled_thresholds = (
+        compiled_contract.get("approval_requirements") or {}
+    ).get("thresholds", [])
+    if compiled_thresholds != model["approval_thresholds"]:
+        raise ValueError("compiled approval thresholds are inconsistent with confirmed rules")
+    compiled_separation = (compiled_contract.get("invariants") or {}).get(
+        "separation_of_duties", []
+    )
+    if compiled_separation != model["separation_of_duties_constraints"]:
+        raise ValueError("compiled separation-of-duties constraints are inconsistent")
+
+
 def _compiler_input(authority: dict[str, Any], rules: list[dict[str, Any]]) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "contract_id": authority["authority_id"],
         "contract_version": authority["authority_version"],
     }
-    roles = sorted(rule["role"] for rule in rules if rule["rule_type"] == "required_actor_role")
+    model = _rule_model(rules)
+    roles = model["required_actor_roles"]
     if roles:
         payload["authority"] = {"required_roles": roles}
-    allow = [
-        {"match": rule["match"], "value": rule["value"]}
-        for rule in rules if rule["rule_type"] == "target" and rule["effect"] == "allow"
-    ]
-    deny = [
-        {"match": rule["match"], "value": rule["value"]}
-        for rule in rules if rule["rule_type"] == "target" and rule["effect"] == "deny"
-    ]
+    allow = model["target_rules"]["allow"]
+    deny = model["target_rules"]["deny"]
     if allow or deny:
         payload["targets"] = {"allow": allow, "deny": deny}
-    thresholds = [
-        {key: rule[key] for key in ("field", "operator", "value", "requires_role")}
-        for rule in rules if rule["rule_type"] == "approval_threshold"
-    ]
+    thresholds = model["approval_thresholds"]
     if thresholds:
         payload["approvals"] = {"thresholds": thresholds}
     constraints = [
-        {"type": "separation_of_duties", "roles": list(rule["roles"])}
-        for rule in rules if rule["rule_type"] == "separation_of_duties"
+        {"type": "separation_of_duties", "roles": roles}
+        for roles in model["separation_of_duties_constraints"]
     ]
     if constraints:
         payload["constraints"] = constraints

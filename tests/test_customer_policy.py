@@ -98,7 +98,17 @@ def test_complete_three_sentence_golden_path_needs_only_plain_bytes_and_identiti
     contract = result["compiled_authority_contract"]
     assert contract["authority_requirements"] == {"required_roles": ["repository-maintainer"]}
     assert contract["target_requirements"] == result["canonical_compiler_input"]["targets"]
-    assert result["status"] == {"provenance_complete": True, "publication_ready": True}
+    meaning = result["semantic_commit_bundle"]["committed_semantic_meaning"]
+    assert meaning["required_actor_roles"] == ["repository-maintainer"]
+    assert "approver_roles" not in meaning
+    assert result["semantic_commit_bundle"]["approved_constraints"]["approval"]["required_roles"] == []
+    assert result["status"] == {
+        "statement_classification_complete": True,
+        "interpretation_complete": True,
+        "ready_for_finalization": True,
+        "provenance_complete": True,
+        "publication_ready": True,
+    }
     assert "policy" not in HUMAN_INPUTS and "rules" not in HUMAN_INPUTS
 
 
@@ -201,30 +211,96 @@ def test_deterministic_repeat_generation_and_input_immutability() -> None:
         assert first["canonical_hashes"][field] == second["canonical_hashes"][field]
 
 
-def test_informational_and_unsupported_prose_remain_visible_and_unmapped() -> None:
+def test_informational_and_unsupported_only_policy_is_truthful_but_cannot_publish() -> None:
     draft = _draft(b"This policy describes repository work.\nAgents should change docs.")
     assert [item["classification"] for item in draft["source_statements"]] == [
         "informational", "unsupported"
     ]
     assert draft["statement_rule_mappings"] == []
+    assert draft["status"] == {
+        "statement_classification_complete": True,
+        "interpretation_complete": True,
+        "requires_resolution_count": 0,
+        "unresolved_ambiguity_count": 0,
+        "enforceable_rule_count": 0,
+        "ready_for_finalization": False,
+        "publication_ready": False,
+    }
+    with pytest.raises(ValueError, match="at least one enforceable confirmed rule"):
+        _final(draft)
+
+
+def test_mixed_supported_and_unsupported_policy_can_publish_without_losing_prose() -> None:
+    draft = _draft(
+        b"This policy describes repository work. "
+        b"Agents should change docs. "
+        b"Agents may modify README.md."
+    )
+    assert [item["classification"] for item in draft["source_statements"]] == [
+        "informational", "unsupported", "enforced"
+    ]
+    assert draft["status"]["ready_for_finalization"] is True
     result = _final(draft)
     assert [item["classification"] for item in result["customer_policy_provenance"]["source_statements"]] == [
-        "informational", "unsupported"
+        "informational", "unsupported", "enforced"
     ]
-    assert result["semantic_commit_bundle"]["committed_semantic_meaning"]["confirmed_rules"] == []
+    assert len(result["semantic_commit_bundle"]["committed_semantic_meaning"]["confirmed_rules"]) == 1
 
 
 def test_ambiguous_language_requires_bounded_explicit_resolution() -> None:
     draft = _draft(b"Agents may normally modify README.md.")
     assert draft["source_statements"][0]["classification"] == "requires_resolution"
+    assert draft["status"]["statement_classification_complete"] is True
+    assert draft["status"]["interpretation_complete"] is False
+    assert draft["status"]["ready_for_finalization"] is False
     assert draft["status"]["publication_ready"] is False
     assert {item["statement_outcomes"][0]["classification"] for item in draft["ambiguities"][0]["options"]} == {
-        "informational", "unsupported"
+        "enforced", "informational", "unsupported"
     }
+    enforce = draft["ambiguities"][0]["options"][0]
+    assert enforce["enforcement_consequence"] == "Enforce exact allow for README.md."
     with pytest.raises(ValueError, match="resolution for every ambiguity"):
         _final(draft)
     result = _final(draft, resolutions=[_resolution(draft)])
-    assert result["customer_policy_provenance"]["source_statements"][0]["classification"] == "unsupported"
+    assert result["customer_policy_provenance"]["source_statements"][0]["classification"] == "enforced"
+    confirmed = result["semantic_commit_bundle"]["committed_semantic_meaning"]["confirmed_rules"]
+    assert confirmed == [draft["proposed_rules"][0]]
+    assert result["canonical_compiler_input"]["targets"] == {
+        "allow": [{"match": "exact", "value": "README.md"}],
+        "deny": [],
+    }
+    assert result["compiled_authority_contract"]["target_requirements"] == result["canonical_compiler_input"]["targets"]
+    assert result["customer_policy_provenance"]["interpretation"]["statement_rule_mappings"][0]["rule_ids"] == [confirmed[0]["rule_id"]]
+    assert validate_publication_receipt(result["authority_bundle"], result["publication_receipt"])["provenance_complete"] is True
+
+
+def test_resolution_eliminating_every_enforceable_rule_cannot_publish() -> None:
+    draft = _draft(b"Agents may normally modify README.md.")
+    with pytest.raises(ValueError, match="at least one enforceable confirmed rule"):
+        _final(draft, resolutions=[_resolution(draft, option_index=1)])
+
+
+def test_unsafe_ambiguity_offers_only_non_enforcement_and_cannot_inject_a_rule() -> None:
+    draft = _draft(
+        b"Agents may modify README.md. Agents may modify an appropriate file."
+    )
+    ambiguity = draft["ambiguities"][0]
+    assert draft["proposed_rules"] == [
+        rule for rule in draft["proposed_rules"] if rule["value"] == "README.md"
+    ]
+    assert {outcome["classification"] for option in ambiguity["options"] for outcome in option["statement_outcomes"]} == {
+        "informational", "unsupported"
+    }
+    assert all(
+        not outcome["rule_ids"]
+        for option in ambiguity["options"]
+        for outcome in option["statement_outcomes"]
+    )
+    result = _final(draft, resolutions=[_resolution(draft)])
+    assert result["canonical_compiler_input"]["targets"] == {
+        "allow": [{"match": "exact", "value": "README.md"}],
+        "deny": [],
+    }
 
 
 @pytest.mark.parametrize("kind", ["unknown", "duplicate", "malformed", "unknown_option", "bad_time"])
@@ -338,6 +414,127 @@ def test_supported_approval_and_separation_of_duties_grammar_projects_to_compile
         {"field": "amount", "operator": ">", "value": 1000000, "requires_role": "manager"}
     ]
     assert compiled["invariants"]["separation_of_duties"] == [["requester", "approver"]]
+
+
+def test_every_rule_category_is_equivalent_across_normalized_commit_compiler_and_contract() -> None:
+    source = (
+        b"Repository changes may be made only by repository maintainers. "
+        b"Agents may modify README.md. "
+        b"Agents must not modify files under deployment/. "
+        b"Transfers above $1000000 require manager approval. "
+        b"Requester and approver must be separate."
+    )
+    result = _final(_draft(source))
+    commit = result["semantic_commit_bundle"]
+    meaning = commit["committed_semantic_meaning"]
+    compiler_input = result["canonical_compiler_input"]
+    compiled = result["compiled_authority_contract"]
+
+    assert meaning["required_actor_roles"] == ["repository-maintainer"]
+    assert "approver_roles" not in meaning
+    assert meaning["approval_thresholds"] == [
+        {"field": "amount", "operator": ">", "value": 1000000, "requires_role": "manager"}
+    ]
+    assert meaning["separation_of_duties_constraints"] == [["requester", "approver"]]
+    assert meaning["target_rules"] == {
+        "allow": [{"match": "exact", "value": "README.md"}],
+        "deny": [{"match": "prefix", "value": "deployment/"}],
+    }
+    assert meaning["canonical_compiler_input"] == compiler_input
+    assert compiler_input["authority"]["required_roles"] == meaning["required_actor_roles"]
+    assert compiler_input["approvals"]["thresholds"] == meaning["approval_thresholds"]
+    assert compiler_input["constraints"] == [
+        {"type": "separation_of_duties", "roles": ["requester", "approver"]}
+    ]
+    assert compiler_input["targets"] == meaning["target_rules"]
+    assert compiled["authority_requirements"]["required_roles"] == meaning["required_actor_roles"]
+    assert compiled["approval_requirements"]["thresholds"] == meaning["approval_thresholds"]
+    assert compiled["invariants"]["separation_of_duties"] == meaning["separation_of_duties_constraints"]
+    assert compiled["target_requirements"] == meaning["target_rules"]
+    assert commit["committed_semantic_meaning"]["confirmed_rules"] == meaning["confirmed_rules"]
+
+
+@pytest.mark.parametrize(
+    "boundary,overrides",
+    [
+        (
+            "resolved_at",
+            {"resolution_time": "2026-08-29T13:58:01Z"},
+        ),
+        (
+            "approved_at",
+            {
+                "approved_at": "2026-08-29T13:59:01Z",
+                "committed_at": "2026-08-29T13:59:00Z",
+            },
+        ),
+        (
+            "committed_at",
+            {
+                "committed_at": "2026-08-29T14:00:01Z",
+                "published_at": "2026-08-29T14:00:00Z",
+            },
+        ),
+    ],
+)
+def test_publication_rejects_every_timestamp_inversion(
+    boundary: str, overrides: dict[str, str]
+) -> None:
+    draft = _draft(b"Agents may normally modify README.md.")
+    resolution = _resolution(draft)
+    final_overrides: dict[str, object] = {}
+    if "resolution_time" in overrides:
+        resolution["resolved_at"] = overrides["resolution_time"]
+    else:
+        final_overrides.update(overrides)
+    with pytest.raises(ValueError, match=boundary + ".*less than or equal"):
+        _final(draft, resolutions=[resolution], **final_overrides)
+
+
+def test_equal_lifecycle_timestamps_are_valid() -> None:
+    timestamp = "2026-08-29T14:00:00Z"
+    draft = _draft(b"Agents may normally modify README.md.")
+    resolution = _resolution(draft)
+    resolution["resolved_at"] = timestamp
+    result = _final(
+        draft,
+        resolutions=[resolution],
+        approved_at=timestamp,
+        committed_at=timestamp,
+        published_at=timestamp,
+    )
+    assert result["approval_record"]["approved_at"] == timestamp
+    assert result["semantic_commit_bundle"]["committed_at"] == timestamp
+    assert result["publication_manifest"]["published_at"] == timestamp
+
+
+def test_resolution_record_order_is_preserved() -> None:
+    draft = _draft(
+        b"Agents may normally modify README.md. "
+        b"Agents may normally modify CONTRIBUTING.md."
+    )
+    supplied = [_resolution(draft, 1), _resolution(draft, 0)]
+    result = _final(draft, resolutions=supplied)
+    assert [
+        record["ambiguity_id"]
+        for record in result["resolution_set"]["ambiguity_resolutions"]
+    ] == [record["ambiguity_id"] for record in supplied]
+
+
+def test_resolved_status_transitions_to_complete_publication() -> None:
+    draft = _draft(b"Agents may normally modify README.md.")
+    assert draft["status"]["interpretation_complete"] is False
+    assert draft["status"]["ready_for_finalization"] is False
+    result = _final(draft, resolutions=[_resolution(draft)])
+    assert result["validated_interpretation"]["status"] == {
+        "statement_classification_complete": True,
+        "interpretation_complete": True,
+        "requires_resolution_count": 0,
+        "unresolved_ambiguity_count": 0,
+        "enforceable_rule_count": 1,
+        "ready_for_finalization": True,
+        "publication_ready": True,
+    }
 
 
 def test_source_byte_change_changes_every_downstream_hash() -> None:

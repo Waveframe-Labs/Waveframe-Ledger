@@ -215,6 +215,8 @@ The interpreter recognizes only the v0.6 grammar documented in `README.md`. Simi
 
 Finalization reconstructs the draft from its exact embedded source rather than trusting supplied derived fields. Confirmed rules are projected into `authority.required_roles`, `targets.allow`, `targets.deny`, `approvals.thresholds`, and separation-of-duties constraints, then compiled through the installed canonical CRI-CORE Contract Compiler. No inferred rule becomes enforceable: only grammar-produced rules retained in the explicitly approved semantic commit are compiled.
 
+A zero-rule interpretation is not publishable. It remains available for review with completed statement classifications, but readiness requires no unresolved ambiguity and at least one enforceable rule. A recognized ambiguity modifier may expose one bounded enforceable choice only when its deterministic removal produces exactly one supported rule. Resolution, approval, commit, and publication evidence must satisfy `resolved_at <= approved_at <= committed_at <= published_at`; records retain caller order.
+
 ## 6. Publication transaction
 
 Publication MUST be treated as one deterministic transaction.
