@@ -15,7 +15,7 @@ authors = [
 ]
 
 dependencies = [
-    "cricore-contract-compiler>=0.3.0",
+    "cricore-contract-compiler>=0.4.0",
 ]
 
 [project.optional-dependencies]

@@ -145,9 +145,13 @@ Semantic provenance does not replace Guard admissibility provenance. It records 
 
 The additive `customer_policy_provenance_complete_v1` profile preserves non-empty UTF-8 policy bytes as canonical base64 and hashes those bytes without whitespace or text normalization. Full-SHA-256-derived statements form an ordered, non-overlapping partition of the complete source. Each has exactly one final classification: `enforced`, `informational`, `unsupported`, or `requires_resolution`; complete publications contain no unresolved classification. Enforced statements alone map to confirmed semantic rules.
 
+`interpret_customer_policy(...)` constructs that partition directly from exact bytes and applies only the documented v0.6 sentence grammar. It makes no model call and accepts no caller-supplied rules. `finalize_customer_policy_authority(...)` deterministically reconstructs the draft from the embedded canonical source bytes plus source and authority identities before applying bounded resolutions. A caller-modified span, classification, rule, mapping, identity, or draft hash therefore cannot enter the publication chain.
+
 Resolution records are canonical audit objects binding an ambiguity identity, full resolution identity, referenced statement identities, selected decision or meaning, resolver, and UTC resolution time. Canonical JSON SHA-256 hashes bind the statement set, mappings, complete resolution record set, approval record, semantic commit, compiled contract, authority identity, version relationship, bundle, and receipt. The short-policy profile limits inputs to 240 KiB of decoded source, 2,048 statements, 1,024 mappings, and 1,024 resolutions.
 
 Source-policy revision and published-authority version remain separate. Their unambiguous `source_policy_ref` and `authority_ref` are connected through the canonical, hash-verified `publishes_as` version binding.
+
+The complete chain is exact source bytes and identity, stable statements and spans, statement-to-rule mappings, bounded resolutions, approval, semantic commit, canonical compiler input and contract, authority identity, authority bundle, then receipt. Approval attests the semantic commit, which already binds final classifications, mappings, resolutions, and confirmed rules. Identical complete inputs reproduce every hash; any changed bound input invalidates verification.
 
 An older `authority_bundle.v1` that lacks the profile remains readable but is classified as `legacy_provenance_incomplete`. Ledger never fills historical gaps with inferred lineage.
 

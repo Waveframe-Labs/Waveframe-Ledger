@@ -207,6 +207,14 @@ The semantic commit binds the source snapshot, stable statement set, interpretat
 
 Artifacts without this explicit profile are `legacy_provenance_incomplete`. Readers must not reconstruct or infer missing historical source bytes, spans, mappings, resolutions, or approval evidence.
 
+### 5.7 Plain-policy authority workflow
+
+Ledger exposes two pure programmatic stages for customer-authored short operational policies. `interpret_customer_policy(...)` accepts exact UTF-8 bytes plus independent source-policy and authority identities and produces an immutable interpretation draft. `finalize_customer_policy_authority(...)` accepts that draft, interpreter-produced-option selections, and explicit human approval, commit, and publication evidence. Neither stage reads or writes files, imports Guard or Cloud, invokes a CLI, or accepts free-form rule JSON.
+
+The interpreter recognizes only the v0.6 grammar documented in `README.md`. Similar-looking normative language is retained as `unsupported`; ambiguous normative qualifiers are `requires_resolution`; other prose is `informational`. Duplicate rules and allow/deny overlaps also require a bounded resolution. Publication is forbidden until every ambiguity has one valid selection and no contradictory confirmed meaning remains.
+
+Finalization reconstructs the draft from its exact embedded source rather than trusting supplied derived fields. Confirmed rules are projected into `authority.required_roles`, `targets.allow`, `targets.deny`, `approvals.thresholds`, and separation-of-duties constraints, then compiled through the installed canonical CRI-CORE Contract Compiler. No inferred rule becomes enforceable: only grammar-produced rules retained in the explicitly approved semantic commit are compiled.
+
 ## 6. Publication transaction
 
 Publication MUST be treated as one deterministic transaction.
