@@ -115,7 +115,35 @@ pip install governance-ledger
 Ledger relies on installed package contracts for integration behavior:
 
 - `cricore-contract-compiler>=0.3.0`
-- `waveframe-guard>=0.5.0`
+
+The base install does not install Waveframe Guard. Install the tested optional
+admissibility integration explicitly when Ledger should delegate execution replay
+to Guard:
+
+```powershell
+pip install "governance-ledger[guard]"
+```
+
+The `guard` extra selects `waveframe-guard==0.15.0`, matching the released Guard
+compatibility metadata that tests Guard 0.15.0 with Ledger 0.5.0. Applications such
+as Cloud can instead inject a compatible evaluator without installing Guard in
+Ledger's environment:
+
+```python
+from governance_ledger.replay import replay_admissibility
+
+result = replay_admissibility(
+    authority_contract=authority,
+    execution_state=execution_state,
+    evaluator=my_admissibility_evaluator,
+)
+```
+
+Existing callers that omit `evaluator` retain Guard-backed replay after installing
+the `guard` extra. Without either an evaluator or that extra, Ledger raises an
+actionable `GuardIntegrationUnavailableError`. Ledger prepares, publishes, replays,
+and verifies authority evidence; Guard evaluates runtime admissibility. Enforcement
+logic remains outside Ledger.
 
 Local checkout path resolution is not part of production behavior.
 
@@ -175,6 +203,9 @@ governance-ledger replay-execution `
   --contract contracts/finance-policy-0.1.0.contract.json `
   --execution-state execution_state.json
 ```
+
+The CLI form uses the optional Guard adapter and therefore requires the `guard`
+extra. Programmatic callers may use evaluator injection instead.
 
 Generate semantic governance artifacts:
 

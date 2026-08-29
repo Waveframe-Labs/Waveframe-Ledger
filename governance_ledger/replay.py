@@ -6,6 +6,10 @@ from typing import Any
 from governance_ledger.authority_contract import with_authority_identity
 from governance_ledger.diagnostics import build_diagnostic
 from governance_ledger.extract import extract_constraints
+from governance_ledger.integrations.guard import (
+    AdmissibilityEvaluator,
+    load_guard_admissibility_evaluator,
+)
 from governance_ledger.provenance import source_governance_identity
 from governance_ledger.review import build_review_report
 
@@ -82,9 +86,8 @@ def replay_admissibility(
     *,
     authority_contract: dict[str, Any],
     execution_state: dict[str, Any],
+    evaluator: AdmissibilityEvaluator | None = None,
 ) -> dict[str, Any]:
-    from waveframe_guard import evaluate_admissibility
-
     diagnostics = []
     lineage = authority_contract.get("lineage") if isinstance(authority_contract.get("lineage"), dict) else {}
     lineage_complete = _lineage_complete(lineage)
@@ -99,7 +102,15 @@ def replay_admissibility(
             diagnostics.append(_execution_compilation_report_hash_mismatch(lineage, execution_state))
             lineage_complete = False
 
-    decision = evaluate_admissibility(copy.deepcopy(authority_contract), copy.deepcopy(execution_state))
+    admissibility_evaluator = (
+        evaluator
+        if evaluator is not None
+        else load_guard_admissibility_evaluator()
+    )
+    decision = admissibility_evaluator(
+        copy.deepcopy(authority_contract),
+        copy.deepcopy(execution_state),
+    )
     return {
         "schema_version": "governance_replay_admissibility.v1",
         "authority_ref": execution_state.get("authority_ref"),
