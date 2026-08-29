@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Additive `customer_policy_provenance_complete_v1` profile for `authority_bundle.v1`, binding exact source bytes, stable statement spans, rule mappings, ambiguity resolutions, approval, semantic commit, compiled contract, authority identity, and the explicit source-revision-to-authority-version relationship.
+- Provenance-complete `publication_receipt.v1` bindings and deterministic verification for every customer-policy publication input.
+- Complete source partition/classification checks, auditable resolution records, canonical base64, full-SHA-256 statement and mapping IDs, and bounded short-policy inputs.
+
+### Changed
+
+- Legacy `authority_bundle.v1` artifacts remain readable and are classified as `legacy_provenance_incomplete`; missing historical lineage is never inferred.
+
 ## 0.5.0 - 2026-07-13
 
 Waveframe Ledger v0.5.0 closes the Published Authority publication path so approved governance can be resolved by explicit, immutable authority identity.

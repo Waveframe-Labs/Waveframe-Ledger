@@ -43,6 +43,28 @@
     "execution_admissibility_semantics": { "type": "object" },
     "replay_obligations": { "type": "array" },
     "committed_semantic_meaning": { "type": "object" },
+    "provenance_bindings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_policy_ref",
+        "source_snapshot_hash",
+        "source_statements_hash",
+        "interpretation_id",
+        "mapping_hash",
+        "resolution_id",
+        "resolution_hash"
+      ],
+      "properties": {
+        "source_policy_ref": { "type": "string", "minLength": 3, "maxLength": 513, "pattern": "^[^@]+@[^@]+$" },
+        "source_snapshot_hash": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+        "source_statements_hash": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+        "interpretation_id": { "type": "string", "minLength": 1 },
+        "mapping_hash": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+        "resolution_id": { "type": "string", "pattern": "^resolution-set-[a-f0-9]{64}$" },
+        "resolution_hash": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }
+      }
+    },
     "non_goals": {
       "type": "array",
       "items": { "type": "string" }

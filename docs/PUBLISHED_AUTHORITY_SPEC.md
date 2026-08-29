@@ -186,6 +186,27 @@ The hashes and manifests required to verify that the publication has not changed
 - bound artifact hashes
 - schema compatibility metadata
 
+### 5.6 Provenance-complete customer-policy profile
+
+`authority_bundle.v1` remains the canonical schema. A new customer-authored publication declares `provenance_profile: customer_policy_provenance_complete_v1` and includes:
+
+- `source_policy`: source identity, independent source revision, derived source reference, base64-preserved exact bytes, and byte-level SHA-256;
+- `source_statements`: full-SHA-256-derived identities, ordered non-overlapping byte spans that partition the entire source, exact statement bytes, statement hashes, and exactly one final classification (`enforced`, `informational`, `unsupported`, or `requires_resolution`);
+- `interpretation`: interpretation identity, sentence-to-confirmed-rule mappings, and mapping hash;
+- `resolution`: resolution-set identity and ordered records that bind stable ambiguity and resolution identities, referenced statement identities, the selected decision or meaning, resolver, UTC resolution time, and the complete record-set hash;
+- `approval_record`: approval identity, actor, timestamp, approved semantic-commit hash, and record hash;
+- `version_binding`: the source-policy reference, published authority reference, named relationship, and binding hash.
+
+The source reference is `<source_policy_id>@<source_revision>`; neither component may contain `@`. It is not the authority reference and its revision is not required to equal the authority version. This profile currently permits only the canonical `publishes_as` relationship, valid only when both references and the relationship match the canonical `version_binding.binding_hash`.
+
+The exact source must be non-empty UTF-8 text. Every byte belongs to exactly one statement. `enforced` statements have exactly one mapping with one or more confirmed rule IDs; `informational` and `unsupported` statements have none. A complete publication contains no `requires_resolution` statement, and the union of mapped rules equals the confirmed semantic rule set.
+
+The profile is bounded for short operational policies: at most 245,760 decoded source bytes (240 KiB), 2,048 statements, 1,024 statement mappings, and 1,024 resolution records. Source and statement bytes use canonical base64: decoding and re-encoding must reproduce the supplied string exactly. Document ingestion is outside this profile.
+
+The semantic commit binds the source snapshot, stable statement set, interpretation mapping, and resolution set. Approval attests the resulting semantic-commit hash. The compiled contract binds that commit; the bundle immutable inputs bind the approval, compiled contract, authority identity, and version relationship; the receipt binds all of them plus the canonical bundle hash.
+
+Artifacts without this explicit profile are `legacy_provenance_incomplete`. Readers must not reconstruct or infer missing historical source bytes, spans, mappings, resolutions, or approval evidence.
+
 ## 6. Publication transaction
 
 Publication MUST be treated as one deterministic transaction.

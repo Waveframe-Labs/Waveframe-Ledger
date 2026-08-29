@@ -141,6 +141,16 @@ Their provenance is based on:
 
 Semantic provenance does not replace Guard admissibility provenance. It records Ledger-owned meaning, not runtime allow or block decisions.
 
+## Customer-Policy Publication Provenance
+
+The additive `customer_policy_provenance_complete_v1` profile preserves non-empty UTF-8 policy bytes as canonical base64 and hashes those bytes without whitespace or text normalization. Full-SHA-256-derived statements form an ordered, non-overlapping partition of the complete source. Each has exactly one final classification: `enforced`, `informational`, `unsupported`, or `requires_resolution`; complete publications contain no unresolved classification. Enforced statements alone map to confirmed semantic rules.
+
+Resolution records are canonical audit objects binding an ambiguity identity, full resolution identity, referenced statement identities, selected decision or meaning, resolver, and UTC resolution time. Canonical JSON SHA-256 hashes bind the statement set, mappings, complete resolution record set, approval record, semantic commit, compiled contract, authority identity, version relationship, bundle, and receipt. The short-policy profile limits inputs to 240 KiB of decoded source, 2,048 statements, 1,024 mappings, and 1,024 resolutions.
+
+Source-policy revision and published-authority version remain separate. Their unambiguous `source_policy_ref` and `authority_ref` are connected through the canonical, hash-verified `publishes_as` version binding.
+
+An older `authority_bundle.v1` that lacks the profile remains readable but is classified as `legacy_provenance_incomplete`. Ledger never fills historical gaps with inferred lineage.
+
 ## Snapshot Hashes
 
 Snapshots hash the embedded review state using canonical JSON:

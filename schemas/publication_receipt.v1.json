@@ -69,6 +69,14 @@
         "type": "string"
       }
     },
+    "semantic_commit_hash": {
+      "type": ["string", "null"],
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "compiled_contract_hash": {
+      "type": ["string", "null"],
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
     "lineage_continuity": {
       "type": "object",
       "additionalProperties": false,
@@ -149,6 +157,15 @@
         "type": "string"
       }
     },
+    "provenance_profile": {
+      "enum": [
+        "legacy_provenance_incomplete",
+        "customer_policy_provenance_complete_v1"
+      ]
+    },
+    "provenance_bindings": {
+      "$ref": "#/$defs/provenanceBindings"
+    },
     "immutable_inputs": {
       "type": "object",
       "additionalProperties": true
@@ -162,6 +179,114 @@
     "receipt_hash": {
       "type": "string",
       "minLength": 1
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "required": ["provenance_profile"],
+        "properties": {
+          "provenance_profile": { "const": "customer_policy_provenance_complete_v1" }
+        }
+      },
+      "then": {
+        "required": [
+          "semantic_commit_hash",
+          "compiled_contract_hash",
+          "provenance_bindings"
+        ],
+        "properties": {
+          "semantic_commit_hash": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+          "compiled_contract_hash": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+          "immutable_inputs": {
+            "required": [
+              "provenance_profile",
+              "provenance_complete",
+              "source_policy_id",
+              "source_revision",
+              "source_policy_ref",
+              "source_snapshot_hash",
+              "source_statements_hash",
+              "interpretation_id",
+              "mapping_hash",
+              "resolution_id",
+              "resolution_hash",
+              "approval_id",
+              "approval_record_hash",
+              "semantic_commit_id",
+              "semantic_commit_hash",
+              "compiled_contract_id",
+              "compiled_contract_version",
+              "compiled_contract_ref",
+              "compiled_contract_hash",
+              "authority_id",
+              "authority_version",
+              "authority_ref",
+              "authority_identity_hash",
+              "version_binding_hash",
+              "bundle_hash"
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "provenanceBindings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provenance_profile",
+        "provenance_complete",
+        "source_policy_id",
+        "source_revision",
+        "source_policy_ref",
+        "source_snapshot_hash",
+        "source_statements_hash",
+        "interpretation_id",
+        "mapping_hash",
+        "resolution_id",
+        "resolution_hash",
+        "approval_id",
+        "approval_record_hash",
+        "semantic_commit_id",
+        "semantic_commit_hash",
+        "compiled_contract_id",
+        "compiled_contract_version",
+        "compiled_contract_ref",
+        "compiled_contract_hash",
+        "authority_id",
+        "authority_version",
+        "authority_ref",
+        "authority_identity_hash",
+        "version_binding_hash"
+      ],
+      "properties": {
+        "provenance_profile": { "const": "customer_policy_provenance_complete_v1" },
+        "provenance_complete": { "const": true },
+        "source_policy_id": { "type": "string", "minLength": 1, "maxLength": 256, "pattern": "^[^@]+$" },
+        "source_revision": { "type": "string", "minLength": 1, "maxLength": 256, "pattern": "^[^@]+$" },
+        "source_policy_ref": { "type": "string", "minLength": 3, "maxLength": 513, "pattern": "^[^@]+@[^@]+$" },
+        "source_snapshot_hash": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+        "source_statements_hash": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+        "interpretation_id": { "type": "string", "minLength": 1 },
+        "mapping_hash": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+        "resolution_id": { "type": "string", "pattern": "^resolution-set-[a-f0-9]{64}$" },
+        "resolution_hash": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+        "approval_id": { "type": "string", "minLength": 1 },
+        "approval_record_hash": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+        "semantic_commit_id": { "type": "string", "minLength": 1 },
+        "semantic_commit_hash": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+        "compiled_contract_id": { "type": "string", "minLength": 1 },
+        "compiled_contract_version": { "type": "string", "minLength": 1 },
+        "compiled_contract_ref": { "type": "string", "minLength": 1 },
+        "compiled_contract_hash": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+        "authority_id": { "type": "string", "minLength": 1 },
+        "authority_version": { "type": "string", "minLength": 1 },
+        "authority_ref": { "type": "string", "minLength": 1 },
+        "authority_identity_hash": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+        "version_binding_hash": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }
+      }
     }
   }
 }
