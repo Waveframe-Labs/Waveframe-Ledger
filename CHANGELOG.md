@@ -2,20 +2,27 @@
 
 ## Unreleased
 
+## 0.6.0 - 2026-08-29
+
+Waveframe Ledger v0.6.0 provides a deterministic, provenance-complete path from short company-policy text to published authority while keeping runtime enforcement optional and separate.
+
 ### Added
 
+- Exact company-policy byte preservation through stable statement spans, full-SHA identities, explicit source revision, and an independently versioned published authority.
+- Pure `interpret_customer_policy` and `finalize_customer_policy_authority` APIs that produce the approved semantic commit, canonical compiled contract, provenance-complete `authority_bundle.v1`, and verified `publication_receipt.v1` without requiring customers to author structured policy artifacts.
+- Bounded clarification choices and explicit human approval, commit, and publication evidence, with enforced resolution-to-publication chronology.
+- Deterministic support for required actor roles, exact and prefix repository target allow/deny rules, approval thresholds, and separation of duties.
+- Additive `customer_policy_provenance_complete_v1` verification binding exact source bytes, classifications, mappings, resolutions, approval, semantic commit, compiled contract, authority identity, bundle, and receipt.
 - Optional `guard` integration extra and evaluator injection for admissibility replay.
-- Additive `customer_policy_provenance_complete_v1` profile for `authority_bundle.v1`, binding exact source bytes, stable statement spans, rule mappings, ambiguity resolutions, approval, semantic commit, compiled contract, authority identity, and the explicit source-revision-to-authority-version relationship.
-- Provenance-complete `publication_receipt.v1` bindings and deterministic verification for every customer-policy publication input.
-- Complete source partition/classification checks, auditable resolution records, canonical base64, full-SHA-256 statement and mapping IDs, and bounded short-policy inputs.
-- Pure `interpret_customer_policy` and `finalize_customer_policy_authority` APIs for exact-byte, deterministic plain-policy interpretation through provenance-complete publication, with the bounded v0.6 role, target, approval-threshold, and separation-of-duties grammar.
 
 ### Changed
 
-- Waveframe Guard is no longer a mandatory Ledger dependency; core imports and workflows remain Guard-independent, while omitted evaluator/integration failures use an actionable Ledger-owned exception.
-- Legacy `authority_bundle.v1` artifacts remain readable and are classified as `legacy_provenance_incomplete`; missing historical lineage is never inferred.
-- The minimum CRI-CORE Contract Compiler dependency is now `0.4.0`, whose released contract supports canonical exact and prefix target requirements.
-- Customer-policy finalization now rejects zero-rule authority, separates acting roles from approval semantics, enforces resolution-to-publication chronology, offers safe bounded enforcement clarification, and reports interpretation readiness without overclaiming unresolved drafts.
+- The supported customer-policy grammar is deliberately narrow and deterministic. Unsupported or unsafe ambiguous language remains visible and never becomes enforceable through general natural-language inference.
+- Informational and unsupported-only drafts remain inspectable but cannot publish without at least one confirmed enforceable rule; Ledger invents neither allow-all nor implicit deny-all behavior.
+- Waveframe Guard is no longer a mandatory dependency. Base installation, core imports, publication, lineage, and provenance verification remain Guard-free; the tested runtime integration is selected explicitly with `governance-ledger[guard]`.
+- Legacy `authority_bundle.v1` artifacts remain readable as `legacy_provenance_incomplete`, and missing historical lineage is never inferred or fabricated.
+- The minimum CRI-CORE Contract Compiler dependency is `0.4.0`, providing the canonical exact and prefix target representation used by this workflow.
+- Package version advanced to `0.6.0`; published schema-version identifiers remain unchanged.
 
 ## 0.5.0 - 2026-07-13
 
