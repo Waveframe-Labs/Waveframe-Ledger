@@ -19,6 +19,11 @@ from governance_ledger.semantics.lifecycle_enforcement import build_semantic_lif
 from governance_ledger.semantics.packets import build_governance_review_packet
 from governance_ledger.semantics.preview import build_governance_impact_preview
 from governance_ledger.semantics.publication import build_authority_bundle, build_publication_receipt
+from governance_ledger.publication_provenance import (
+    classify_authority_bundle_provenance,
+    validate_authority_bundle,
+    validate_publication_receipt,
+)
 from governance_ledger.semantics.reconciliation import (
     build_governance_semantic_reconciliation,
     build_semantic_interpretation_decision,
@@ -40,6 +45,7 @@ __all__ = [
     "build_guard_enforcement_projection",
     "build_runtime_consequence_projection",
     "build_publication_receipt",
+    "classify_authority_bundle_provenance",
     "build_governance_quality_diagnostics",
     "build_governance_impact_preview",
     "build_governance_review_packet",
@@ -47,4 +53,6 @@ __all__ = [
     "build_semantic_interpretation_decision",
     "build_semantic_reconciliation_projection",
     "build_semantic_stability_projection",
+    "validate_authority_bundle",
+    "validate_publication_receipt",
 ]

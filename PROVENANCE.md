@@ -141,6 +141,14 @@ Their provenance is based on:
 
 Semantic provenance does not replace Guard admissibility provenance. It records Ledger-owned meaning, not runtime allow or block decisions.
 
+## Customer-Policy Publication Provenance
+
+The additive `customer_policy_provenance_complete_v1` profile preserves exact policy bytes as base64 and hashes those bytes without whitespace or text normalization. Stable statements use byte offsets and identities derived from source identity, source revision, span, and statement hash. Canonical JSON SHA-256 hashes bind the statement set, sentence-to-rule mappings, ambiguity resolutions, approval record, semantic commit, compiled contract, authority identity, version relationship, bundle, and receipt.
+
+Source-policy revision and published-authority version remain separate. Their `source_policy_ref` and `authority_ref` are connected only through an explicit, hash-verified `version_binding`.
+
+An older `authority_bundle.v1` that lacks the profile remains readable but is classified as `legacy_provenance_incomplete`. Ledger never fills historical gaps with inferred lineage.
+
 ## Snapshot Hashes
 
 Snapshots hash the embedded review state using canonical JSON:

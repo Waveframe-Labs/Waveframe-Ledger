@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import copy
 import hashlib
-import json
 from typing import Any
 
 from governance_ledger.schema_versions import (
@@ -14,6 +13,15 @@ from governance_ledger.schema_versions import (
     GOVERNANCE_REVIEW_PACKET_V1,
     PUBLICATION_MANIFEST_V1,
     PUBLICATION_RECEIPT_V1,
+)
+from governance_ledger.publication_provenance import (
+    CUSTOMER_POLICY_PROFILE,
+    LEGACY_INCOMPLETE_PROFILE,
+    canonical_sha256,
+    classify_authority_bundle_provenance,
+    receipt_provenance_bindings,
+    validate_authority_bundle,
+    validate_publication_receipt,
 )
 
 NON_GOALS = [
@@ -36,6 +44,7 @@ def build_authority_bundle(
     governance_review_packets: list[dict[str, Any]] | None = None,
     semantic_commit_bundle: dict[str, Any] | None = None,
     compiled_authority_contract: dict[str, Any] | None = None,
+    customer_policy_provenance: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Return authority_bundle.v1 from published governance artifacts."""
     authority = copy.deepcopy(authority_contract)
@@ -45,6 +54,7 @@ def build_authority_bundle(
     packets = copy.deepcopy(governance_review_packets) if governance_review_packets is not None else []
     semantic_commit = copy.deepcopy(semantic_commit_bundle) if semantic_commit_bundle is not None else None
     compiled_contract = copy.deepcopy(compiled_authority_contract) if compiled_authority_contract is not None else None
+    customer_provenance = copy.deepcopy(customer_policy_provenance) if customer_policy_provenance is not None else None
 
     authority_ref = _authority_ref(authority)
     contract_hash = _contract_hash(authority)
@@ -52,10 +62,14 @@ def build_authority_bundle(
     compiled_contract_hash = _compiled_contract_hash(compiled_contract)
     publication_id = _publication_id(manifest, authority_ref, contract_hash)
     immutable_inputs = _immutable_inputs(authority, manifest, preview, diff, packets, semantic_commit, compiled_contract)
+    if customer_provenance is not None:
+        immutable_inputs.update(
+            _customer_policy_immutable_inputs(customer_provenance, semantic_commit, compiled_contract)
+        )
     semantic_artifacts = _semantic_artifacts(preview, diff, semantic_commit, compiled_contract)
     review_packets = _review_packets(packets)
 
-    return {
+    bundle = {
         "schema_version": AUTHORITY_BUNDLE_V1,
         "publication_id": publication_id,
         "authority_ref": authority_ref,
@@ -73,6 +87,10 @@ def build_authority_bundle(
         "review_packets": review_packets,
         "lineage": _lineage(authority, manifest),
         "provenance": _provenance(manifest),
+        "provenance_profile": (
+            CUSTOMER_POLICY_PROFILE if customer_provenance is not None else LEGACY_INCOMPLETE_PROFILE
+        ),
+        "customer_policy_provenance": customer_provenance,
         "schema_compatibility": _schema_compatibility(authority, manifest, preview, diff, packets, semantic_commit, compiled_contract),
         "publication_meaning": _publication_meaning(authority_ref, preview, diff, review_packets),
         "operational_implications": _operational_implications(preview, diff, packets),
@@ -80,6 +98,8 @@ def build_authority_bundle(
         "immutable_inputs": immutable_inputs,
         "non_goals": list(NON_GOALS),
     }
+    validate_authority_bundle(bundle)
+    return bundle
 
 
 def format_authority_bundle(bundle: dict[str, Any]) -> str:
@@ -139,6 +159,7 @@ def build_publication_receipt(
         "readiness_confirmations": _readiness_confirmations(confirmations),
         "publication_notes": _publication_notes(notes),
         "semantic_compatibility_warnings": _semantic_compatibility_warnings(bundle),
+        "provenance_profile": classify_authority_bundle_provenance(bundle),
         "immutable_inputs": {
             "authority_hash": immutable_inputs.get("authority_hash"),
             "manifest_hash": immutable_inputs.get("manifest_hash"),
@@ -157,7 +178,12 @@ def build_publication_receipt(
             "does_not_evaluate_admissibility",
         ],
     }
+    if receipt["provenance_profile"] == CUSTOMER_POLICY_PROFILE:
+        bindings = receipt_provenance_bindings(bundle)
+        receipt["provenance_bindings"] = bindings
+        receipt["immutable_inputs"].update(bindings)
     receipt["receipt_hash"] = _artifact_hash(receipt)
+    validate_publication_receipt(bundle, receipt)
     return receipt
 
 
@@ -210,6 +236,59 @@ def _immutable_inputs(
         "review_packet_hashes": [_artifact_hash(packet) for packet in packets],
         "semantic_commit_hash": _semantic_commit_hash(semantic_commit),
         "compiled_contract_hash": _compiled_contract_hash(compiled_contract),
+    }
+
+
+def _customer_policy_immutable_inputs(
+    provenance: dict[str, Any],
+    semantic_commit: dict[str, Any] | None,
+    compiled_contract: dict[str, Any] | None,
+) -> dict[str, Any]:
+    source = provenance.get("source_policy") or {}
+    interpretation = provenance.get("interpretation") or {}
+    resolution = provenance.get("resolution") or {}
+    approval = provenance.get("approval_record") or {}
+    version_binding = provenance.get("version_binding") or {}
+    semantic_commit = semantic_commit or {}
+    compiled_contract = compiled_contract or {}
+    contract_id = compiled_contract.get("contract_id")
+    contract_version = compiled_contract.get("contract_version")
+    authority_ref = (
+        f"{contract_id}@{contract_version}"
+        if isinstance(contract_id, str) and isinstance(contract_version, str)
+        else None
+    )
+    return {
+        "provenance_profile": CUSTOMER_POLICY_PROFILE,
+        "provenance_complete": True,
+        "source_policy_id": source.get("source_policy_id"),
+        "source_revision": source.get("source_revision"),
+        "source_policy_ref": source.get("source_policy_ref"),
+        "source_snapshot_hash": source.get("snapshot_hash"),
+        "source_statements_hash": canonical_sha256(provenance.get("source_statements") or []),
+        "interpretation_id": interpretation.get("interpretation_id"),
+        "mapping_hash": interpretation.get("mapping_hash"),
+        "resolution_id": resolution.get("resolution_id"),
+        "resolution_hash": resolution.get("resolution_hash"),
+        "approval_id": approval.get("approval_id"),
+        "approval_record_hash": approval.get("approval_record_hash"),
+        "semantic_commit_id": semantic_commit.get("semantic_commit_id"),
+        "semantic_commit_hash": semantic_commit.get("semantic_commit_hash"),
+        "compiled_contract_id": contract_id,
+        "compiled_contract_version": contract_version,
+        "compiled_contract_ref": compiled_contract.get("authority_ref"),
+        "compiled_contract_hash": compiled_contract.get("contract_hash"),
+        "authority_id": contract_id,
+        "authority_version": contract_version,
+        "authority_ref": authority_ref,
+        "authority_identity_hash": canonical_sha256(
+            {
+                "authority_id": contract_id,
+                "authority_version": contract_version,
+                "authority_ref": authority_ref,
+            }
+        ),
+        "version_binding_hash": version_binding.get("binding_hash"),
     }
 
 
@@ -410,10 +489,13 @@ def _semantic_artifact_hashes(
 
 def _lineage_continuity(bundle: dict[str, Any]) -> dict[str, Any]:
     lineage = bundle.get("lineage") if isinstance(bundle.get("lineage"), dict) else {}
+    customer_complete = classify_authority_bundle_provenance(bundle) == CUSTOMER_POLICY_PROFILE
     return {
         "source_hash_present": bool(lineage.get("source_hash")),
         "compilation_report_hash_present": bool(lineage.get("compilation_report_hash")),
-        "lineage_complete": bool(lineage.get("source_hash") and lineage.get("compilation_report_hash")),
+        "lineage_complete": customer_complete or bool(
+            lineage.get("source_hash") and lineage.get("compilation_report_hash")
+        ),
     }
 
 
@@ -478,7 +560,7 @@ def _semantic_compatibility_warnings(bundle: dict[str, Any]) -> list[str]:
 
 
 def _artifact_hash(artifact: Any) -> str:
-    return "sha256:" + hashlib.sha256(_canonical_json(artifact).encode("utf-8")).hexdigest()
+    return canonical_sha256(artifact)
 
 
 def _semantic_commit_hash(semantic_commit: dict[str, Any] | None) -> str | None:
@@ -497,10 +579,6 @@ def _compiled_contract_hash(compiled_contract: dict[str, Any] | None) -> str | N
     if isinstance(value, str) and value:
         return value if value.startswith("sha256:") else f"sha256:{value}"
     return _artifact_hash(compiled_contract)
-
-
-def _canonical_json(value: Any) -> str:
-    return json.dumps(value, sort_keys=True, separators=(",", ":"))
 
 
 def _strings(value: Any) -> list[str]:

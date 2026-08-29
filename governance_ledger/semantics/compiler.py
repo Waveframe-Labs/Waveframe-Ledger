@@ -25,6 +25,7 @@ def build_semantic_commit_bundle(
     *,
     committed_by: str = "governance-ledger",
     committed_at: str | None = None,
+    provenance_bindings: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Freeze completed semantic reconciliation as compiler input."""
     _require_complete_reconciliation(reconciliation)
@@ -32,7 +33,15 @@ def build_semantic_commit_bundle(
     if not committed_semantics:
         raise ValueError("Semantic commit bundle requires final normalized semantic meaning.")
     _reject_raw_policy_text(committed_semantics)
-    semantic_hash = _hash_payload(committed_semantics)
+    bindings = copy.deepcopy(provenance_bindings) if provenance_bindings is not None else None
+    semantic_hash = _hash_payload(
+        {
+            "committed_semantic_meaning": committed_semantics,
+            "provenance_bindings": bindings,
+        }
+        if bindings is not None
+        else committed_semantics
+    )
     decisions = copy.deepcopy(reconciliation.get("operator_interpretation_decisions") or [])
     payload = {
         "schema_version": SEMANTIC_COMMIT_BUNDLE_SCHEMA_VERSION,
@@ -54,6 +63,8 @@ def build_semantic_commit_bundle(
         "committed_semantic_meaning": committed_semantics,
         "non_goals": list(_NON_GOALS),
     }
+    if bindings is not None:
+        payload["provenance_bindings"] = bindings
     payload["bundle_hash"] = _hash_payload(payload)
     return payload
 

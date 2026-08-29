@@ -186,6 +186,23 @@ The hashes and manifests required to verify that the publication has not changed
 - bound artifact hashes
 - schema compatibility metadata
 
+### 5.6 Provenance-complete customer-policy profile
+
+`authority_bundle.v1` remains the canonical schema. A new customer-authored publication declares `provenance_profile: customer_policy_provenance_complete_v1` and includes:
+
+- `source_policy`: source identity, independent source revision, derived source reference, base64-preserved exact bytes, and byte-level SHA-256;
+- `source_statements`: stable identities, byte spans, exact statement bytes, and statement hashes;
+- `interpretation`: interpretation identity, sentence-to-confirmed-rule mappings, and mapping hash;
+- `resolution`: resolution-set identity, recorded ambiguity resolutions, and resolution hash;
+- `approval_record`: approval identity, actor, timestamp, approved semantic-commit hash, and record hash;
+- `version_binding`: the source-policy reference, published authority reference, named relationship, and binding hash.
+
+The source reference is `<source_policy_id>@<source_revision>`. It is not the authority reference and its revision is not required to equal the authority version. The relationship is valid only when both references and the relationship label match the canonical `version_binding.binding_hash`.
+
+The semantic commit binds the source snapshot, stable statement set, interpretation mapping, and resolution set. Approval attests the resulting semantic-commit hash. The compiled contract binds that commit; the bundle immutable inputs bind the approval, compiled contract, authority identity, and version relationship; the receipt binds all of them plus the canonical bundle hash.
+
+Artifacts without this explicit profile are `legacy_provenance_incomplete`. Readers must not reconstruct or infer missing historical source bytes, spans, mappings, resolutions, or approval evidence.
+
 ## 6. Publication transaction
 
 Publication MUST be treated as one deterministic transaction.

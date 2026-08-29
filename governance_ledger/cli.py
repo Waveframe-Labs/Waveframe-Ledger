@@ -146,6 +146,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     authority_bundle_parser.add_argument("--review-packet", action="append", default=[])
     authority_bundle_parser.add_argument("--semantic-commit")
     authority_bundle_parser.add_argument("--compiled-contract")
+    authority_bundle_parser.add_argument("--customer-policy-provenance")
     authority_bundle_parser.add_argument("--output")
     authority_bundle_parser.add_argument("--json", action="store_true")
 
@@ -156,6 +157,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     semantic_commit_parser.add_argument("--reconciliation", required=True)
     semantic_commit_parser.add_argument("--committed-by", default="governance-ledger")
     semantic_commit_parser.add_argument("--committed-at")
+    semantic_commit_parser.add_argument("--provenance-bindings")
     semantic_commit_parser.add_argument("--output")
     semantic_commit_parser.add_argument("--json", action="store_true")
 
@@ -309,6 +311,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             ],
             semantic_commit_bundle=_read_json_arg(args.semantic_commit),
             compiled_authority_contract=_read_json_arg(args.compiled_contract),
+            customer_policy_provenance=_read_json_arg(args.customer_policy_provenance),
         )
         if args.output:
             Path(args.output).write_text(
@@ -320,6 +323,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             _read_json_arg(args.reconciliation) or {},
             committed_by=args.committed_by,
             committed_at=args.committed_at,
+            provenance_bindings=_read_json_arg(args.provenance_bindings),
         )
         if args.output:
             Path(args.output).write_text(
