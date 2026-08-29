@@ -6,6 +6,7 @@
 
 - Additive `customer_policy_provenance_complete_v1` profile for `authority_bundle.v1`, binding exact source bytes, stable statement spans, rule mappings, ambiguity resolutions, approval, semantic commit, compiled contract, authority identity, and the explicit source-revision-to-authority-version relationship.
 - Provenance-complete `publication_receipt.v1` bindings and deterministic verification for every customer-policy publication input.
+- Complete source partition/classification checks, auditable resolution records, canonical base64, full-SHA-256 statement and mapping IDs, and bounded short-policy inputs.
 
 ### Changed
 

@@ -223,14 +223,14 @@
         },
         "provenance_profile": { "const": "customer_policy_provenance_complete_v1" },
         "provenance_complete": { "const": true },
-        "source_policy_id": { "type": "string", "minLength": 1 },
-        "source_revision": { "type": "string", "minLength": 1 },
-        "source_policy_ref": { "type": "string", "minLength": 1 },
+        "source_policy_id": { "type": "string", "minLength": 1, "maxLength": 256, "pattern": "^[^@]+$" },
+        "source_revision": { "type": "string", "minLength": 1, "maxLength": 256, "pattern": "^[^@]+$" },
+        "source_policy_ref": { "type": "string", "minLength": 3, "maxLength": 513, "pattern": "^[^@]+@[^@]+$" },
         "source_snapshot_hash": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
         "source_statements_hash": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
         "interpretation_id": { "type": "string", "minLength": 1 },
         "mapping_hash": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
-        "resolution_id": { "type": "string", "minLength": 1 },
+        "resolution_id": { "type": "string", "pattern": "^resolution-set-[a-f0-9]{64}$" },
         "resolution_hash": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
         "approval_id": { "type": "string", "minLength": 1 },
         "approval_record_hash": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
@@ -352,17 +352,40 @@
             "snapshot_hash"
           ],
           "properties": {
-            "source_policy_id": { "type": "string", "minLength": 1 },
-            "source_revision": { "type": "string", "minLength": 1 },
-            "source_policy_ref": { "type": "string", "minLength": 1 },
+            "source_policy_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256,
+              "pattern": "^[^@]+$"
+            },
+            "source_revision": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256,
+              "pattern": "^[^@]+$"
+            },
+            "source_policy_ref": {
+              "type": "string",
+              "minLength": 3,
+              "maxLength": 513,
+              "pattern": "^[^@]+@[^@]+$"
+            },
             "content_encoding": { "const": "base64" },
-            "source_bytes_base64": { "type": "string", "contentEncoding": "base64" },
+            "source_bytes_base64": {
+              "type": "string",
+              "minLength": 4,
+              "maxLength": 327680,
+              "$comment": "Canonical base64 for at most 245760 decoded source bytes (240 KiB). Runtime validation enforces the decoded-byte limit.",
+              "contentEncoding": "base64"
+            },
             "snapshot_hash": { "$ref": "#/$defs/sha256" }
           }
         },
         "source_statements": {
           "type": "array",
           "minItems": 1,
+          "maxItems": 2048,
+          "$comment": "At most 2048 ordered statements forming a complete, non-overlapping byte partition.",
           "items": {
             "type": "object",
             "additionalProperties": false,
@@ -371,14 +394,31 @@
               "start_byte",
               "end_byte",
               "statement_bytes_base64",
-              "statement_hash"
+              "statement_hash",
+              "classification"
             ],
             "properties": {
-              "statement_id": { "type": "string", "minLength": 1 },
+              "statement_id": {
+                "type": "string",
+                "pattern": "^statement-[a-f0-9]{64}$"
+              },
               "start_byte": { "type": "integer", "minimum": 0 },
               "end_byte": { "type": "integer", "minimum": 1 },
-              "statement_bytes_base64": { "type": "string", "contentEncoding": "base64" },
-              "statement_hash": { "$ref": "#/$defs/sha256" }
+              "statement_bytes_base64": {
+                "type": "string",
+                "minLength": 4,
+                "maxLength": 327680,
+                "contentEncoding": "base64"
+              },
+              "statement_hash": { "$ref": "#/$defs/sha256" },
+              "classification": {
+                "enum": [
+                  "enforced",
+                  "informational",
+                  "unsupported",
+                  "requires_resolution"
+                ]
+              }
             }
           }
         },
@@ -390,22 +430,28 @@
             "interpretation_id": { "type": "string", "minLength": 1 },
             "statement_rule_mappings": {
               "type": "array",
-              "minItems": 1,
+              "maxItems": 1024,
+              "$comment": "At most 1024 enforced statement-to-rule mappings.",
               "items": {
                 "type": "object",
                 "additionalProperties": false,
                 "required": ["mapping_id", "statement_ids", "rule_ids"],
                 "properties": {
-                  "mapping_id": { "type": "string", "minLength": 1 },
+                  "mapping_id": {
+                    "type": "string",
+                    "pattern": "^mapping-[a-f0-9]{64}$"
+                  },
                   "statement_ids": {
                     "type": "array",
                     "minItems": 1,
+                    "maxItems": 1,
                     "uniqueItems": true,
-                    "items": { "type": "string", "minLength": 1 }
+                    "items": { "type": "string", "pattern": "^statement-[a-f0-9]{64}$" }
                   },
                   "rule_ids": {
                     "type": "array",
                     "minItems": 1,
+                    "maxItems": 256,
                     "uniqueItems": true,
                     "items": { "type": "string", "minLength": 1 }
                   }
@@ -420,8 +466,50 @@
           "additionalProperties": false,
           "required": ["resolution_id", "ambiguity_resolutions", "resolution_hash"],
           "properties": {
-            "resolution_id": { "type": "string", "minLength": 1 },
-            "ambiguity_resolutions": { "type": "array", "items": { "type": "object" } },
+            "resolution_id": {
+              "type": "string",
+              "pattern": "^resolution-set-[a-f0-9]{64}$"
+            },
+            "ambiguity_resolutions": {
+              "type": "array",
+              "maxItems": 1024,
+              "$comment": "At most 1024 canonical, auditable resolution records.",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "resolution_id",
+                  "ambiguity_id",
+                  "statement_ids",
+                  "selected_decision",
+                  "resolved_by",
+                  "resolved_at"
+                ],
+                "properties": {
+                  "resolution_id": {
+                    "type": "string",
+                    "pattern": "^resolution-[a-f0-9]{64}$"
+                  },
+                  "ambiguity_id": { "type": "string", "minLength": 1, "maxLength": 256 },
+                  "statement_ids": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 64,
+                    "uniqueItems": true,
+                    "items": {
+                      "type": "string",
+                      "pattern": "^statement-[a-f0-9]{64}$"
+                    }
+                  },
+                  "selected_decision": { "type": "string", "minLength": 1, "maxLength": 4096 },
+                  "resolved_by": { "type": "string", "minLength": 1, "maxLength": 256 },
+                  "resolved_at": {
+                    "type": "string",
+                    "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+                  }
+                }
+              }
+            },
             "resolution_hash": { "$ref": "#/$defs/sha256" }
           }
         },
@@ -448,9 +536,14 @@
           "additionalProperties": false,
           "required": ["source_policy_ref", "authority_ref", "relationship", "binding_hash"],
           "properties": {
-            "source_policy_ref": { "type": "string", "minLength": 1 },
+            "source_policy_ref": {
+              "type": "string",
+              "minLength": 3,
+              "maxLength": 513,
+              "pattern": "^[^@]+@[^@]+$"
+            },
             "authority_ref": { "type": "string", "minLength": 1 },
-            "relationship": { "type": "string", "minLength": 1 },
+            "relationship": { "const": "publishes_as" },
             "binding_hash": { "$ref": "#/$defs/sha256" }
           }
         }

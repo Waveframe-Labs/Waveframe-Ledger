@@ -29,6 +29,11 @@
   ],
   "interpretation": {
     "interpretation_id": "interpretation-repository-change-001",
+    "statement_classifications": [
+      "enforced",
+      "enforced",
+      "enforced"
+    ],
     "statement_rule_ids": [
       ["rule-role-maintainer"],
       ["rule-allow-readme"],
@@ -41,8 +46,7 @@
     "published_by": "policy-owner@example.com"
   },
   "resolution": {
-    "ambiguity_resolutions": [],
-    "resolution_id": "resolution-repository-change-001"
+    "ambiguity_resolutions": []
   },
   "semantic_commit": {
     "committed_at": "2026-08-29T14:00:00Z",

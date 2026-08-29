@@ -10,10 +10,16 @@ import pytest
 from governance_ledger.publication_provenance import (
     CUSTOMER_POLICY_PROFILE,
     LEGACY_INCOMPLETE_PROFILE,
+    MAX_RESOLUTION_RECORDS,
+    MAX_SOURCE_BYTES,
+    MAX_SOURCE_STATEMENTS,
+    MAX_STATEMENT_MAPPINGS,
     bytes_sha256,
     canonical_json,
     canonical_sha256,
     classify_authority_bundle_provenance,
+    resolution_record_id,
+    resolution_set_id,
     source_statement_id,
     statement_mapping_id,
     validate_authority_bundle,
@@ -58,18 +64,35 @@ def test_valid_provenance_complete_publication_binds_distinct_versions() -> None
         "customer_policy_provenance.source_policy",
         "customer_policy_provenance.source_policy.source_policy_id",
         "customer_policy_provenance.source_policy.source_revision",
+        "customer_policy_provenance.source_policy.source_policy_ref",
+        "customer_policy_provenance.source_policy.content_encoding",
+        "customer_policy_provenance.source_policy.source_bytes_base64",
         "customer_policy_provenance.source_policy.snapshot_hash",
         "customer_policy_provenance.source_statements",
         "customer_policy_provenance.source_statements.0.statement_id",
         "customer_policy_provenance.source_statements.0.start_byte",
         "customer_policy_provenance.source_statements.0.end_byte",
+        "customer_policy_provenance.source_statements.0.statement_bytes_base64",
+        "customer_policy_provenance.source_statements.0.statement_hash",
+        "customer_policy_provenance.source_statements.0.classification",
         "customer_policy_provenance.interpretation",
+        "customer_policy_provenance.interpretation.interpretation_id",
+        "customer_policy_provenance.interpretation.statement_rule_mappings",
         "customer_policy_provenance.interpretation.mapping_hash",
         "customer_policy_provenance.resolution",
+        "customer_policy_provenance.resolution.resolution_id",
+        "customer_policy_provenance.resolution.ambiguity_resolutions",
         "customer_policy_provenance.resolution.resolution_hash",
         "customer_policy_provenance.approval_record",
+        "customer_policy_provenance.approval_record.approval_id",
+        "customer_policy_provenance.approval_record.approved_by",
+        "customer_policy_provenance.approval_record.approved_at",
+        "customer_policy_provenance.approval_record.approved_semantic_commit_hash",
         "customer_policy_provenance.approval_record.approval_record_hash",
         "customer_policy_provenance.version_binding",
+        "customer_policy_provenance.version_binding.source_policy_ref",
+        "customer_policy_provenance.version_binding.authority_ref",
+        "customer_policy_provenance.version_binding.relationship",
         "customer_policy_provenance.version_binding.binding_hash",
         "semantic_commit_bundle",
         "compiled_authority_contract",
@@ -148,6 +171,141 @@ def test_source_byte_tampering_fails_closed() -> None:
         validate_authority_bundle(bundle)
 
 
+@pytest.mark.parametrize("source_bytes", [b"", b"   \n", b"\xff"])
+def test_source_policy_requires_non_empty_utf8_text(source_bytes: bytes) -> None:
+    with pytest.raises(ValueError, match="UTF-8 text|non-empty"):
+        _complete_publication(source_bytes=source_bytes)
+
+
+@pytest.mark.parametrize("partition_error", ["omitted", "overlapping", "out_of_order", "duplicate", "out_of_bounds"])
+def test_statement_partition_rejects_invalid_spans(partition_error: str) -> None:
+    bundle, _ = _complete_publication()
+    statements = bundle["customer_policy_provenance"]["source_statements"]
+    if partition_error == "omitted":
+        del statements[1]
+    elif partition_error == "overlapping":
+        statements[1]["start_byte"] = statements[0]["end_byte"] - 1
+    elif partition_error == "out_of_order":
+        statements[0], statements[1] = statements[1], statements[0]
+    elif partition_error == "duplicate":
+        statements.insert(1, dict(statements[0]))
+    else:
+        statements[-1]["end_byte"] += 1
+
+    with pytest.raises(ValueError, match="span|overlapping|order|omits"):
+        validate_authority_bundle(bundle)
+
+
+def test_statement_partition_rejects_unclassified_and_multiply_classified_statements() -> None:
+    bundle, _ = _complete_publication()
+    del bundle["customer_policy_provenance"]["source_statements"][0]["classification"]
+    with pytest.raises(ValueError, match="classification|required"):
+        validate_authority_bundle(bundle)
+
+    bundle, _ = _complete_publication()
+    bundle["customer_policy_provenance"]["source_statements"][0]["classification"] = [
+        "enforced",
+        "informational",
+    ]
+    with pytest.raises(ValueError, match="classification"):
+        validate_authority_bundle(bundle)
+
+
+def test_enforced_statement_requires_confirmed_rules() -> None:
+    bundle, _ = _complete_publication()
+    del bundle["customer_policy_provenance"]["interpretation"]["statement_rule_mappings"][0]
+
+    with pytest.raises(ValueError, match="enforced source statement"):
+        validate_authority_bundle(bundle)
+
+
+@pytest.mark.parametrize("classification", ["informational", "unsupported"])
+def test_non_enforced_statements_cannot_acquire_rules(classification: str) -> None:
+    bundle, _ = _complete_publication()
+    bundle["customer_policy_provenance"]["source_statements"][0]["classification"] = classification
+
+    with pytest.raises(ValueError, match="must not acquire enforceable rules"):
+        validate_authority_bundle(bundle)
+
+
+def test_complete_publication_rejects_requires_resolution_state() -> None:
+    bundle, _ = _complete_publication()
+    bundle["customer_policy_provenance"]["source_statements"][0]["classification"] = "requires_resolution"
+
+    with pytest.raises(ValueError, match="requires_resolution"):
+        validate_authority_bundle(bundle)
+
+
+def test_auditable_resolution_record_is_bound_to_semantic_commit() -> None:
+    initial, _ = _complete_publication()
+    statement_id = initial["customer_policy_provenance"]["source_statements"][0]["statement_id"]
+    record = _resolution_record(statement_id, 1)
+    bundle, receipt = _complete_publication(resolution_records=[record])
+
+    assert bundle["semantic_commit_bundle"]["resolved_interpretations"] == [record]
+    assert validate_publication_receipt(bundle, receipt)["provenance_complete"] is True
+
+
+@pytest.mark.parametrize("record_error", ["malformed", "duplicate", "unknown_statement"])
+def test_resolution_records_reject_malformed_duplicate_or_unknown_references(record_error: str) -> None:
+    initial, _ = _complete_publication()
+    statement_id = initial["customer_policy_provenance"]["source_statements"][0]["statement_id"]
+    record = _resolution_record(statement_id, 1)
+    bundle, _ = _complete_publication(resolution_records=[record])
+    records = bundle["customer_policy_provenance"]["resolution"]["ambiguity_resolutions"]
+    if record_error == "malformed":
+        del records[0]["resolved_by"]
+    elif record_error == "duplicate":
+        records.append(dict(records[0]))
+    else:
+        records[0]["statement_ids"] = ["statement-" + "0" * 64]
+
+    with pytest.raises(ValueError, match="required|duplicate|unknown"):
+        validate_authority_bundle(bundle)
+
+
+@pytest.mark.parametrize(
+    "field",
+    [
+        "resolution_id",
+        "ambiguity_id",
+        "statement_ids",
+        "selected_decision",
+        "resolved_by",
+        "resolved_at",
+    ],
+)
+def test_resolution_record_rejects_every_missing_audit_field(field: str) -> None:
+    initial, _ = _complete_publication()
+    statement_id = initial["customer_policy_provenance"]["source_statements"][0]["statement_id"]
+    bundle, _ = _complete_publication(resolution_records=[_resolution_record(statement_id, 1)])
+    del bundle["customer_policy_provenance"]["resolution"]["ambiguity_resolutions"][0][field]
+
+    with pytest.raises(ValueError, match="missing|required"):
+        validate_authority_bundle(bundle)
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("resolution_id", "resolution-not-a-digest"),
+        ("ambiguity_id", ""),
+        ("statement_ids", []),
+        ("selected_decision", "   "),
+        ("resolved_by", ""),
+        ("resolved_at", "2026-08-29T13:58:00+00:00"),
+    ],
+)
+def test_resolution_record_rejects_malformed_audit_values(field: str, value: object) -> None:
+    initial, _ = _complete_publication()
+    statement_id = initial["customer_policy_provenance"]["source_statements"][0]["statement_id"]
+    bundle, _ = _complete_publication(resolution_records=[_resolution_record(statement_id, 1)])
+    bundle["customer_policy_provenance"]["resolution"]["ambiguity_resolutions"][0][field] = value
+
+    with pytest.raises(ValueError):
+        validate_authority_bundle(bundle)
+
+
 def test_unexplained_or_unbound_version_relationship_fails() -> None:
     bundle, _ = _complete_publication()
     bundle["customer_policy_provenance"]["version_binding"]["relationship"] = ""
@@ -159,6 +317,77 @@ def test_unexplained_or_unbound_version_relationship_fails() -> None:
     bundle["customer_policy_provenance"]["version_binding"]["authority_ref"] = "repository-change-authority@rev-17"
     with pytest.raises(ValueError, match="version authority_ref"):
         validate_authority_bundle(bundle)
+
+
+def test_unsupported_version_relationship_fails() -> None:
+    bundle, _ = _complete_publication()
+    bundle["customer_policy_provenance"]["version_binding"]["relationship"] = "supersedes"
+
+    with pytest.raises(ValueError, match="unsupported version relationship"):
+        validate_authority_bundle(bundle)
+
+
+@pytest.mark.parametrize(
+    "identity",
+    [
+        {"source_policy_id": "repository@change-policy"},
+        {"source_revision": "rev@17"},
+    ],
+)
+def test_ambiguous_source_policy_identity_is_rejected(identity: dict[str, str]) -> None:
+    bundle, _ = _complete_publication()
+    source = bundle["customer_policy_provenance"]["source_policy"]
+    source.update(identity)
+
+    with pytest.raises(ValueError, match="must not contain @"):
+        validate_authority_bundle(bundle)
+
+
+@pytest.mark.parametrize("field", ["source", "statement"])
+def test_noncanonical_base64_is_rejected(field: str) -> None:
+    bundle, _ = _complete_publication(source_bytes=b"a")
+    provenance = bundle["customer_policy_provenance"]
+    if field == "source":
+        provenance["source_policy"]["source_bytes_base64"] = "YR=="
+    else:
+        provenance["source_statements"][0]["statement_bytes_base64"] = "YR=="
+
+    with pytest.raises(ValueError, match="canonical base64"):
+        validate_authority_bundle(bundle)
+
+
+@pytest.mark.parametrize(
+    "limit_name,limit",
+    [
+        ("source_bytes", MAX_SOURCE_BYTES),
+        ("source_statements", MAX_SOURCE_STATEMENTS),
+        ("statement_mappings", MAX_STATEMENT_MAPPINGS),
+        ("resolution_records", MAX_RESOLUTION_RECORDS),
+    ],
+)
+@pytest.mark.parametrize("offset", [-1, 0, 1])
+def test_runtime_input_limit_boundaries(limit_name: str, limit: int, offset: int) -> None:
+    inputs = _limit_inputs(limit_name, limit + offset)
+    bundle_schema = json.loads((ROOT / "schemas/authority_bundle.v1.json").read_text(encoding="utf-8"))
+    if offset == 1:
+        with pytest.raises(ValueError, match="maximum"):
+            _complete_publication(**inputs)
+        with pytest.raises(jsonschema.ValidationError):
+            jsonschema.Draft202012Validator(bundle_schema).validate(
+                _schema_above_limit_bundle(limit_name, limit + offset)
+            )
+    else:
+        bundle, receipt = _complete_publication(**inputs)
+        jsonschema.Draft202012Validator(bundle_schema).validate(bundle)
+        assert validate_publication_receipt(bundle, receipt)["provenance_complete"] is True
+
+
+def test_statement_and_mapping_ids_use_complete_sha256_digests() -> None:
+    bundle, _ = _complete_publication()
+    provenance = bundle["customer_policy_provenance"]
+
+    assert len(provenance["source_statements"][0]["statement_id"]) == len("statement-") + 64
+    assert len(provenance["interpretation"]["statement_rule_mappings"][0]["mapping_id"]) == len("mapping-") + 64
 
 
 @pytest.mark.parametrize(
@@ -189,6 +418,7 @@ def test_receipt_verification_detects_changed_publication_inputs(path: str, new_
         "provenance_bindings.source_policy_id",
         "provenance_bindings.source_revision",
         "provenance_bindings.source_policy_ref",
+        "provenance_bindings.source_statements_hash",
         "provenance_bindings.interpretation_id",
         "provenance_bindings.mapping_hash",
         "provenance_bindings.resolution_id",
@@ -271,19 +501,48 @@ def test_schema_validation_and_canonical_serialization() -> None:
     assert canonical_sha256({"a": 1, "b": 2}) == canonical_sha256({"b": 2, "a": 1})
 
 
-def _complete_publication() -> tuple[dict, dict]:
+def _complete_publication(
+    *,
+    source_bytes: bytes | None = None,
+    classifications: list[str] | None = None,
+    rule_ids_by_statement: list[list[str]] | None = None,
+    confirmed_rules: list[dict] | None = None,
+    resolution_records: list[dict] | None = None,
+    source_policy_id: str | None = None,
+    source_revision: str | None = None,
+    version_relationship: str | None = None,
+) -> tuple[dict, dict]:
     fixture = json.loads((FIXTURE_ROOT / "publication-inputs.json").read_text(encoding="utf-8"))
-    source_bytes = base64.b64decode(
-        (FIXTURE_ROOT / "repository-change-policy.base64").read_text(encoding="ascii").strip(),
-        validate=True,
-    )
-    source_policy_id = fixture["source_policy"]["source_policy_id"]
-    source_revision = fixture["source_policy"]["source_revision"]
+    using_fixture_source = source_bytes is None
+    if source_bytes is None:
+        source_bytes = base64.b64decode(
+            (FIXTURE_ROOT / "repository-change-policy.base64").read_text(encoding="ascii").strip(),
+            validate=True,
+        )
+    source_policy_id = source_policy_id or fixture["source_policy"]["source_policy_id"]
+    source_revision = source_revision or fixture["source_policy"]["source_revision"]
     source_ref = f"{source_policy_id}@{source_revision}"
     source_hash = bytes_sha256(source_bytes)
+    statement_chunks = source_bytes.splitlines(keepends=True) or [source_bytes]
+    if classifications is None:
+        classifications = (
+            fixture["interpretation"]["statement_classifications"]
+            if using_fixture_source
+            else ["informational"] * len(statement_chunks)
+        )
+    if rule_ids_by_statement is None:
+        rule_ids_by_statement = (
+            fixture["interpretation"]["statement_rule_ids"]
+            if using_fixture_source
+            else [[] for _ in statement_chunks]
+        )
+    if len(classifications) != len(statement_chunks):
+        raise AssertionError("test fixture classifications must match statement chunks")
+    if len(rule_ids_by_statement) != len(statement_chunks):
+        raise AssertionError("test fixture mappings must match statement chunks")
     source_statements = []
     cursor = 0
-    for statement_bytes in source_bytes.splitlines(keepends=True):
+    for statement_bytes, classification in zip(statement_chunks, classifications):
         start = cursor
         end = cursor + len(statement_bytes)
         statement_hash = bytes_sha256(statement_bytes)
@@ -300,15 +559,15 @@ def _complete_publication() -> tuple[dict, dict]:
                 "end_byte": end,
                 "statement_bytes_base64": base64.b64encode(statement_bytes).decode("ascii"),
                 "statement_hash": statement_hash,
+                "classification": classification,
             }
         )
         cursor = end
 
     mappings = []
-    for statement, mapped_rules in zip(
-        source_statements,
-        fixture["interpretation"]["statement_rule_ids"],
-    ):
+    for statement, mapped_rules in zip(source_statements, rule_ids_by_statement):
+        if not mapped_rules:
+            continue
         statement_ids = [statement["statement_id"]]
         mappings.append(
             {
@@ -322,10 +581,15 @@ def _complete_publication() -> tuple[dict, dict]:
         "statement_rule_mappings": mappings,
         "mapping_hash": canonical_sha256(mappings),
     }
+    resolution_records = (
+        fixture["resolution"]["ambiguity_resolutions"]
+        if resolution_records is None
+        else resolution_records
+    )
     resolution = {
-        "resolution_id": fixture["resolution"]["resolution_id"],
-        "ambiguity_resolutions": fixture["resolution"]["ambiguity_resolutions"],
-        "resolution_hash": canonical_sha256(fixture["resolution"]["ambiguity_resolutions"]),
+        "resolution_id": resolution_set_id(resolution_records),
+        "ambiguity_resolutions": resolution_records,
+        "resolution_hash": canonical_sha256(resolution_records),
     }
     semantic_bindings = {
         "source_policy_ref": source_ref,
@@ -341,7 +605,7 @@ def _complete_publication() -> tuple[dict, dict]:
         "source_id": source_policy_id,
         "source_hash": source_hash,
         "extraction_id": "extraction-repository-change-001",
-        "operator_interpretation_decisions": [],
+        "operator_interpretation_decisions": resolution_records,
         "unresolved_ambiguities": [],
         "semantic_conflicts": [],
         "interpretation_completeness_posture": "complete",
@@ -351,7 +615,19 @@ def _complete_publication() -> tuple[dict, dict]:
             "governed_targets": ["README.md", "deployment/"],
             "governed_operations": ["modify"],
             "approver_roles": ["repository-maintainer"],
-            "confirmed_rules": fixture["confirmed_rules"],
+            "confirmed_rules": (
+                fixture["confirmed_rules"]
+                if confirmed_rules is None and using_fixture_source
+                else (
+                    confirmed_rules
+                    if confirmed_rules is not None
+                    else [
+                        {"rule_id": rule_id, "rule_type": "test_rule"}
+                        for rule_ids in rule_ids_by_statement
+                        for rule_id in rule_ids
+                    ]
+                )
+            ),
         },
     }
     semantic_commit = build_semantic_commit_bundle(
@@ -372,7 +648,7 @@ def _complete_publication() -> tuple[dict, dict]:
     version_binding = {
         "source_policy_ref": source_ref,
         "authority_ref": authority_ref,
-        "relationship": fixture["version_relationship"],
+        "relationship": version_relationship or fixture["version_relationship"],
     }
     version_binding["binding_hash"] = canonical_sha256(version_binding)
     provenance = {
@@ -422,6 +698,79 @@ def _complete_publication() -> tuple[dict, dict]:
         published_at=manifest["published_at"],
     )
     return bundle, receipt
+
+
+def _resolution_record(statement_id: str, index: int) -> dict:
+    values = {
+        "ambiguity_id": f"ambiguity-{index:04d}",
+        "statement_ids": [statement_id],
+        "selected_decision": f"Selected bounded meaning {index}",
+        "resolved_by": "policy-owner@example.com",
+        "resolved_at": "2026-08-29T13:58:00Z",
+    }
+    return {
+        "resolution_id": resolution_record_id(**values),
+        **values,
+    }
+
+
+def _limit_inputs(limit_name: str, count: int) -> dict:
+    if limit_name == "source_bytes":
+        return {"source_bytes": b"x" * count}
+    if limit_name == "source_statements":
+        return {"source_bytes": b"x\n" * count}
+    if limit_name == "statement_mappings":
+        return {
+            "source_bytes": b"x\n" * count,
+            "classifications": ["enforced"] * count,
+            "rule_ids_by_statement": [[f"rule-{index:04d}"] for index in range(count)],
+        }
+    if limit_name == "resolution_records":
+        source_bytes = b"x"
+        statement_hash = bytes_sha256(source_bytes)
+        statement_id = source_statement_id(
+            source_policy_id="repository-change-policy",
+            source_revision="rev-17",
+            start_byte=0,
+            end_byte=1,
+            statement_hash=statement_hash,
+        )
+        return {
+            "source_bytes": source_bytes,
+            "resolution_records": [
+                _resolution_record(statement_id, index)
+                for index in range(count)
+            ],
+        }
+    raise AssertionError(f"unknown test limit: {limit_name}")
+
+
+def _schema_above_limit_bundle(limit_name: str, count: int) -> dict:
+    bundle, _ = _complete_publication()
+    provenance = bundle["customer_policy_provenance"]
+    if limit_name == "source_bytes":
+        provenance["source_policy"]["source_bytes_base64"] = base64.b64encode(
+            b"x" * count
+        ).decode("ascii")
+    elif limit_name == "source_statements":
+        provenance["source_statements"] = [
+            dict(provenance["source_statements"][0])
+            for _ in range(count)
+        ]
+    elif limit_name == "statement_mappings":
+        provenance["interpretation"]["statement_rule_mappings"] = [
+            dict(provenance["interpretation"]["statement_rule_mappings"][0])
+            for _ in range(count)
+        ]
+    elif limit_name == "resolution_records":
+        statement_id = provenance["source_statements"][0]["statement_id"]
+        provenance["resolution"]["ambiguity_resolutions"] = [
+            _resolution_record(statement_id, index)
+            for index in range(count)
+        ]
+    else:
+        raise AssertionError(f"unknown test limit: {limit_name}")
+    return bundle
 
 
 def _path_parts(path: str) -> list[str | int]:

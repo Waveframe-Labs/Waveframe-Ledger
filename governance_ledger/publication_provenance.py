@@ -6,11 +6,27 @@ import base64
 import binascii
 import hashlib
 import json
+import re
+from datetime import datetime
 from typing import Any
 
 
 CUSTOMER_POLICY_PROFILE = "customer_policy_provenance_complete_v1"
 LEGACY_INCOMPLETE_PROFILE = "legacy_provenance_incomplete"
+MAX_SOURCE_BYTES = 245_760
+MAX_SOURCE_STATEMENTS = 2_048
+MAX_STATEMENT_MAPPINGS = 1_024
+MAX_RESOLUTION_RECORDS = 1_024
+MAX_RULE_IDS_PER_MAPPING = 256
+MAX_STATEMENT_IDS_PER_RESOLUTION = 64
+MAX_RESOLUTION_DECISION_LENGTH = 4_096
+SOURCE_STATEMENT_CLASSIFICATIONS = {
+    "enforced",
+    "informational",
+    "unsupported",
+    "requires_resolution",
+}
+VERSION_RELATIONSHIPS = {"publishes_as"}
 
 
 def canonical_json(value: Any) -> str:
@@ -68,7 +84,7 @@ def source_statement_id(
             "statement_hash": statement_hash,
         }
     ).removeprefix("sha256:")
-    return f"statement-{digest[:16]}"
+    return f"statement-{digest}"
 
 
 def statement_mapping_id(statement_ids: list[str], rule_ids: list[str]) -> str:
@@ -79,7 +95,33 @@ def statement_mapping_id(statement_ids: list[str], rule_ids: list[str]) -> str:
             "rule_ids": rule_ids,
         }
     ).removeprefix("sha256:")
-    return f"mapping-{digest[:16]}"
+    return f"mapping-{digest}"
+
+
+def resolution_record_id(
+    *,
+    ambiguity_id: str,
+    statement_ids: list[str],
+    selected_decision: str,
+    resolved_by: str,
+    resolved_at: str,
+) -> str:
+    """Derive a stable audit identity for an ambiguity resolution record."""
+    digest = canonical_sha256(
+        {
+            "ambiguity_id": ambiguity_id,
+            "statement_ids": statement_ids,
+            "selected_decision": selected_decision,
+            "resolved_by": resolved_by,
+            "resolved_at": resolved_at,
+        }
+    ).removeprefix("sha256:")
+    return f"resolution-{digest}"
+
+
+def resolution_set_id(records: list[dict[str, Any]]) -> str:
+    """Derive the stable identity of an ordered resolution record set."""
+    return f"resolution-set-{canonical_sha256(records).removeprefix('sha256:')}"
 
 
 def classify_authority_bundle_provenance(bundle: dict[str, Any]) -> str:
@@ -191,26 +233,74 @@ def _validate_customer_policy_bundle(bundle: dict[str, Any]) -> None:
     source = _required_object(provenance, "source_policy")
     source_policy_id = _required_string(source, "source_policy_id")
     source_revision = _required_string(source, "source_revision")
+    if "@" in source_policy_id or "@" in source_revision:
+        raise ValueError("source policy identity and revision must not contain @")
     source_ref = f"{source_policy_id}@{source_revision}"
     _require_equal(source.get("source_policy_ref"), source_ref, "source policy reference")
     _require_equal(source.get("content_encoding"), "base64", "source content_encoding")
     source_bytes = _decode_base64(_required_string(source, "source_bytes_base64"), "source bytes")
+    if not source_bytes:
+        raise ValueError("source policy must contain non-empty UTF-8 text")
+    if len(source_bytes) > MAX_SOURCE_BYTES:
+        raise ValueError(f"source policy exceeds maximum of {MAX_SOURCE_BYTES} bytes")
+    try:
+        source_text = source_bytes.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise ValueError("source policy must contain valid UTF-8 text") from exc
+    if not source_text.strip():
+        raise ValueError("source policy must contain non-empty UTF-8 text")
     source_snapshot_hash = bytes_sha256(source_bytes)
     _require_equal(source.get("snapshot_hash"), source_snapshot_hash, "source snapshot_hash")
 
     statements = _required_list(provenance, "source_statements")
     if not statements:
         raise ValueError("customer provenance requires at least one source statement")
+    if len(statements) > MAX_SOURCE_STATEMENTS:
+        raise ValueError(
+            f"customer provenance exceeds maximum of {MAX_SOURCE_STATEMENTS} source statements"
+        )
     statement_ids: set[str] = set()
+    statement_spans: set[tuple[int, int]] = set()
+    classifications: dict[str, str] = {}
+    expected_start = 0
     for index, statement_value in enumerate(statements):
         if not isinstance(statement_value, dict):
             raise ValueError(f"source_statements[{index}] must be an object")
         statement = statement_value
+        _require_exact_fields(
+            statement,
+            {
+                "statement_id",
+                "start_byte",
+                "end_byte",
+                "statement_bytes_base64",
+                "statement_hash",
+                "classification",
+            },
+            f"source_statements[{index}]",
+        )
         start = _required_integer(statement, "start_byte")
         end = _required_integer(statement, "end_byte")
         if start < 0 or end <= start or end > len(source_bytes):
             raise ValueError(f"source_statements[{index}] has an invalid byte span")
+        if (start, end) in statement_spans:
+            raise ValueError(f"source_statements[{index}] duplicates a byte span")
+        if start < expected_start:
+            raise ValueError(f"source_statements[{index}] is overlapping or out of order")
+        if start > expected_start:
+            raise ValueError(f"source_statements[{index}] omits source policy bytes")
+        statement_spans.add((start, end))
+        expected_start = end
         statement_bytes = source_bytes[start:end]
+        supplied_statement_bytes = _decode_base64(
+            _required_string(statement, "statement_bytes_base64"),
+            f"source_statements[{index}] bytes",
+        )
+        _require_equal(
+            supplied_statement_bytes,
+            statement_bytes,
+            f"source_statements[{index}] byte span",
+        )
         encoded = base64.b64encode(statement_bytes).decode("ascii")
         _require_equal(statement.get("statement_bytes_base64"), encoded, f"source_statements[{index}] bytes")
         expected_statement_hash = bytes_sha256(statement_bytes)
@@ -226,34 +316,142 @@ def _validate_customer_policy_bundle(bundle: dict[str, Any]) -> None:
         if expected_statement_id in statement_ids:
             raise ValueError(f"duplicate source statement identity: {expected_statement_id}")
         statement_ids.add(expected_statement_id)
+        classification = _required_string(statement, "classification")
+        if classification not in SOURCE_STATEMENT_CLASSIFICATIONS:
+            raise ValueError(f"source_statements[{index}] has an invalid final classification")
+        classifications[expected_statement_id] = classification
+    if expected_start != len(source_bytes):
+        raise ValueError("source statement partition omits trailing source policy bytes")
+    unresolved_statement_ids = [
+        statement_id
+        for statement_id, classification in classifications.items()
+        if classification == "requires_resolution"
+    ]
+    if unresolved_statement_ids:
+        raise ValueError(
+            "provenance-complete publication cannot contain requires_resolution statements"
+        )
     source_statements_hash = canonical_sha256(statements)
 
     interpretation = _required_object(provenance, "interpretation")
     interpretation_id = _required_string(interpretation, "interpretation_id")
     mappings = _required_list(interpretation, "statement_rule_mappings")
-    if not mappings:
-        raise ValueError("customer provenance requires sentence-to-rule mappings")
+    if len(mappings) > MAX_STATEMENT_MAPPINGS:
+        raise ValueError(
+            f"customer provenance exceeds maximum of {MAX_STATEMENT_MAPPINGS} statement mappings"
+        )
     mapped_rule_ids: set[str] = set()
+    mapped_statement_ids: set[str] = set()
+    mapping_ids: set[str] = set()
     for index, mapping_value in enumerate(mappings):
         if not isinstance(mapping_value, dict):
             raise ValueError(f"statement_rule_mappings[{index}] must be an object")
         mapping = mapping_value
+        _require_exact_fields(
+            mapping,
+            {"mapping_id", "statement_ids", "rule_ids"},
+            f"statement_rule_mappings[{index}]",
+        )
         mapped_statements = _required_string_list(mapping, "statement_ids")
         rule_ids = _required_string_list(mapping, "rule_ids")
-        if not mapped_statements or not rule_ids:
-            raise ValueError(f"statement_rule_mappings[{index}] requires statement_ids and rule_ids")
+        if len(mapped_statements) != 1:
+            raise ValueError(
+                f"statement_rule_mappings[{index}] must reference exactly one source statement"
+            )
+        if not rule_ids:
+            raise ValueError(f"statement_rule_mappings[{index}] requires confirmed rule_ids")
+        if len(rule_ids) > MAX_RULE_IDS_PER_MAPPING:
+            raise ValueError(
+                f"statement_rule_mappings[{index}] exceeds maximum rule IDs per mapping"
+            )
         unknown = set(mapped_statements) - statement_ids
         if unknown:
             raise ValueError(f"statement_rule_mappings[{index}] references unknown statements: {sorted(unknown)}")
+        statement_id = mapped_statements[0]
+        if classifications[statement_id] != "enforced":
+            raise ValueError(
+                f"{classifications[statement_id]} source statement must not acquire enforceable rules"
+            )
+        if statement_id in mapped_statement_ids:
+            raise ValueError(f"source statement has duplicate enforceable mappings: {statement_id}")
         expected_mapping_id = statement_mapping_id(mapped_statements, rule_ids)
         _require_equal(mapping.get("mapping_id"), expected_mapping_id, f"statement_rule_mappings[{index}] id")
+        if expected_mapping_id in mapping_ids:
+            raise ValueError(f"duplicate statement mapping identity: {expected_mapping_id}")
+        mapping_ids.add(expected_mapping_id)
+        mapped_statement_ids.add(statement_id)
         mapped_rule_ids.update(rule_ids)
+    enforced_statement_ids = {
+        statement_id
+        for statement_id, classification in classifications.items()
+        if classification == "enforced"
+    }
+    if mapped_statement_ids != enforced_statement_ids:
+        raise ValueError("every enforced source statement requires exactly one confirmed-rule mapping")
     mapping_hash = canonical_sha256(mappings)
     _require_equal(interpretation.get("mapping_hash"), mapping_hash, "interpretation mapping_hash")
 
     resolution = _required_object(provenance, "resolution")
     resolution_id = _required_string(resolution, "resolution_id")
     resolutions = _required_list(resolution, "ambiguity_resolutions")
+    if len(resolutions) > MAX_RESOLUTION_RECORDS:
+        raise ValueError(
+            f"customer provenance exceeds maximum of {MAX_RESOLUTION_RECORDS} resolution records"
+        )
+    resolution_ids: set[str] = set()
+    ambiguity_ids: set[str] = set()
+    for index, record_value in enumerate(resolutions):
+        if not isinstance(record_value, dict):
+            raise ValueError(f"ambiguity_resolutions[{index}] must be an object")
+        record = record_value
+        _require_exact_fields(
+            record,
+            {
+                "resolution_id",
+                "ambiguity_id",
+                "statement_ids",
+                "selected_decision",
+                "resolved_by",
+                "resolved_at",
+            },
+            f"ambiguity_resolutions[{index}]",
+        )
+        ambiguity_id = _required_string(record, "ambiguity_id")
+        referenced_statements = _required_string_list(record, "statement_ids")
+        if not referenced_statements:
+            raise ValueError(f"ambiguity_resolutions[{index}] requires statement_ids")
+        if len(referenced_statements) > MAX_STATEMENT_IDS_PER_RESOLUTION:
+            raise ValueError(f"ambiguity_resolutions[{index}] references too many statements")
+        unknown = set(referenced_statements) - statement_ids
+        if unknown:
+            raise ValueError(
+                f"ambiguity_resolutions[{index}] references unknown statements: {sorted(unknown)}"
+            )
+        selected_decision = _required_string(record, "selected_decision")
+        if not selected_decision.strip() or len(selected_decision) > MAX_RESOLUTION_DECISION_LENGTH:
+            raise ValueError(f"ambiguity_resolutions[{index}] selected_decision is invalid")
+        resolved_by = _required_string(record, "resolved_by")
+        resolved_at = _required_string(record, "resolved_at")
+        _validate_resolution_time(resolved_at, index)
+        expected_record_id = resolution_record_id(
+            ambiguity_id=ambiguity_id,
+            statement_ids=referenced_statements,
+            selected_decision=selected_decision,
+            resolved_by=resolved_by,
+            resolved_at=resolved_at,
+        )
+        _require_equal(
+            record.get("resolution_id"),
+            expected_record_id,
+            f"ambiguity_resolutions[{index}] resolution_id",
+        )
+        if expected_record_id in resolution_ids:
+            raise ValueError(f"duplicate resolution identity: {expected_record_id}")
+        if ambiguity_id in ambiguity_ids:
+            raise ValueError(f"duplicate ambiguity identity: {ambiguity_id}")
+        resolution_ids.add(expected_record_id)
+        ambiguity_ids.add(ambiguity_id)
+    _require_equal(resolution_id, resolution_set_id(resolutions), "resolution set identity")
     resolution_hash = canonical_sha256(resolutions)
     _require_equal(resolution.get("resolution_hash"), resolution_hash, "resolution hash")
 
@@ -320,7 +518,9 @@ def _validate_customer_policy_bundle(bundle: dict[str, Any]) -> None:
     version_binding = _required_object(provenance, "version_binding")
     _require_equal(version_binding.get("source_policy_ref"), source_ref, "version source_policy_ref")
     _require_equal(version_binding.get("authority_ref"), authority_ref, "version authority_ref")
-    _required_string(version_binding, "relationship")
+    relationship = _required_string(version_binding, "relationship")
+    if relationship not in VERSION_RELATIONSHIPS:
+        raise ValueError(f"unsupported version relationship: {relationship}")
     version_binding_hash = hash_without_field(version_binding, "binding_hash")
     _require_equal(version_binding.get("binding_hash"), version_binding_hash, "version binding_hash")
 
@@ -422,8 +622,8 @@ def _receipt_provenance_bindings(bundle: dict[str, Any]) -> dict[str, Any]:
 def _confirmed_rule_ids(semantic_commit: dict[str, Any]) -> set[str]:
     meaning = semantic_commit.get("committed_semantic_meaning") or {}
     rules = meaning.get("confirmed_rules")
-    if not isinstance(rules, list) or not rules:
-        raise ValueError("customer semantic commit requires confirmed_rules")
+    if not isinstance(rules, list):
+        raise ValueError("customer semantic commit requires a confirmed_rules array")
     result: set[str] = set()
     for index, rule in enumerate(rules):
         if not isinstance(rule, dict):
@@ -461,9 +661,32 @@ def _without_compiler_hashes(value: Any) -> Any:
 
 def _decode_base64(value: str, label: str) -> bytes:
     try:
-        return base64.b64decode(value.encode("ascii"), validate=True)
+        decoded = base64.b64decode(value.encode("ascii"), validate=True)
     except (UnicodeEncodeError, binascii.Error) as exc:
         raise ValueError(f"{label} must be canonical base64") from exc
+    if base64.b64encode(decoded).decode("ascii") != value:
+        raise ValueError(f"{label} must be canonical base64")
+    return decoded
+
+
+def _validate_resolution_time(value: str, index: int) -> None:
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z", value):
+        raise ValueError(f"ambiguity_resolutions[{index}] resolved_at must be canonical UTC")
+    try:
+        datetime.fromisoformat(value.removesuffix("Z") + "+00:00")
+    except ValueError as exc:
+        raise ValueError(
+            f"ambiguity_resolutions[{index}] resolved_at must be canonical UTC"
+        ) from exc
+
+
+def _require_exact_fields(value: dict[str, Any], fields: set[str], label: str) -> None:
+    missing = fields - set(value)
+    extra = set(value) - fields
+    if missing:
+        raise ValueError(f"{label} is missing required fields: {sorted(missing)}")
+    if extra:
+        raise ValueError(f"{label} contains unsupported fields: {sorted(extra)}")
 
 
 def _required_object(value: dict[str, Any], field: str) -> dict[str, Any]:
