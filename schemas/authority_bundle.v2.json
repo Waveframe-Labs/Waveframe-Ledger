@@ -17,7 +17,7 @@
     "runtime_fact_schema": { "$ref": "runtime_fact_schema.v1.json" },
     "domain_pack": { "$ref": "constraint_ir.v1.json#/$defs/packRef" },
     "semantic_commit_bundle": { "$ref": "semantic_commit_bundle.v1.json" },
-    "compiled_authority_contract": { "$ref": "#/$defs/compiledContract" },
+    "compiled_authority_contract": { "$ref": "compiled_authority_contract.v2.json" },
     "authority": { "$ref": "#/$defs/authority" },
     "approval_record": { "$ref": "#/$defs/approvalRecord" },
     "publication_manifest": { "$ref": "publication_manifest.v1.json" },
@@ -72,26 +72,6 @@
       "type": "object", "additionalProperties": false, "required": ["constraint_id", "preview"],
       "properties": { "constraint_id": { "type": "string", "pattern": "^constraint-[a-f0-9]{64}$" }, "preview": { "type": "string", "minLength": 1 } }
     },
-    "compiledContract": {
-      "type": "object", "additionalProperties": false,
-      "required": ["contract_id", "contract_version", "authority_requirements", "approval_requirements", "artifact_requirements", "stage_requirements", "invariants", "target_requirements", "contract_hash", "schema_version", "lineage", "authority_ref", "compiled_from"],
-      "properties": {
-        "contract_id": { "type": "string", "minLength": 1 }, "contract_version": { "$ref": "#/$defs/semver" },
-        "authority_requirements": { "type": "object", "additionalProperties": false, "properties": { "required_roles": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "minLength": 1 } } } }, "approval_requirements": { "$ref": "#/$defs/emptyObject" },
-        "artifact_requirements": { "$ref": "#/$defs/emptyObject" }, "stage_requirements": { "$ref": "#/$defs/emptyObject" }, "invariants": { "$ref": "#/$defs/emptyObject" },
-        "target_requirements": { "type": "object", "additionalProperties": false, "required": ["allow", "deny"], "properties": { "allow": { "$ref": "#/$defs/targetRules" }, "deny": { "$ref": "#/$defs/targetRules" } } },
-        "contract_hash": { "$ref": "#/$defs/sha256" }, "schema_version": { "const": "compiled_authority_contract.v1" },
-        "lineage": { "type": "object", "additionalProperties": false, "required": ["schema_version", "source_hash", "compilation_report_hash", "review_id"], "properties": {
-          "schema_version": { "const": "governance_authority_lineage.v1" }, "source_hash": { "$ref": "#/$defs/sha256" }, "compilation_report_hash": { "$ref": "#/$defs/sha256" }, "review_id": { "type": "string", "minLength": 1 }
-        } },
-        "authority_ref": { "type": "string", "minLength": 3 },
-        "compiled_from": { "type": "object", "additionalProperties": false, "required": ["schema_version", "semantic_commit_id", "semantic_commit_hash", "source_hash", "resolved_interpretation_count"], "properties": {
-          "schema_version": { "const": "semantic_commit_bundle.v1" }, "semantic_commit_id": { "type": "string", "minLength": 1 }, "semantic_commit_hash": { "$ref": "#/$defs/sha256" }, "source_hash": { "$ref": "#/$defs/sha256" }, "resolved_interpretation_count": { "type": "integer", "minimum": 0 }
-        } }
-      }
-    },
-    "emptyObject": { "type": "object", "maxProperties": 0 },
-    "targetRules": { "type": "array", "items": { "type": "object", "additionalProperties": false, "required": ["match", "value"], "properties": { "match": { "enum": ["exact", "prefix"] }, "value": { "type": "string", "minLength": 1 } } } },
     "authority": {
       "type": "object", "additionalProperties": false, "required": ["authority_id", "authority_version", "authority_ref", "authority_identity_hash"],
       "properties": { "authority_id": { "type": "string", "minLength": 1 }, "authority_version": { "$ref": "#/$defs/semver" }, "authority_ref": { "type": "string", "minLength": 3 }, "authority_identity_hash": { "$ref": "#/$defs/sha256" } }

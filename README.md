@@ -153,6 +153,8 @@ Ledger's production policy boundary is a selected, immutable domain pack rather 
 
 Clauses inside the selected grammar compile directly. Every other nonempty clause remains pending until a human explicitly chooses one pack-bounded enforcement control, `informational`, or `unsupported`. Users do not author policy JSON or rule JSON. Arbitrary prose cannot be automatically interpreted without AI, and this workflow uses no AI, probabilistic inference, embeddings, external inference, spaCy heuristics, or network lookup. Missing runtime facts block publication rather than weakening a rule.
 
+The new publication path emits standalone `compiled_authority_contract.v2`, limited to the repository pack's current acting-role and exact/prefix path allow/deny lowering. Advanced conditions, evidence, exceptions, approvals, and other obligations remain representable in Constraint IR but fail closed until a trusted lowering supports them. Released v0.6 compatibility outputs remain unchanged.
+
 See [Deterministic Domain-Pack Policy Compiler](docs/DOMAIN_PACK_COMPILER.md) for the representation boundaries, guided-mapping workflow, exact public APIs, repository/finance compatibility boundary, and native `authority_bundle.v2` provenance chain.
 
 ## v0.6 Customer-Policy Compatibility Service
@@ -422,6 +424,7 @@ Canonical schemas live in [schemas/](schemas/), including:
 - [runtime_fact_schema.v1.json](schemas/runtime_fact_schema.v1.json): exact proposal/derived runtime fact contracts.
 - [constraint_ir.v1.json](schemas/constraint_ir.v1.json): Waveframe-owned typed enforcement Constraint IR.
 - [policy_mapping_decision.v1.json](schemas/policy_mapping_decision.v1.json): exact-source-bound human mapping decisions.
+- [compiled_authority_contract.v2.json](schemas/compiled_authority_contract.v2.json): strict compiled repository surface used by the v2 domain-pack publication path.
 - [authority_bundle.v2.json](schemas/authority_bundle.v2.json): complete native domain-pack authority bundle with strict component bindings.
 - [publication_receipt.v2.json](schemas/publication_receipt.v2.json): receipt binding the complete v2 authority bundle.
 
@@ -446,7 +449,7 @@ Canonical schemas live in [schemas/](schemas/), including:
 - [semantic_commit_bundle.v1.json](schemas/semantic_commit_bundle.v1.json): committed semantic interpretation bundles.
 - [semantic_authority_diff.v1.json](schemas/semantic_authority_diff.v1.json): semantic authority diffs.
 - [semantic_lifecycle_enforcement_projection.v1.json](schemas/semantic_lifecycle_enforcement_projection.v1.json): lifecycle enforcement consequence projections.
-- [compiled_authority_contract.v1.json](schemas/compiled_authority_contract.v1.json): compiled authority contracts.
+- [compiled_authority_contract.v1.json](schemas/compiled_authority_contract.v1.json): released v1 compiled authority contract schema.
 - [authority_execution_projection.v1.json](schemas/authority_execution_projection.v1.json): authority execution projections.
 - [execution_requirement_projection.v1.json](schemas/execution_requirement_projection.v1.json): execution requirement projections.
 - [execution_admissibility_projection.v1.json](schemas/execution_admissibility_projection.v1.json): execution admissibility projections.

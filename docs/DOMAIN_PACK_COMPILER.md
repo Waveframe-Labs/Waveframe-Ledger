@@ -26,6 +26,8 @@ Runtime-fact availability is a publication gate. Ledger rejects unavailable or m
 
 Validation also rejects unknown fields, symbols, operators, incompatible comparisons, implicit precedence, untyped values, contradictory effects, malformed exceptions, and empty enforceable rule sets.
 
+The IR can represent advanced Boolean conditions, approval and evidence obligations, separation of duties, and exceptions, but representation is not a claim of lowering support. The repository pack's current lowering supports only acting-role requirements and exact/prefix repository-path allow/deny rules. Any advanced IR concept fails closed during lowering until an exact compiler surface supports it.
+
 ## Direct parsing and explicit statement decisions
 
 A matching clause is parsed deterministically. Every other nonempty statement is `pending`; no global keyword heuristic infers that it is informational.
@@ -136,11 +138,13 @@ exact source bytes and identity
 → constraint_ir.v1 and runtime_fact_schema.v1
 → domain_pack.v1 identity/version/hash
 → semantic_commit_bundle.v1
-→ compiled_authority_contract.v1
+→ compiled_authority_contract.v2
 → authority identity/version and approval record
 → publication manifest and complete provenance bindings
 → authority_bundle.v2
 → publication_receipt.v2
 ```
 
-The v2 JSON schemas strictly define or reference security-critical nested components. Runtime validation additionally reconstructs source partitions and mapping replay, regenerates the semantic commit and compiled contract, cross-checks all identities and hashes, and verifies the receipt. Schema-valid semantic tampering therefore still fails. Missing lineage is never inferred for historical v1 artifacts.
+`compiled_authority_contract.v2` is a standalone strict schema for only the presently compiled repository surface: optional required roles plus exact/prefix target allow/deny rules. It is not an alias for the structurally different released `compiled_authority_contract.v1`. `authority_bundle.v2` references the standalone v2 schema rather than duplicating its definition.
+
+The v2 JSON schemas strictly define or reference security-critical nested components. Runtime validation additionally reconstructs source partitions and mapping replay, regenerates and independently validates the v2 compiled contract, cross-checks all identities and hashes, and verifies the receipt. Schema-valid semantic tampering therefore still fails. Missing lineage is never inferred for historical v1 artifacts.

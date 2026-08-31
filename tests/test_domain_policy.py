@@ -32,6 +32,7 @@ from governance_ledger.domain_packs import (
     validate_domain_pack,
 )
 from governance_ledger.domain_policy import (
+    _lower_constraint,
     apply_policy_mapping_decision,
     finalize_domain_policy_authority,
     inspect_policy_mapping_controls,
@@ -377,6 +378,27 @@ def test_explicit_exception_precedence_is_canonical() -> None:
     assert validate_constraint_ir(ir, domain_pack=pack)["valid"] is True
 
 
+@pytest.mark.parametrize("advanced_field", ["condition", "approval", "evidence", "separation", "exception"])
+def test_advanced_ir_concepts_fail_closed_until_lowering_supports_them(advanced_field: str) -> None:
+    constraint = copy.deepcopy(_draft(b"Agents may modify README.md.")["constraint_ir"]["constraints"][0])
+    comparison = {
+        "kind": "comparison", "operator": "==", "fact": "actor.role",
+        "literal": {"type": "enum", "value": "security-reviewer", "unit": None},
+    }
+    if advanced_field == "condition":
+        constraint["condition"] = comparison
+    elif advanced_field == "approval":
+        constraint["obligations"]["approvals"] = [{"minimum": 1, "role": "repository-reviewer", "evidence_fact": "actor.principal_id"}]
+    elif advanced_field == "evidence":
+        constraint["obligations"]["evidence"] = [{"evidence_type": "review", "fact": "actor.principal_id"}]
+    elif advanced_field == "separation":
+        constraint["obligations"]["separation_of_duties"] = [{"roles": ["repository-maintainer", "repository-reviewer"], "principal_facts": ["actor.principal_id", "actor.principal_id"]}]
+    else:
+        constraint["exceptions"] = [{"exception_id": "exception", "effect": "deny", "condition": comparison}]
+    with pytest.raises(ValueError, match="unsupported Constraint IR concept"):
+        _lower_constraint(constraint)
+
+
 def test_missing_runtime_fact_and_type_operator_mismatches_are_actionable() -> None:
     pack = get_builtin_domain_pack(PACK_ID, PACK_VERSION)
     ir = _draft(b"Agents may modify README.md.")["constraint_ir"]
@@ -401,6 +423,7 @@ def test_v2_is_one_complete_native_bundle_and_receipt_binds_it() -> None:
     receipt = result["publication_receipt"]
     assert bundle["schema_version"] == "authority_bundle.v2"
     assert receipt["schema_version"] == "publication_receipt.v2"
+    assert bundle["compiled_authority_contract"]["schema_version"] == "compiled_authority_contract.v2"
     assert "authority_bundle" not in bundle and "publication_receipt" not in bundle
     assert "authority_bundle_v1" not in json.dumps(bundle)
     assert receipt["bundle_hash"] == bundle["bundle_hash"]
@@ -414,6 +437,7 @@ def test_v2_schemas_validate_complete_artifacts_and_reject_malformed_nested_valu
         (get_builtin_domain_pack(PACK_ID, PACK_VERSION), "domain_pack.v1.json"),
         (result["authority_bundle"]["constraint_ir"], "constraint_ir.v1.json"),
         (result["authority_bundle"]["runtime_fact_schema"], "runtime_fact_schema.v1.json"),
+        (result["compiled_authority_contract"], "compiled_authority_contract.v2.json"),
         (result["authority_bundle"]["statement_decisions"][0], "policy_mapping_decision.v1.json"),
         (result["authority_bundle"], "authority_bundle.v2.json"),
         (result["publication_receipt"], "publication_receipt.v2.json"),
@@ -427,6 +451,44 @@ def test_v2_schemas_validate_complete_artifacts_and_reject_malformed_nested_valu
     malformed["approval_record"].pop("approved_by")
     with pytest.raises(jsonschema.ValidationError):
         _schema_validate(malformed, "authority_bundle.v2.json")
+
+
+def test_authority_bundle_v2_references_standalone_compiled_contract_v2_schema() -> None:
+    schema = json.loads((ROOT / "schemas/authority_bundle.v2.json").read_text(encoding="utf-8"))
+    assert schema["properties"]["compiled_authority_contract"] == {
+        "$ref": "compiled_authority_contract.v2.json"
+    }
+    assert "compiledContract" not in schema["$defs"]
+
+
+def test_v1_shaped_contract_cannot_masquerade_as_v2() -> None:
+    sha = "sha256:" + "0" * 64
+    contract = {
+        "schema_version": "compiled_authority_contract.v1",
+        "contract_id": "contract", "contract_version": "1.0.0", "authority_ref": "contract@1.0.0",
+        "compiled_from": {"schema_version": "semantic_commit_bundle.v1", "semantic_commit_id": "commit", "semantic_commit_hash": sha, "source_hash": sha, "resolved_interpretation_count": 0},
+        "governed_targets": [], "governed_operations": [], "mutation_classes": [], "capability_scope": [],
+        "approval_requirements": {}, "continuity_requirements": {}, "replay_obligations": [],
+        "lifecycle_requirements": {}, "escalation_requirements": {}, "delegation_requirements": {},
+        "identity_bindings": {}, "execution_admissibility_semantics": {},
+        "determinism": {"input_schema": "semantic_commit_bundle.v1", "output_schema": "compiled_authority_contract.v1", "same_input_same_output": True, "runtime_enforced_by": "Guard/Cloud"},
+        "non_goals": [], "contract_hash": sha,
+    }
+    _schema_validate(contract, "compiled_authority_contract.v1.json")
+    masquerading = copy.deepcopy(contract)
+    masquerading["schema_version"] = "compiled_authority_contract.v2"
+    with pytest.raises(jsonschema.ValidationError):
+        _schema_validate(masquerading, "compiled_authority_contract.v2.json")
+
+
+def test_v2_shaped_contract_labeled_v1_is_rejected_by_both_contract_schemas() -> None:
+    mislabeled = copy.deepcopy(_final()["compiled_authority_contract"])
+    mislabeled["schema_version"] = "compiled_authority_contract.v1"
+    mislabeled["contract_hash"] = artifact_hash(mislabeled, "contract_hash")
+    with pytest.raises(jsonschema.ValidationError):
+        _schema_validate(mislabeled, "compiled_authority_contract.v2.json")
+    with pytest.raises(jsonschema.ValidationError):
+        _schema_validate(mislabeled, "compiled_authority_contract.v1.json")
 
 
 def test_schema_valid_semantic_tampering_fails_runtime_reconstruction() -> None:

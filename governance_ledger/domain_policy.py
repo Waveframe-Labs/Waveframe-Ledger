@@ -8,6 +8,7 @@ import re
 from datetime import datetime
 from typing import Any
 
+from governance_ledger.authority_contract import compute_contract_hash
 from governance_ledger.constraint_ir import (
     artifact_hash,
     finalize_constraint_ir,
@@ -21,6 +22,7 @@ from governance_ledger.domain_packs import (
     PREFIX_PATH_EMITTER_ID,
     REPOSITORY_CHANGES_PACK_ID,
     REPOSITORY_CHANGES_PACK_VERSION,
+    REPOSITORY_PATH_FORMAT_ID,
     get_builtin_domain_pack,
     mapping_control_index,
 )
@@ -34,6 +36,7 @@ POLICY_MAPPING_APPLICATION_V1 = "policy_mapping_application.v1"
 DOMAIN_POLICY_FINALIZATION_V1 = "domain_policy_finalization.v1"
 AUTHORITY_BUNDLE_V2 = "authority_bundle.v2"
 PUBLICATION_RECEIPT_V2 = "publication_receipt.v2"
+COMPILED_AUTHORITY_CONTRACT_V2 = "compiled_authority_contract.v2"
 
 _CANONICAL_UTC = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z\Z")
 _DECIMAL = re.compile(r"-?(?:0|[1-9]\d*)(?:\.\d*[1-9])?\Z")
@@ -284,7 +287,6 @@ def finalize_domain_policy_authority(
 
     rules = [_lower_constraint(item) for item in constraint_ir["constraints"]]
     from governance_ledger.customer_policy import (
-        _compile,
         _compiler_input,
         _normalized_semantic_meaning,
         _require_no_rule_conflicts,
@@ -310,7 +312,7 @@ def finalize_domain_policy_authority(
         committed_by=_nonempty(committed_by, "committed_by"),
         committed_at=committed_at,
     )
-    compiled = _compile(
+    compiled = _compile_domain_contract_v2(
         compiler_input,
         semantic_commit,
         {
@@ -533,7 +535,6 @@ def _validate_authority_bundle_v2(bundle: dict[str, Any]) -> dict[str, Any]:
         "authority_bundle.v2 approval_record",
     )
     from governance_ledger.customer_policy import (
-        _compile,
         _compiler_input,
         _normalized_semantic_meaning,
         _require_no_rule_conflicts,
@@ -561,7 +562,8 @@ def _validate_authority_bundle_v2(bundle: dict[str, Any]) -> dict[str, Any]:
     )
     if semantic != expected_semantic:
         raise ValueError("semantic commit is not the deterministic result of the bound Constraint IR")
-    expected_compiled = _compile(
+    _validate_compiled_authority_contract_v2(compiled)
+    expected_compiled = _compile_domain_contract_v2(
         compiler_input,
         expected_semantic,
         {
@@ -874,6 +876,132 @@ def _lower_constraint(constraint: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("Constraint IR concept is not supported by repository lowering")
     rule["rule_id"] = "rule-" + canonical_sha256(rule).removeprefix("sha256:")
     return rule
+
+
+def _compile_domain_contract_v2(
+    compiler_input: dict[str, Any],
+    semantic_commit: dict[str, Any],
+    draft: dict[str, Any],
+) -> dict[str, Any]:
+    """Project the installed compiler result into the new strict v2 identity."""
+    from governance_ledger.customer_policy import _compile
+
+    compiled = _compile(compiler_input, semantic_commit, draft)
+    compiled["schema_version"] = COMPILED_AUTHORITY_CONTRACT_V2
+    compiled["contract_hash"] = "sha256:" + compute_contract_hash(compiled)
+    _validate_compiled_authority_contract_v2(compiled)
+    return compiled
+
+
+def _validate_compiled_authority_contract_v2(contract: dict[str, Any]) -> dict[str, Any]:
+    """Independently validate the exact compiled surface supported by v2 publication."""
+    _exact(
+        contract,
+        {
+            "schema_version", "contract_id", "contract_version", "authority_ref",
+            "compiled_from", "authority_requirements", "approval_requirements",
+            "artifact_requirements", "stage_requirements", "invariants",
+            "target_requirements", "lineage", "contract_hash",
+        },
+        COMPILED_AUTHORITY_CONTRACT_V2,
+    )
+    if contract["schema_version"] != COMPILED_AUTHORITY_CONTRACT_V2:
+        raise ValueError(f"compiled contract must be {COMPILED_AUTHORITY_CONTRACT_V2}")
+    _identity(contract["contract_id"], "compiled contract contract_id")
+    if not isinstance(contract["contract_version"], str) or not re.fullmatch(
+        r"(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)",
+        contract["contract_version"],
+    ):
+        raise ValueError("compiled contract contract_version must be canonical semver")
+    _nonempty(contract["authority_ref"], "compiled contract authority_ref")
+
+    authority = contract["authority_requirements"]
+    if not isinstance(authority, dict) or set(authority) - {"required_roles"}:
+        raise ValueError("compiled contract authority_requirements is invalid")
+    if "required_roles" in authority:
+        roles = authority["required_roles"]
+        if (
+            not isinstance(roles, list)
+            or not roles
+            or roles != sorted(set(roles))
+            or any(not isinstance(role, str) or not role for role in roles)
+        ):
+            raise ValueError("compiled contract required_roles must be sorted unique strings")
+    for field in (
+        "approval_requirements", "artifact_requirements", "stage_requirements", "invariants"
+    ):
+        if contract[field] != {}:
+            raise ValueError(
+                f"{COMPILED_AUTHORITY_CONTRACT_V2} does not support {field} yet"
+            )
+
+    targets = contract["target_requirements"]
+    _exact(targets, {"allow", "deny"}, "compiled contract target_requirements")
+    target_effects: dict[str, str] = {}
+    for effect in ("allow", "deny"):
+        rules = targets[effect]
+        if not isinstance(rules, list):
+            raise ValueError(f"compiled contract target_requirements.{effect} must be an array")
+        seen: set[str] = set()
+        for index, rule in enumerate(rules):
+            label = f"compiled contract target_requirements.{effect}[{index}]"
+            _exact(rule, {"match", "value"}, label)
+            if rule["match"] not in {"exact", "prefix"}:
+                raise ValueError(f"{label}.match is unsupported")
+            validate_format_value(
+                REPOSITORY_PATH_FORMAT_ID,
+                rule["value"],
+                match_mode=rule["match"],
+                label=f"{label}.value",
+            )
+            signature = canonical_sha256(rule)
+            if signature in seen:
+                raise ValueError(f"{label} duplicates another target rule")
+            prior_effect = target_effects.get(signature)
+            if prior_effect is not None and prior_effect != effect:
+                raise ValueError(f"{label} contradicts a {prior_effect} target rule")
+            seen.add(signature)
+            target_effects[signature] = effect
+
+    lineage = contract["lineage"]
+    _exact(
+        lineage,
+        {"schema_version", "source_hash", "compilation_report_hash", "review_id"},
+        "compiled contract lineage",
+    )
+    if lineage["schema_version"] != "governance_authority_lineage.v1":
+        raise ValueError("compiled contract lineage schema is unsupported")
+    for field in ("source_hash", "compilation_report_hash"):
+        if not isinstance(lineage[field], str) or not re.fullmatch(
+            r"sha256:[a-f0-9]{64}", lineage[field]
+        ):
+            raise ValueError(f"compiled contract lineage {field} is invalid")
+    _nonempty(lineage["review_id"], "compiled contract lineage review_id")
+
+    compiled_from = contract["compiled_from"]
+    _exact(
+        compiled_from,
+        {"schema_version", "semantic_commit_id", "semantic_commit_hash", "source_hash", "resolved_interpretation_count"},
+        "compiled contract compiled_from",
+    )
+    if compiled_from["schema_version"] != "semantic_commit_bundle.v1":
+        raise ValueError("compiled contract compiled_from schema is unsupported")
+    _nonempty(compiled_from["semantic_commit_id"], "compiled contract semantic_commit_id")
+    for field in ("semantic_commit_hash", "source_hash"):
+        if not isinstance(compiled_from[field], str) or not re.fullmatch(
+            r"sha256:[a-f0-9]{64}", compiled_from[field]
+        ):
+            raise ValueError(f"compiled contract compiled_from {field} is invalid")
+    count = compiled_from["resolved_interpretation_count"]
+    if not isinstance(count, int) or isinstance(count, bool) or count < 0:
+        raise ValueError("compiled contract resolved_interpretation_count is invalid")
+    if contract["contract_hash"] != "sha256:" + compute_contract_hash(contract):
+        raise ValueError("compiled_authority_contract.v2 contract_hash is invalid")
+    return {
+        "schema_version": COMPILED_AUTHORITY_CONTRACT_V2,
+        "contract_hash": contract["contract_hash"],
+        "valid": True,
+    }
 
 
 def _validate_selections(control: dict[str, Any], selections: Any) -> dict[str, Any]:
