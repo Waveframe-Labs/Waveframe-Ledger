@@ -147,9 +147,17 @@ logic remains outside Ledger.
 
 Local checkout path resolution is not part of production behavior.
 
-## Plain Customer-Policy Service
+## Deterministic Domain-Pack Policy Compiler
 
-Cloud and other callers can use the stable, pure service boundary without a repository checkout, filesystem state, subprocess, Cloud import, or Guard import:
+Ledger's production policy boundary is a selected, immutable domain pack rather than a universal company-policy grammar. The first built-in pack is `repository-changes` / `1.0.0`. It binds scoped vocabulary, runtime facts, typed Constraint IR semantics, deterministic grammar and lowering identities, bounded human mapping controls, conformance vectors, and a canonical hash.
+
+Clauses inside the selected grammar compile directly. Other normative clauses require a pack-bounded human mapping decision suitable for a future Console form; users do not author policy JSON or rule JSON. Arbitrary prose cannot be automatically interpreted without AI, and this workflow uses no AI, probabilistic inference, embeddings, external inference, spaCy heuristics, or network lookup. Missing runtime facts block publication rather than weakening a rule.
+
+See [Deterministic Domain-Pack Policy Compiler](docs/DOMAIN_PACK_COMPILER.md) for the representation boundaries, guided-mapping workflow, exact public APIs, built-in example, provenance chain, and additive schema decision.
+
+## v0.6 Customer-Policy Compatibility Service
+
+The published v0.6 APIs remain stable compatibility wrappers with their exact supported/rejected behavior and canonical hashes. They do not add domain-pack metadata to legacy artifacts:
 
 ```python
 from governance_ledger import (
@@ -409,6 +417,13 @@ Semantic artifacts also carry immutable input hashes. Authority bundles bind con
 ## Schemas
 
 Canonical schemas live in [schemas/](schemas/), including:
+
+- [domain_pack.v1.json](schemas/domain_pack.v1.json): immutable, versioned deterministic domain-pack contracts.
+- [runtime_fact_schema.v1.json](schemas/runtime_fact_schema.v1.json): exact proposal/derived runtime fact contracts.
+- [constraint_ir.v1.json](schemas/constraint_ir.v1.json): Waveframe-owned typed enforcement Constraint IR.
+- [policy_mapping_decision.v1.json](schemas/policy_mapping_decision.v1.json): exact-source-bound human mapping decisions.
+- [domain_policy_authority_bundle.v1.json](schemas/domain_policy_authority_bundle.v1.json): additive complete domain-policy lineage envelope.
+- [domain_policy_publication_receipt.v1.json](schemas/domain_policy_publication_receipt.v1.json): receipt binding the domain-policy envelope.
 
 - [governance_source.v1.json](schemas/governance_source.v1.json): governance source identity.
 - [governance_diagnostic.v1.json](schemas/governance_diagnostic.v1.json): governance diagnostics.

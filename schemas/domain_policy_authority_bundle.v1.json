@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.waveframe.dev/domain_policy_authority_bundle.v1.json",
+  "title": "Waveframe Domain Policy Authority Bundle",
+  "$comment": "This additive envelope preserves released authority_bundle.v1 semantics while binding complete domain-pack lineage.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "provenance_complete", "source_policy", "source_statements",
+    "interpretation", "source_to_constraint_mappings", "mapping_decisions",
+    "canonical_cnl_previews", "constraint_ir", "runtime_fact_schema", "domain_pack",
+    "semantic_commit_bundle", "compiled_authority_contract", "authority", "approval_record",
+    "authority_bundle_v1", "publication_receipt_v1", "compatibility", "bundle_hash"
+  ],
+  "properties": {
+    "schema_version": { "const": "domain_policy_authority_bundle.v1" },
+    "provenance_complete": { "const": true },
+    "source_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_policy_id", "source_revision", "source_policy_ref", "content_encoding", "source_bytes_base64", "snapshot_hash"],
+      "properties": {
+        "source_policy_id": { "type": "string", "minLength": 1 },
+        "source_revision": { "type": "string", "minLength": 1 },
+        "source_policy_ref": { "type": "string", "minLength": 3 },
+        "content_encoding": { "const": "base64" },
+        "source_bytes_base64": { "type": "string", "minLength": 4, "contentEncoding": "base64" },
+        "snapshot_hash": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "source_statements": { "type": "array", "minItems": 1, "items": { "type": "object" } },
+    "interpretation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["interpretation_id", "draft_hash", "source_statements_hash", "source_to_constraint_mappings_hash"],
+      "properties": {
+        "interpretation_id": { "type": "string", "minLength": 1 },
+        "draft_hash": { "$ref": "#/$defs/sha256" },
+        "source_statements_hash": { "$ref": "#/$defs/sha256" },
+        "source_to_constraint_mappings_hash": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "source_to_constraint_mappings": { "type": "array", "minItems": 1, "items": { "type": "object" } },
+    "mapping_decisions": { "type": "array", "items": { "$ref": "policy_mapping_decision.v1.json" } },
+    "canonical_cnl_previews": { "type": "array", "minItems": 1, "items": { "type": "object" } },
+    "constraint_ir": { "$ref": "constraint_ir.v1.json" },
+    "runtime_fact_schema": { "$ref": "runtime_fact_schema.v1.json" },
+    "domain_pack": { "$ref": "constraint_ir.v1.json#/$defs/packRef" },
+    "semantic_commit_bundle": { "type": "object" },
+    "compiled_authority_contract": { "type": "object" },
+    "authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["authority_id", "authority_version", "authority_ref", "authority_identity_hash"],
+      "properties": {
+        "authority_id": { "type": "string", "minLength": 1 },
+        "authority_version": { "type": "string", "minLength": 1 },
+        "authority_ref": { "type": "string", "minLength": 3 },
+        "authority_identity_hash": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "approval_record": { "type": "object" },
+    "authority_bundle_v1": { "type": "object", "required": ["schema_version"], "properties": { "schema_version": { "const": "authority_bundle.v1" } } },
+    "publication_receipt_v1": { "type": "object", "required": ["schema_version"], "properties": { "schema_version": { "const": "publication_receipt.v1" } } },
+    "compatibility": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["embedded_v1_profile", "reason"],
+      "properties": {
+        "embedded_v1_profile": { "const": "legacy_provenance_incomplete" },
+        "reason": { "type": "string", "minLength": 1 }
+      }
+    },
+    "bundle_hash": { "$ref": "#/$defs/sha256" }
+  },
+  "$defs": { "sha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" } }
+}

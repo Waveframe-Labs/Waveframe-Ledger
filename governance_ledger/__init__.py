@@ -8,6 +8,23 @@ from governance_ledger.customer_policy import (
     interpret_customer_policy_text,
 )
 from governance_ledger.deployment import attach_deployment
+from governance_ledger.constraint_ir import (
+    validate_constraint_ir,
+    validate_runtime_fact_compatibility,
+    validate_runtime_fact_schema,
+)
+from governance_ledger.domain_packs import (
+    get_builtin_domain_pack,
+    list_builtin_domain_packs,
+    validate_domain_pack,
+)
+from governance_ledger.domain_policy import (
+    apply_policy_mapping_decision,
+    finalize_domain_policy_authority,
+    inspect_policy_mapping_controls,
+    interpret_policy_with_domain_pack,
+    validate_domain_policy_publication,
+)
 from governance_ledger.diff import diff_reviews
 from governance_ledger.extract import extract_constraints
 from governance_ledger.inspect import format_artifact, format_contract_list, list_contracts, show_artifact
@@ -50,8 +67,14 @@ __all__ = [
     "format_run_summary",
     "format_check_summary",
     "finalize_customer_policy_authority",
+    "finalize_domain_policy_authority",
+    "get_builtin_domain_pack",
+    "inspect_policy_mapping_controls",
     "interpret_customer_policy",
     "interpret_customer_policy_text",
+    "interpret_policy_with_domain_pack",
+    "apply_policy_mapping_decision",
+    "list_builtin_domain_packs",
     "list_contracts",
     "load_contract_registry",
     "publish_review_file",
@@ -65,5 +88,10 @@ __all__ = [
     "update_contract_registry",
     "validate_authoring",
     "validate_compiler_policy",
+    "validate_constraint_ir",
     "validate_constraints",
+    "validate_domain_pack",
+    "validate_domain_policy_publication",
+    "validate_runtime_fact_compatibility",
+    "validate_runtime_fact_schema",
 ]

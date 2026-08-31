@@ -217,6 +217,12 @@ Finalization reconstructs the draft from its exact embedded source rather than t
 
 A zero-rule interpretation is not publishable. It remains available for review with completed statement classifications, but readiness requires no unresolved ambiguity and at least one enforceable rule. A recognized ambiguity modifier may expose one bounded enforceable choice only when its deterministic removal produces exactly one supported rule. Resolution, approval, commit, and publication evidence must satisfy `resolved_at <= approved_at <= committed_at <= published_at`; records retain caller order.
 
+### 5.8 Domain-pack publication extension
+
+The production domain-pack path is documented in `docs/DOMAIN_PACK_COMPILER.md`. It does not mutate the meaning of `semantic_commit_bundle.v1`, `authority_bundle.v1`, or `publication_receipt.v1`. Instead, `domain_policy_authority_bundle.v1` binds exact source and statements, direct or human-mapped interpretation, canonical CNL, Constraint IR, selected runtime schema, exact pack identity/version/hash, semantic commit, compiled authority, approval, and embedded v1 bundle/receipt. `domain_policy_publication_receipt.v1` binds that envelope.
+
+Because the released v1 authority bundle has no domain-pack lineage profile, the embedded bundle remains truthfully `legacy_provenance_incomplete`. Readers must use the additive envelope and its receipt when asserting complete domain-pack provenance. Historical v1 artifacts remain readable, and Ledger does not infer this new lineage for them.
+
 ## 6. Publication transaction
 
 Publication MUST be treated as one deterministic transaction.

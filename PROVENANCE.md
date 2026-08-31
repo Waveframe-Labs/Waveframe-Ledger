@@ -157,6 +157,14 @@ The complete chain is exact source bytes and identity, stable statements and spa
 
 An older `authority_bundle.v1` that lacks the profile remains readable but is classified as `legacy_provenance_incomplete`. Ledger never fills historical gaps with inferred lineage.
 
+## Domain-Pack Policy Provenance
+
+The deterministic domain-pack workflow preserves the released v1 artifacts above and adds `domain_policy_authority_bundle.v1` plus `domain_policy_publication_receipt.v1`. The additive envelope binds exact source bytes and statement spans to either a direct pack parse or exact `policy_mapping_decision.v1`, canonical controlled-language previews, `constraint_ir.v1`, the selected `runtime_fact_schema.v1`, exact `domain_pack.v1` identity/version/hash, semantic commit, compiled contract, authority identity/version, embedded `authority_bundle.v1`, and embedded `publication_receipt.v1`.
+
+The embedded v1 bundle is deliberately classified as `legacy_provenance_incomplete`; the released schema is not reinterpreted to claim lineage it did not previously define. Complete domain-pack lineage belongs to the versioned outer envelope and receipt. A byte-only source change may preserve the released semantic-meaning hash while changing the semantic commit's full bundle hash, compiled lineage, outer bundle, and receipts.
+
+Guided decisions bind mapper identity and canonical UTC time as well as the source document hash, statement ID/span, exact pack reference, bounded control selection, full selected typed meaning, required runtime facts, generated constraint, and decision hash. Finalization reconstructs and replays those decisions. It neither infers arbitrary prose nor accepts caller-authored rule objects.
+
 ## Snapshot Hashes
 
 Snapshots hash the embedded review state using canonical JSON:

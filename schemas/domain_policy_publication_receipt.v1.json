@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.waveframe.dev/domain_policy_publication_receipt.v1.json",
+  "title": "Waveframe Domain Policy Publication Receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "receipt_id", "publication_id", "authority_ref", "published_at",
+    "published_by", "bundle_hash", "source_snapshot_hash", "domain_pack_hash",
+    "constraint_ir_hash", "semantic_commit_hash", "semantic_commit_bundle_hash", "compiled_contract_hash",
+    "embedded_authority_bundle_hash", "embedded_publication_receipt_hash",
+    "provenance_complete", "receipt_hash"
+  ],
+  "properties": {
+    "schema_version": { "const": "domain_policy_publication_receipt.v1" },
+    "receipt_id": { "type": "string", "pattern": "^domain-receipt-[a-f0-9]{64}$" },
+    "publication_id": { "type": "string", "minLength": 1 },
+    "authority_ref": { "type": "string", "minLength": 3 },
+    "published_at": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$" },
+    "published_by": { "type": "string", "minLength": 1 },
+    "bundle_hash": { "$ref": "#/$defs/sha256" },
+    "source_snapshot_hash": { "$ref": "#/$defs/sha256" },
+    "domain_pack_hash": { "$ref": "#/$defs/sha256" },
+    "constraint_ir_hash": { "$ref": "#/$defs/sha256" },
+    "semantic_commit_hash": { "$ref": "#/$defs/sha256" },
+    "semantic_commit_bundle_hash": { "$ref": "#/$defs/sha256" },
+    "compiled_contract_hash": { "$ref": "#/$defs/sha256" },
+    "embedded_authority_bundle_hash": { "$ref": "#/$defs/sha256" },
+    "embedded_publication_receipt_hash": { "$ref": "#/$defs/sha256" },
+    "provenance_complete": { "const": true },
+    "receipt_hash": { "$ref": "#/$defs/sha256" }
+  },
+  "$defs": { "sha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" } }
+}
