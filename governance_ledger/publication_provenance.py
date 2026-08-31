@@ -136,7 +136,11 @@ def classify_authority_bundle_provenance(bundle: dict[str, Any]) -> str:
 
 
 def validate_authority_bundle(bundle: dict[str, Any]) -> dict[str, Any]:
-    """Validate a bundle, failing closed for a claimed customer-policy profile."""
+    """Validate an authority bundle according to its exact schema version."""
+    if isinstance(bundle, dict) and bundle.get("schema_version") == "authority_bundle.v2":
+        from governance_ledger.domain_policy import _validate_authority_bundle_v2
+
+        return _validate_authority_bundle_v2(bundle)
     declared_profile = bundle.get("provenance_profile")
     customer_provenance = bundle.get("customer_policy_provenance")
     if declared_profile not in {None, LEGACY_INCOMPLETE_PROFILE, CUSTOMER_POLICY_PROFILE}:
@@ -158,6 +162,14 @@ def validate_publication_receipt(
     publication_receipt: dict[str, Any],
 ) -> dict[str, Any]:
     """Verify every receipt binding against the canonical authority bundle."""
+    bundle_version = authority_bundle.get("schema_version") if isinstance(authority_bundle, dict) else None
+    receipt_version = publication_receipt.get("schema_version") if isinstance(publication_receipt, dict) else None
+    if bundle_version == "authority_bundle.v2" or receipt_version == "publication_receipt.v2":
+        if bundle_version != "authority_bundle.v2" or receipt_version != "publication_receipt.v2":
+            raise ValueError("authority bundle and publication receipt schema versions do not match")
+        from governance_ledger.domain_policy import _validate_publication_receipt_v2
+
+        return _validate_publication_receipt_v2(authority_bundle, publication_receipt)
     bundle_status = validate_authority_bundle(authority_bundle)
     receipt = publication_receipt
     expected_bundle_hash = canonical_sha256(authority_bundle)

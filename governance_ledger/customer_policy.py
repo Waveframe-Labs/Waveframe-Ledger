@@ -1,7 +1,8 @@
-"""Pure, deterministic customer-policy interpretation and publication.
+"""Released v0.6 repository-policy compatibility interpretation and publication.
 
-This module is intentionally filesystem-free and Guard-free.  It recognizes a
-small documented grammar; it does not perform natural-language inference.
+This module is intentionally filesystem-free and Guard-free.  Its exact grammar
+is retained for legacy APIs and as the implementation behind the built-in
+repository-changes domain pack; it is not a universal company-policy grammar.
 """
 
 from __future__ import annotations
@@ -60,7 +61,7 @@ _AMBIGUOUS = re.compile(
 _NORMATIVE = re.compile(r"\b(may|must|shall|should|cannot|require|requires|required|only|forbid|forbidden|prohibit|prohibited)\b", re.IGNORECASE)
 
 
-def interpret_customer_policy(
+def _interpret_customer_policy_v0_6_compatibility(
     source_bytes: bytes,
     *,
     source_policy_id: str,
@@ -68,7 +69,7 @@ def interpret_customer_policy(
     authority_id: str,
     authority_version: str,
 ) -> dict[str, Any]:
-    """Interpret exact UTF-8 policy bytes into an immutable deterministic draft.
+    """Run the released v0.6 repository-sentence compatibility interpreter.
 
     Only the documented v0.6 sentence grammar is recognized.  Similar-looking
     text is retained as unsupported or requires_resolution, never inferred.
@@ -180,6 +181,30 @@ def interpret_customer_policy(
     return draft
 
 
+def interpret_customer_policy(
+    source_bytes: bytes,
+    *,
+    source_policy_id: str,
+    source_revision: str,
+    authority_id: str,
+    authority_version: str,
+) -> dict[str, Any]:
+    """Compatibility API for the exact released v0.6 behavior and hashes.
+
+    New integrations should select a domain pack through
+    :func:`interpret_policy_with_domain_pack`.  This wrapper deliberately does
+    not add pack metadata to its artifacts because doing so would change v0.6
+    canonical identities.
+    """
+    return _interpret_customer_policy_v0_6_compatibility(
+        source_bytes,
+        source_policy_id=source_policy_id,
+        source_revision=source_revision,
+        authority_id=authority_id,
+        authority_version=authority_version,
+    )
+
+
 def interpret_customer_policy_text(source_text: str, **identities: str) -> dict[str, Any]:
     """Encode a string as UTF-8 without normalizing any characters or newlines."""
     if not isinstance(source_text, str):
@@ -187,7 +212,7 @@ def interpret_customer_policy_text(source_text: str, **identities: str) -> dict[
     return interpret_customer_policy(source_text.encode("utf-8"), **identities)
 
 
-def finalize_customer_policy_authority(
+def _finalize_customer_policy_authority_v0_6_compatibility(
     interpretation_draft: dict[str, Any],
     *,
     resolutions: list[dict[str, Any]],
@@ -395,6 +420,34 @@ def finalize_customer_policy_authority(
             "publication_receipt_hash": receipt["receipt_hash"],
         },
     }
+
+
+def finalize_customer_policy_authority(
+    interpretation_draft: dict[str, Any],
+    *,
+    resolutions: list[dict[str, Any]],
+    approval_id: str,
+    approved_by: str,
+    approved_at: str,
+    committed_by: str,
+    committed_at: str,
+    publication_id: str,
+    published_by: str,
+    published_at: str,
+) -> dict[str, Any]:
+    """Compatibility API for the exact released v0.6 publication path."""
+    return _finalize_customer_policy_authority_v0_6_compatibility(
+        interpretation_draft,
+        resolutions=resolutions,
+        approval_id=approval_id,
+        approved_by=approved_by,
+        approved_at=approved_at,
+        committed_by=committed_by,
+        committed_at=committed_at,
+        publication_id=publication_id,
+        published_by=published_by,
+        published_at=published_at,
+    )
 
 
 def _validate_source(value: bytes) -> bytes:
