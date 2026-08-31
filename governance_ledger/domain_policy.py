@@ -1,9 +1,4 @@
-"""Deterministic domain-pack policy interpretation, mapping, and publication.
-
-This module performs no filesystem or network access.  It uses the selected
-pack's bounded grammar and controls, validates Waveframe Constraint IR, then
-lowers to Ledger's existing Contract Compiler boundary.
-"""
+"""Filesystem-free deterministic domain-pack policy compilation."""
 
 from __future__ import annotations
 
@@ -17,39 +12,33 @@ from governance_ledger.constraint_ir import (
     artifact_hash,
     finalize_constraint_ir,
     validate_constraint_ir,
+    validate_format_value,
     validate_runtime_fact_compatibility,
 )
 from governance_ledger.domain_packs import (
+    ACTING_ROLE_EMITTER_ID,
+    EXACT_PATH_EMITTER_ID,
+    PREFIX_PATH_EMITTER_ID,
     REPOSITORY_CHANGES_PACK_ID,
     REPOSITORY_CHANGES_PACK_VERSION,
     get_builtin_domain_pack,
     mapping_control_index,
 )
-from governance_ledger.publication_provenance import (
-    bytes_sha256,
-    canonical_sha256,
-    validate_authority_bundle,
-    validate_publication_receipt,
-)
+from governance_ledger.publication_provenance import bytes_sha256, canonical_sha256
 from governance_ledger.semantics.compiler import build_semantic_commit_bundle
 from governance_ledger.semantics.preview import build_governance_impact_preview
-from governance_ledger.semantics.publication import build_authority_bundle, build_publication_receipt
-
 
 DOMAIN_POLICY_INTERPRETATION_V1 = "domain_policy_interpretation.v1"
 POLICY_MAPPING_DECISION_V1 = "policy_mapping_decision.v1"
 POLICY_MAPPING_APPLICATION_V1 = "policy_mapping_application.v1"
 DOMAIN_POLICY_FINALIZATION_V1 = "domain_policy_finalization.v1"
-DOMAIN_POLICY_AUTHORITY_BUNDLE_V1 = "domain_policy_authority_bundle.v1"
-DOMAIN_POLICY_PUBLICATION_RECEIPT_V1 = "domain_policy_publication_receipt.v1"
+AUTHORITY_BUNDLE_V2 = "authority_bundle.v2"
+PUBLICATION_RECEIPT_V2 = "publication_receipt.v2"
 
 _CANONICAL_UTC = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z\Z")
-_DECIMAL = re.compile(r"(?:0|[1-9]\d*)(?:\.\d*[1-9])?\Z")
-_NORMATIVE = re.compile(
-    r"\b(may|must|shall|should|cannot|require|requires|required|only|forbid|"
-    r"forbidden|prohibit|prohibited)\b",
-    re.IGNORECASE,
-)
+_DECIMAL = re.compile(r"-?(?:0|[1-9]\d*)(?:\.\d*[1-9])?\Z")
+_INFORMATIONAL_REASONS = {"context-only", "descriptive", "non-policy", "other"}
+_UNSUPPORTED_REASONS = {"outside-domain", "not-enforceable", "deferred", "other"}
 
 
 def interpret_policy_with_domain_pack(
@@ -62,24 +51,14 @@ def interpret_policy_with_domain_pack(
     authority_id: str,
     authority_version: str,
 ) -> dict[str, Any]:
-    """Interpret exact bytes with one selected built-in domain pack.
-
-    Matching clauses compile directly.  Other normative clauses remain bound to
-    their exact byte spans and expose only the pack's bounded mapping controls.
-    """
+    """Directly parse matching clauses and leave every unmatched clause pending."""
     pack = get_builtin_domain_pack(domain_pack_id, domain_pack_version)
     if (domain_pack_id, domain_pack_version) != (
         REPOSITORY_CHANGES_PACK_ID,
         REPOSITORY_CHANGES_PACK_VERSION,
     ):
-        raise ValueError("the selected pack has no local deterministic grammar implementation")
-
-    # This compatibility grammar is intentionally reused internally.  The new
-    # API translates its repository-specific result into pack-scoped concepts;
-    # it is not treated as a universal company-policy interpreter.
-    from governance_ledger.customer_policy import (
-        _interpret_customer_policy_v0_6_compatibility,
-    )
+        raise ValueError("the selected pack has no installed deterministic grammar")
+    from governance_ledger.customer_policy import _interpret_customer_policy_v0_6_compatibility
 
     legacy = _interpret_customer_policy_v0_6_compatibility(
         source_bytes,
@@ -88,86 +67,64 @@ def interpret_policy_with_domain_pack(
         authority_id=authority_id,
         authority_version=authority_version,
     )
-    source = copy.deepcopy(legacy["source_policy"])
-    pack_ref = _pack_ref(pack)
+    exact = base64.b64decode(legacy["source_policy"]["source_bytes_base64"].encode("ascii"))
+    rules = {item["rule_id"]: item for item in legacy["proposed_rules"]}
+    control_ids = [item["control_id"] for item in pack["allowed_mapping_controls"]]
     constraints: list[dict[str, Any]] = []
-    previews: list[dict[str, Any]] = []
-    mappings: list[dict[str, Any]] = []
     statements: list[dict[str, Any]] = []
-    rules = {rule["rule_id"]: rule for rule in legacy["proposed_rules"]}
-    source_bytes_exact = base64.b64decode(source["source_bytes_base64"].encode("ascii"))
-    all_control_ids = [item["control_id"] for item in pack["allowed_mapping_controls"]]
-
-    for statement in legacy["source_statements"]:
+    direct_parses: list[dict[str, Any]] = []
+    mappings: list[dict[str, Any]] = []
+    previews: list[dict[str, Any]] = []
+    for source_statement in legacy["source_statements"]:
         direct_constraints: list[dict[str, Any]] = []
-        text = source_bytes_exact[statement["start_byte"] : statement["end_byte"]].decode(
-            "utf-8"
-        ).strip()
-        if statement["classification"] == "enforced":
+        if source_statement["classification"] == "enforced":
             try:
                 direct_constraints = [
-                    _constraint_from_legacy_rule(rules[rule_id], text, pack)
-                    for rule_id in statement["proposed_rule_ids"]
+                    _finalize_constraint(_constraint_from_legacy_rule(rules[rule_id], pack))
+                    for rule_id in source_statement["proposed_rule_ids"]
                 ]
             except ValueError:
                 direct_constraints = []
+        statement = {
+            "statement_id": source_statement["statement_id"],
+            "start_byte": source_statement["start_byte"],
+            "end_byte": source_statement["end_byte"],
+            "statement_bytes_base64": source_statement["statement_bytes_base64"],
+            "statement_hash": source_statement["statement_hash"],
+            "classification": "direct" if direct_constraints else "pending",
+            "available_mapping_control_ids": [] if direct_constraints else control_ids,
+            "decision_hash": None,
+        }
+        # Every partition returned by the compatibility grammar is preserved,
+        # including exact whitespace bytes; no unmatched text is inferred.
+        if not exact[statement["start_byte"] : statement["end_byte"]]:
+            raise ValueError("source statement spans must be non-empty")
+        statements.append(statement)
         if direct_constraints:
-            classification = "direct"
-            constraint_ids: list[str] = []
-            for constraint in direct_constraints:
-                constraint = _finalize_constraint(constraint)
-                constraints.append(constraint)
-                constraint_ids.append(constraint["constraint_id"])
-                previews.append(
-                    {
-                        "constraint_id": constraint["constraint_id"],
-                        "preview": _cnl_preview(constraint),
-                    }
-                )
+            constraint_ids = [item["constraint_id"] for item in direct_constraints]
+            constraints.extend(direct_constraints)
+            direct_parses.append(_direct_parse(statement, constraint_ids, pack))
             mappings.append(_source_mapping(statement, constraint_ids, "direct", None))
-            controls: list[str] = []
-            reason = None
-        elif statement["classification"] == "informational" and not _NORMATIVE.search(text):
-            classification = "informational"
-            controls = []
-            reason = None
-        else:
-            classification = "requires_mapping"
-            controls = all_control_ids
-            reason = (
-                "ambiguous_or_conflicting"
-                if statement["classification"] == "requires_resolution"
-                else "outside_deterministic_grammar"
+            previews.extend(
+                {"constraint_id": item["constraint_id"], "preview": _cnl_preview(item)}
+                for item in direct_constraints
             )
-        statements.append(
-            {
-                "statement_id": statement["statement_id"],
-                "start_byte": statement["start_byte"],
-                "end_byte": statement["end_byte"],
-                "statement_bytes_base64": statement["statement_bytes_base64"],
-                "statement_hash": statement["statement_hash"],
-                "classification": classification,
-                "mapping_reason": reason,
-                "available_mapping_control_ids": controls,
-            }
-        )
-
-    constraint_ir = _build_ir(constraints, pack) if constraints else None
+    ir = _build_ir(constraints, pack) if constraints else None
     draft: dict[str, Any] = {
         "schema_version": DOMAIN_POLICY_INTERPRETATION_V1,
-        "source_policy": source,
+        "source_policy": copy.deepcopy(legacy["source_policy"]),
         "authority": copy.deepcopy(legacy["authority"]),
-        "domain_pack": pack_ref,
+        "domain_pack": _pack_ref(pack),
         "runtime_fact_schema": copy.deepcopy(pack["runtime_fact_schema"]),
         "source_statements": statements,
-        "constraint_ir": constraint_ir,
+        "direct_parses": direct_parses,
+        "statement_decisions": [],
+        "constraint_ir": ir,
         "canonical_cnl_previews": previews,
         "source_to_constraint_mappings": mappings,
-        "mapping_decisions": [],
         "status": _draft_status(statements, constraints),
     }
-    core_hash = canonical_sha256(draft)
-    draft["interpretation_id"] = "domain-interpretation-" + core_hash.removeprefix("sha256:")
+    draft["interpretation_id"] = "domain-interpretation-" + canonical_sha256(draft).removeprefix("sha256:")
     draft["draft_hash"] = artifact_hash(draft, "draft_hash")
     return draft
 
@@ -175,17 +132,23 @@ def interpret_policy_with_domain_pack(
 def inspect_policy_mapping_controls(
     interpretation_draft: dict[str, Any], statement_id: str
 ) -> dict[str, Any]:
-    """Return renderable, bounded controls for one exact unmapped statement."""
+    """Return pack enforcement controls plus fixed non-enforcement dispositions."""
     draft = _reconstruct_domain_draft(interpretation_draft)
     statement = _statement(draft, statement_id)
-    if statement["classification"] != "requires_mapping":
-        raise ValueError("mapping controls are available only for a statement requiring mapping")
+    if statement["classification"] != "pending":
+        raise ValueError("statement decisions are available only for a pending statement")
     pack = _pack_for_draft(draft)
-    index = mapping_control_index(pack)
+    controls = mapping_control_index(pack)
     return {
         "domain_pack": copy.deepcopy(draft["domain_pack"]),
         "statement": copy.deepcopy(statement),
-        "controls": [index[item] for item in statement["available_mapping_control_ids"]],
+        "enforcement_controls": [
+            controls[item] for item in statement["available_mapping_control_ids"]
+        ],
+        "disposition_options": [
+            {"disposition": "informational", "reason_codes": sorted(_INFORMATIONAL_REASONS)},
+            {"disposition": "unsupported", "reason_codes": sorted(_UNSUPPORTED_REASONS)},
+        ],
     }
 
 
@@ -193,45 +156,81 @@ def apply_policy_mapping_decision(
     interpretation_draft: dict[str, Any],
     *,
     statement_id: str,
-    control_id: str,
-    selections: dict[str, Any],
+    disposition: str,
     mapper_identity: str,
     mapped_at: str,
+    control_id: str | None = None,
+    selections: dict[str, Any] | None = None,
+    reason_code: str | None = None,
+    human_reason: str | None = None,
 ) -> dict[str, Any]:
-    """Apply one pack-bounded human decision and return its deterministic outputs."""
+    """Apply one explicit enforced, informational, or unsupported decision."""
     draft = _reconstruct_domain_draft(interpretation_draft)
-    pack = _pack_for_draft(draft)
     statement = _statement(draft, statement_id)
-    if statement["classification"] != "requires_mapping":
-        raise ValueError("the selected statement does not require mapping")
-    if control_id not in statement["available_mapping_control_ids"]:
-        raise ValueError("the selected mapping control is not exposed for this statement")
-    control = mapping_control_index(pack)[control_id]
-    selections = _validate_selections(control, selections)
-    constraint = _finalize_constraint(_constraint_from_control(control, selections, pack))
-    preview = _cnl_preview(constraint)
-    decision = _mapping_decision(
+    if statement["classification"] != "pending":
+        raise ValueError("the selected statement is not pending")
+    pack = _pack_for_draft(draft)
+    constraint: dict[str, Any] | None = None
+    control: dict[str, Any] | None = None
+    validated_selections: dict[str, Any] | None = None
+    if disposition == "enforced":
+        if reason_code not in {None, "human-mapped"} or human_reason is not None:
+            raise ValueError("enforced decisions use only the canonical human-mapped reason")
+        if not isinstance(control_id, str) or selections is None:
+            raise ValueError("enforced decisions require one pack control and its selections")
+        controls = mapping_control_index(pack)
+        if control_id not in statement["available_mapping_control_ids"] or control_id not in controls:
+            raise ValueError("the selected enforcement control is unavailable")
+        control = controls[control_id]
+        validated_selections = _validate_selections(control, selections)
+        constraint = _finalize_constraint(
+            _constraint_from_control(control, validated_selections, pack)
+        )
+        reason_code = "human-mapped"
+    elif disposition in {"informational", "unsupported"}:
+        if control_id is not None or selections is not None:
+            raise ValueError("non-enforced dispositions cannot select an enforcement control")
+        allowed = _INFORMATIONAL_REASONS if disposition == "informational" else _UNSUPPORTED_REASONS
+        if reason_code not in allowed:
+            raise ValueError(f"{disposition} decision requires a bounded reason_code")
+        if reason_code == "other" and (not isinstance(human_reason, str) or not human_reason.strip()):
+            raise ValueError("reason_code other requires a human_reason")
+        if human_reason is not None and (not isinstance(human_reason, str) or not human_reason.strip() or len(human_reason) > 1024):
+            raise ValueError("human_reason must be null or 1 to 1024 non-whitespace characters")
+    else:
+        raise ValueError("disposition must be enforced, informational, or unsupported")
+    decision = _statement_decision(
         draft,
         statement,
-        control,
-        selections,
-        constraint,
-        mapper_identity,
-        mapped_at,
+        disposition=disposition,
+        mapper_identity=mapper_identity,
+        mapped_at=mapped_at,
+        reason_code=reason_code,
+        human_reason=human_reason,
+        control=control,
+        selections=validated_selections,
+        constraint=constraint,
     )
     updated = _apply_canonical_decision(draft, decision, reconstructing=False)
-    validation = validate_constraint_ir(updated["constraint_ir"], domain_pack=pack)
-    compatibility = validate_runtime_fact_compatibility(
-        updated["constraint_ir"], updated["runtime_fact_schema"], domain_pack=pack
-    )
     mapping = next(
-        item
-        for item in updated["source_to_constraint_mappings"]
-        if item["statement_id"] == statement_id
+        (
+            item
+            for item in updated["source_to_constraint_mappings"]
+            if item["statement_id"] == statement_id
+        ),
+        None,
     )
+    preview = _cnl_preview(constraint) if constraint else None
+    validation = None
+    compatibility = None
+    if updated["constraint_ir"] is not None:
+        validation = validate_constraint_ir(updated["constraint_ir"], domain_pack=pack)
+        compatibility = validate_runtime_fact_compatibility(
+            updated["constraint_ir"], updated["runtime_fact_schema"], domain_pack=pack
+        )
     return {
         "schema_version": POLICY_MAPPING_APPLICATION_V1,
-        "mapping_decision": copy.deepcopy(decision),
+        "statement_decision": copy.deepcopy(decision),
         "canonical_cnl_preview": preview,
         "constraint_ir": copy.deepcopy(updated["constraint_ir"]),
         "source_to_constraint_mapping": copy.deepcopy(mapping),
@@ -256,26 +255,27 @@ def finalize_domain_policy_authority(
     published_at: str,
     runtime_fact_schema: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Validate, lower, and publish a fully mapped domain-policy interpretation."""
+    """Lower a complete domain interpretation and emit authority_bundle.v2."""
     draft = _reconstruct_domain_draft(interpretation_draft)
     if not draft["status"]["ready_for_finalization"]:
-        raise ValueError("domain policy requires all normative statements to be directly compiled or mapped")
+        raise ValueError("every nonempty statement requires a direct parse or explicit human decision")
     pack = _pack_for_draft(draft)
     constraint_ir = draft["constraint_ir"]
-    validation = validate_constraint_ir(constraint_ir, domain_pack=pack)
+    ir_validation = validate_constraint_ir(constraint_ir, domain_pack=pack)
     selected_runtime = copy.deepcopy(runtime_fact_schema or draft["runtime_fact_schema"])
-    runtime_compatibility = validate_runtime_fact_compatibility(
+    compatibility = validate_runtime_fact_compatibility(
         constraint_ir, selected_runtime, domain_pack=pack
     )
-    if not runtime_compatibility["compatible"]:
-        messages = "; ".join(item["message"] for item in runtime_compatibility["diagnostics"])
-        raise ValueError(f"domain policy is not publication-ready: {messages}")
-
+    if not compatibility["compatible"]:
+        raise ValueError(
+            "domain policy is not publication-ready: "
+            + "; ".join(item["message"] for item in compatibility["diagnostics"])
+        )
     approved_at = _utc(approved_at, "approved_at")
     committed_at = _utc(committed_at, "committed_at")
     published_at = _utc(published_at, "published_at")
     approval_time = _utc_datetime(approved_at, "approved_at")
-    if any(_utc_datetime(item["mapped_at"], "mapped_at") > approval_time for item in draft["mapping_decisions"]):
+    if any(_utc_datetime(item["mapped_at"], "mapped_at") > approval_time for item in draft["statement_decisions"]):
         raise ValueError("every mapped_at must be less than or equal to approved_at")
     if approval_time > _utc_datetime(committed_at, "committed_at"):
         raise ValueError("approved_at must be less than or equal to committed_at")
@@ -290,7 +290,6 @@ def finalize_domain_policy_authority(
         _require_no_rule_conflicts,
         _validate_cross_artifact_rule_equivalence,
     )
-
     _require_no_rule_conflicts(rules)
     authority = draft["authority"]
     compiler_input = _compiler_input(authority, rules)
@@ -300,7 +299,7 @@ def finalize_domain_policy_authority(
         "source_id": draft["source_policy"]["source_policy_id"],
         "source_hash": draft["source_policy"]["snapshot_hash"],
         "extraction_id": draft["interpretation_id"],
-        "operator_interpretation_decisions": copy.deepcopy(draft["mapping_decisions"]),
+        "operator_interpretation_decisions": copy.deepcopy(draft["statement_decisions"]),
         "unresolved_ambiguities": [],
         "semantic_conflicts": [],
         "interpretation_completeness_posture": "complete",
@@ -335,9 +334,7 @@ def finalize_domain_policy_authority(
         "approved_constraint_ir_hash": constraint_ir["ir_hash"],
         "approved_semantic_commit_hash": semantic_commit["semantic_commit_hash"],
     }
-    approval_record["approval_record_hash"] = artifact_hash(
-        approval_record, "approval_record_hash"
-    )
+    approval_record["approval_record_hash"] = artifact_hash(approval_record, "approval_record_hash")
     publication_id = _identity(publication_id, "publication_id")
     published_by = _nonempty(published_by, "published_by")
     manifest = {
@@ -354,455 +351,378 @@ def finalize_domain_policy_authority(
                 "path": f"contracts/{compiled['contract_id']}-{compiled['contract_version']}.contract.json",
             }
         ],
-        "reviews": [
-            {"path": f"reviews/{draft['source_policy']['source_policy_id']}.domain-policy.json"}
-        ],
-        "snapshots": [
-            {"path": f"snapshots/{draft['source_policy']['source_policy_id']}.source.json"}
-        ],
+        "reviews": [{"path": f"reviews/{draft['source_policy']['source_policy_id']}.domain-policy.json"}],
+        "snapshots": [{"path": f"snapshots/{draft['source_policy']['source_policy_id']}.source.json"}],
     }
-    preview = build_governance_impact_preview(compiled)
-    legacy_bundle = build_authority_bundle(
-        authority_contract=compiled,
-        publication_manifest=manifest,
-        governance_impact_preview=preview,
-        semantic_commit_bundle=semantic_commit,
-        compiled_authority_contract=compiled,
-    )
-    legacy_receipt = build_publication_receipt(
-        authority_bundle=legacy_bundle, published_at=published_at
-    )
-    validate_authority_bundle(legacy_bundle)
-    validate_publication_receipt(legacy_bundle, legacy_receipt)
-
-    mappings_hash = canonical_sha256(draft["source_to_constraint_mappings"])
-    outer_bundle: dict[str, Any] = {
-        "schema_version": DOMAIN_POLICY_AUTHORITY_BUNDLE_V1,
+    authority_record = {
+        **copy.deepcopy(authority),
+        "authority_identity_hash": canonical_sha256(authority),
+    }
+    provenance = {
+        "interpretation_id": draft["interpretation_id"],
+        "interpretation_hash": draft["draft_hash"],
+        "source_snapshot_hash": draft["source_policy"]["snapshot_hash"],
+        "source_statements_hash": canonical_sha256(draft["source_statements"]),
+        "direct_parses_hash": canonical_sha256(draft["direct_parses"]),
+        "statement_decisions_hash": canonical_sha256(draft["statement_decisions"]),
+        "source_to_constraint_mappings_hash": canonical_sha256(draft["source_to_constraint_mappings"]),
+        "canonical_cnl_previews_hash": canonical_sha256(draft["canonical_cnl_previews"]),
+        "constraint_ir_hash": constraint_ir["ir_hash"],
+        "runtime_fact_schema_hash": selected_runtime["schema_hash"],
+        "domain_pack_hash": pack["canonical_hash"],
+        "semantic_commit_id": semantic_commit["semantic_commit_id"],
+        "semantic_commit_hash": semantic_commit["semantic_commit_hash"],
+        "semantic_commit_bundle_hash": semantic_commit["bundle_hash"],
+        "compiled_contract_hash": compiled["contract_hash"],
+        "authority_identity_hash": authority_record["authority_identity_hash"],
+        "approval_record_hash": approval_record["approval_record_hash"],
+        "publication_manifest_hash": canonical_sha256(manifest),
+    }
+    bundle: dict[str, Any] = {
+        "schema_version": AUTHORITY_BUNDLE_V2,
         "provenance_complete": True,
         "source_policy": copy.deepcopy(draft["source_policy"]),
         "source_statements": copy.deepcopy(draft["source_statements"]),
-        "interpretation": {
-            "interpretation_id": draft["interpretation_id"],
-            "draft_hash": draft["draft_hash"],
-            "source_statements_hash": canonical_sha256(draft["source_statements"]),
-            "source_to_constraint_mappings_hash": mappings_hash,
-        },
-        "source_to_constraint_mappings": copy.deepcopy(
-            draft["source_to_constraint_mappings"]
-        ),
-        "mapping_decisions": copy.deepcopy(draft["mapping_decisions"]),
+        "direct_parses": copy.deepcopy(draft["direct_parses"]),
+        "statement_decisions": copy.deepcopy(draft["statement_decisions"]),
+        "source_to_constraint_mappings": copy.deepcopy(draft["source_to_constraint_mappings"]),
         "canonical_cnl_previews": copy.deepcopy(draft["canonical_cnl_previews"]),
         "constraint_ir": copy.deepcopy(constraint_ir),
         "runtime_fact_schema": selected_runtime,
         "domain_pack": copy.deepcopy(draft["domain_pack"]),
         "semantic_commit_bundle": semantic_commit,
         "compiled_authority_contract": compiled,
-        "authority": {
-            **copy.deepcopy(authority),
-            "authority_identity_hash": canonical_sha256(authority),
-        },
+        "authority": authority_record,
         "approval_record": approval_record,
-        "authority_bundle_v1": legacy_bundle,
-        "publication_receipt_v1": legacy_receipt,
-        "compatibility": {
-            "embedded_v1_profile": "legacy_provenance_incomplete",
-            "reason": (
-                "Released v1 schemas are unchanged; complete domain-pack lineage is bound "
-                "by this versioned envelope and its receipt."
-            ),
-        },
+        "publication_manifest": manifest,
+        "provenance_bindings": provenance,
     }
-    outer_bundle["bundle_hash"] = artifact_hash(outer_bundle, "bundle_hash")
-    outer_receipt: dict[str, Any] = {
-        "schema_version": DOMAIN_POLICY_PUBLICATION_RECEIPT_V1,
-        "receipt_id": "domain-receipt-" + outer_bundle["bundle_hash"].removeprefix("sha256:"),
+    bundle["bundle_hash"] = artifact_hash(bundle, "bundle_hash")
+    receipt: dict[str, Any] = {
+        "schema_version": PUBLICATION_RECEIPT_V2,
+        "receipt_id": "receipt-v2-" + bundle["bundle_hash"].removeprefix("sha256:"),
         "publication_id": publication_id,
         "authority_ref": authority["authority_ref"],
         "published_at": published_at,
         "published_by": published_by,
-        "bundle_hash": outer_bundle["bundle_hash"],
-        "source_snapshot_hash": draft["source_policy"]["snapshot_hash"],
-        "domain_pack_hash": pack["canonical_hash"],
-        "constraint_ir_hash": constraint_ir["ir_hash"],
-        "semantic_commit_hash": semantic_commit["semantic_commit_hash"],
-        "semantic_commit_bundle_hash": semantic_commit["bundle_hash"],
-        "compiled_contract_hash": compiled["contract_hash"],
-        "embedded_authority_bundle_hash": canonical_sha256(legacy_bundle),
-        "embedded_publication_receipt_hash": legacy_receipt["receipt_hash"],
+        "bundle_hash": bundle["bundle_hash"],
+        "source_snapshot_hash": provenance["source_snapshot_hash"],
+        "source_statements_hash": provenance["source_statements_hash"],
+        "statement_decisions_hash": provenance["statement_decisions_hash"],
+        "constraint_ir_hash": provenance["constraint_ir_hash"],
+        "runtime_fact_schema_hash": provenance["runtime_fact_schema_hash"],
+        "domain_pack": copy.deepcopy(draft["domain_pack"]),
+        "semantic_commit_id": provenance["semantic_commit_id"],
+        "semantic_commit_hash": provenance["semantic_commit_hash"],
+        "semantic_commit_bundle_hash": provenance["semantic_commit_bundle_hash"],
+        "compiled_contract_ref": f"{compiled['contract_id']}@{compiled['contract_version']}",
+        "compiled_contract_hash": provenance["compiled_contract_hash"],
+        "authority_identity_hash": provenance["authority_identity_hash"],
+        "approval_record_hash": provenance["approval_record_hash"],
+        "publication_manifest_hash": provenance["publication_manifest_hash"],
         "provenance_complete": True,
     }
-    outer_receipt["receipt_hash"] = artifact_hash(outer_receipt, "receipt_hash")
-    provenance_validation = validate_domain_policy_publication(
-        outer_bundle, outer_receipt
-    )
+    receipt["receipt_hash"] = artifact_hash(receipt, "receipt_hash")
+    from governance_ledger.publication_provenance import validate_authority_bundle, validate_publication_receipt
+    bundle_validation = validate_authority_bundle(bundle)
+    receipt_validation = validate_publication_receipt(bundle, receipt)
     return {
         "schema_version": DOMAIN_POLICY_FINALIZATION_V1,
-        "status": {
-            "constraint_ir_valid": True,
-            "runtime_fact_compatible": True,
-            "provenance_complete": True,
-            "publication_ready": True,
-        },
+        "status": {"constraint_ir_valid": True, "runtime_fact_compatible": True, "provenance_complete": True, "publication_ready": True},
         "validated_interpretation": draft,
-        "constraint_ir_validation": validation,
-        "runtime_fact_compatibility": runtime_compatibility,
+        "constraint_ir_validation": ir_validation,
+        "runtime_fact_compatibility": compatibility,
         "approval_record": approval_record,
         "semantic_commit_bundle": semantic_commit,
         "canonical_compiler_input": compiler_input,
         "compiled_authority_contract": compiled,
-        "governance_impact_preview": preview,
+        "governance_impact_preview": build_governance_impact_preview(compiled),
         "publication_manifest": manifest,
-        "authority_bundle_v1": legacy_bundle,
-        "publication_receipt_v1": legacy_receipt,
-        "domain_policy_authority_bundle": outer_bundle,
-        "domain_policy_publication_receipt": outer_receipt,
-        "provenance_validation": provenance_validation,
+        "authority_bundle": bundle,
+        "publication_receipt": receipt,
+        "authority_bundle_validation": bundle_validation,
+        "publication_receipt_validation": receipt_validation,
         "canonical_hashes": {
-            "source_snapshot_hash": draft["source_policy"]["snapshot_hash"],
-            "interpretation_hash": draft["draft_hash"],
-            "constraint_ir_hash": constraint_ir["ir_hash"],
-            "runtime_fact_schema_hash": selected_runtime["schema_hash"],
-            "domain_pack_hash": pack["canonical_hash"],
-            "semantic_commit_hash": semantic_commit["semantic_commit_hash"],
-            "semantic_commit_bundle_hash": semantic_commit["bundle_hash"],
-            "compiled_contract_hash": compiled["contract_hash"],
-            "authority_bundle_v1_hash": canonical_sha256(legacy_bundle),
-            "publication_receipt_v1_hash": legacy_receipt["receipt_hash"],
-            "domain_policy_bundle_hash": outer_bundle["bundle_hash"],
-            "domain_policy_receipt_hash": outer_receipt["receipt_hash"],
+            "source_snapshot_hash": provenance["source_snapshot_hash"],
+            "interpretation_hash": provenance["interpretation_hash"],
+            "constraint_ir_hash": provenance["constraint_ir_hash"],
+            "runtime_fact_schema_hash": provenance["runtime_fact_schema_hash"],
+            "domain_pack_hash": provenance["domain_pack_hash"],
+            "semantic_commit_hash": provenance["semantic_commit_hash"],
+            "semantic_commit_bundle_hash": provenance["semantic_commit_bundle_hash"],
+            "compiled_contract_hash": provenance["compiled_contract_hash"],
+            "authority_bundle_hash": bundle["bundle_hash"],
+            "publication_receipt_hash": receipt["receipt_hash"],
         },
     }
 
 
-def validate_domain_policy_publication(
-    bundle: dict[str, Any], receipt: dict[str, Any]
-) -> dict[str, Any]:
-    """Validate the complete new-workflow provenance chain and both self-hashes."""
-    if not isinstance(bundle, dict) or bundle.get("schema_version") != DOMAIN_POLICY_AUTHORITY_BUNDLE_V1:
-        raise ValueError(f"bundle must be {DOMAIN_POLICY_AUTHORITY_BUNDLE_V1}")
-    expected_bundle_fields = {
-        "schema_version",
-        "provenance_complete",
-        "source_policy",
-        "source_statements",
-        "interpretation",
-        "source_to_constraint_mappings",
-        "mapping_decisions",
-        "canonical_cnl_previews",
-        "constraint_ir",
-        "runtime_fact_schema",
-        "domain_pack",
-        "semantic_commit_bundle",
-        "compiled_authority_contract",
-        "authority",
-        "approval_record",
-        "authority_bundle_v1",
-        "publication_receipt_v1",
-        "compatibility",
-        "bundle_hash",
-    }
-    _exact(bundle, expected_bundle_fields, "domain policy authority bundle")
-    if bundle["provenance_complete"] is not True:
-        raise ValueError("domain policy authority bundle must declare complete provenance")
-    if bundle["bundle_hash"] != artifact_hash(bundle, "bundle_hash"):
-        raise ValueError("domain policy authority bundle hash does not match canonical content")
-    pack = get_builtin_domain_pack(
-        bundle["domain_pack"]["domain_pack_id"],
-        bundle["domain_pack"]["domain_pack_version"],
+def _validate_authority_bundle_v2(bundle: dict[str, Any]) -> dict[str, Any]:
+    """Independently reconstruct and validate an authority_bundle.v2 chain."""
+    _exact(
+        bundle,
+        {
+            "schema_version", "provenance_complete", "source_policy", "source_statements",
+            "direct_parses", "statement_decisions", "source_to_constraint_mappings",
+            "canonical_cnl_previews", "constraint_ir", "runtime_fact_schema", "domain_pack",
+            "semantic_commit_bundle", "compiled_authority_contract", "authority",
+            "approval_record", "publication_manifest", "provenance_bindings", "bundle_hash",
+        },
+        "authority_bundle.v2",
     )
-    if bundle["domain_pack"] != _pack_ref(pack):
-        raise ValueError("domain policy authority bundle has a tampered domain-pack binding")
+    if bundle["schema_version"] != AUTHORITY_BUNDLE_V2 or bundle["provenance_complete"] is not True:
+        raise ValueError("authority bundle must be provenance-complete authority_bundle.v2")
+    if bundle["bundle_hash"] != artifact_hash(bundle, "bundle_hash"):
+        raise ValueError("authority_bundle.v2 canonical hash is invalid")
+    pack_ref = bundle["domain_pack"]
+    pack = get_builtin_domain_pack(pack_ref["domain_pack_id"], pack_ref["domain_pack_version"])
+    if pack_ref != _pack_ref(pack):
+        raise ValueError("authority_bundle.v2 domain-pack binding is invalid")
+    if bundle["runtime_fact_schema"] != pack["runtime_fact_schema"]:
+        raise ValueError("authority_bundle.v2 runtime schema is not the pack-bound schema")
     validate_constraint_ir(bundle["constraint_ir"], domain_pack=pack)
     compatibility = validate_runtime_fact_compatibility(
         bundle["constraint_ir"], bundle["runtime_fact_schema"], domain_pack=pack
     )
     if not compatibility["compatible"]:
-        raise ValueError("domain policy authority bundle runtime facts are incompatible")
+        raise ValueError("authority_bundle.v2 runtime facts are incompatible")
     source = bundle["source_policy"]
     exact = base64.b64decode(source["source_bytes_base64"].encode("ascii"), validate=True)
     if bytes_sha256(exact) != source["snapshot_hash"]:
-        raise ValueError("domain policy authority bundle source snapshot hash is invalid")
+        raise ValueError("authority_bundle.v2 source snapshot hash is invalid")
     for statement in bundle["source_statements"]:
         piece = exact[statement["start_byte"] : statement["end_byte"]]
-        if bytes_sha256(piece) != statement["statement_hash"]:
-            raise ValueError("domain policy authority bundle statement span or hash is invalid")
+        if not piece or bytes_sha256(piece) != statement["statement_hash"]:
+            raise ValueError("authority_bundle.v2 statement span or hash is invalid")
         if base64.b64encode(piece).decode("ascii") != statement["statement_bytes_base64"]:
-            raise ValueError("domain policy authority bundle statement bytes do not match its span")
-    interpretation = bundle["interpretation"]
-    if interpretation["source_statements_hash"] != canonical_sha256(bundle["source_statements"]):
-        raise ValueError("domain policy source statements hash is invalid")
-    if interpretation["source_to_constraint_mappings_hash"] != canonical_sha256(
-        bundle["source_to_constraint_mappings"]
-    ):
-        raise ValueError("domain policy source-to-constraint mapping hash is invalid")
+            raise ValueError("authority_bundle.v2 statement bytes are invalid")
     authority = bundle["authority"]
-    authority_core = {
-        key: authority[key]
-        for key in ("authority_id", "authority_version", "authority_ref")
-    }
-    reconstructed_draft = {
+    _exact(
+        authority,
+        {"authority_id", "authority_version", "authority_ref", "authority_identity_hash"},
+        "authority_bundle.v2 authority",
+    )
+    authority_core = {key: authority[key] for key in ("authority_id", "authority_version", "authority_ref")}
+    if authority["authority_identity_hash"] != canonical_sha256(authority_core):
+        raise ValueError("authority_bundle.v2 authority identity hash is invalid")
+    provenance = bundle["provenance_bindings"]
+    draft = {
         "schema_version": DOMAIN_POLICY_INTERPRETATION_V1,
         "source_policy": copy.deepcopy(source),
-        "authority": copy.deepcopy(authority_core),
-        "domain_pack": copy.deepcopy(bundle["domain_pack"]),
+        "authority": authority_core,
+        "domain_pack": copy.deepcopy(pack_ref),
         "runtime_fact_schema": copy.deepcopy(bundle["runtime_fact_schema"]),
         "source_statements": copy.deepcopy(bundle["source_statements"]),
+        "direct_parses": copy.deepcopy(bundle["direct_parses"]),
+        "statement_decisions": copy.deepcopy(bundle["statement_decisions"]),
         "constraint_ir": copy.deepcopy(bundle["constraint_ir"]),
         "canonical_cnl_previews": copy.deepcopy(bundle["canonical_cnl_previews"]),
-        "source_to_constraint_mappings": copy.deepcopy(
-            bundle["source_to_constraint_mappings"]
-        ),
-        "mapping_decisions": copy.deepcopy(bundle["mapping_decisions"]),
-        "status": _draft_status(
-            bundle["source_statements"], bundle["constraint_ir"]["constraints"]
-        ),
-        "interpretation_id": interpretation["interpretation_id"],
-        "draft_hash": interpretation["draft_hash"],
+        "source_to_constraint_mappings": copy.deepcopy(bundle["source_to_constraint_mappings"]),
+        "status": _draft_status(bundle["source_statements"], bundle["constraint_ir"]["constraints"]),
+        "interpretation_id": provenance["interpretation_id"],
+        "draft_hash": provenance["interpretation_hash"],
     }
-    _reconstruct_domain_draft(reconstructed_draft)
-    statement_index = {item["statement_id"]: item for item in bundle["source_statements"]}
-    constraint_ids = {item["constraint_id"] for item in bundle["constraint_ir"]["constraints"]}
-    for mapping in bundle["source_to_constraint_mappings"]:
-        if mapping["statement_id"] not in statement_index or not set(mapping["constraint_ids"]) <= constraint_ids:
-            raise ValueError("domain policy mapping references an unknown statement or constraint")
-    for decision in bundle["mapping_decisions"]:
-        _validate_mapping_decision_record(decision, bundle, pack)
+    _reconstruct_domain_draft(draft)
     semantic = bundle["semantic_commit_bundle"]
     compiled = bundle["compiled_authority_contract"]
-    if semantic["source_hash"] != source["snapshot_hash"]:
-        raise ValueError("semantic commit is not bound to the exact domain-policy source")
-    if compiled["compiled_from"]["semantic_commit_hash"] != semantic["semantic_commit_hash"]:
-        raise ValueError("compiled contract is not bound to the semantic commit")
-    if authority["authority_identity_hash"] != canonical_sha256(authority_core):
-        raise ValueError("domain policy authority identity hash is invalid")
-    if compiled["authority_ref"] != authority["authority_ref"]:
-        raise ValueError("compiled contract authority identity is inconsistent")
-    validate_authority_bundle(bundle["authority_bundle_v1"])
-    validate_publication_receipt(
-        bundle["authority_bundle_v1"], bundle["publication_receipt_v1"]
-    )
-    if bundle["authority_bundle_v1"].get("semantic_commit_bundle") != semantic:
-        raise ValueError("embedded authority bundle semantic commit is inconsistent")
-    if bundle["authority_bundle_v1"].get("compiled_authority_contract") != compiled:
-        raise ValueError("embedded authority bundle compiled contract is inconsistent")
     approval = bundle["approval_record"]
+    manifest = bundle["publication_manifest"]
     _exact(
         approval,
-        {
-            "approval_id",
-            "approved_by",
-            "approved_at",
-            "approved_constraint_ir_hash",
-            "approved_semantic_commit_hash",
-            "approval_record_hash",
-        },
-        "domain policy approval record",
+        {"approval_id", "approved_by", "approved_at", "approved_constraint_ir_hash", "approved_semantic_commit_hash", "approval_record_hash"},
+        "authority_bundle.v2 approval_record",
     )
-    if approval["approval_record_hash"] != artifact_hash(approval, "approval_record_hash"):
-        raise ValueError("domain policy approval record hash is invalid")
-    if approval["approved_constraint_ir_hash"] != bundle["constraint_ir"]["ir_hash"]:
-        raise ValueError("domain policy approval does not bind Constraint IR")
-    if approval["approved_semantic_commit_hash"] != semantic["semantic_commit_hash"]:
-        raise ValueError("domain policy approval does not bind the semantic commit")
-    if not isinstance(receipt, dict) or receipt.get("schema_version") != DOMAIN_POLICY_PUBLICATION_RECEIPT_V1:
-        raise ValueError(f"receipt must be {DOMAIN_POLICY_PUBLICATION_RECEIPT_V1}")
-    expected_receipt_fields = {
-        "schema_version",
-        "receipt_id",
-        "publication_id",
-        "authority_ref",
-        "published_at",
-        "published_by",
-        "bundle_hash",
-        "source_snapshot_hash",
-        "domain_pack_hash",
-        "constraint_ir_hash",
-        "semantic_commit_hash",
-        "semantic_commit_bundle_hash",
-        "compiled_contract_hash",
-        "embedded_authority_bundle_hash",
-        "embedded_publication_receipt_hash",
-        "provenance_complete",
-        "receipt_hash",
+    from governance_ledger.customer_policy import (
+        _compile,
+        _compiler_input,
+        _normalized_semantic_meaning,
+        _require_no_rule_conflicts,
+        _validate_cross_artifact_rule_equivalence,
+    )
+    rules = [_lower_constraint(item) for item in bundle["constraint_ir"]["constraints"]]
+    _require_no_rule_conflicts(rules)
+    compiler_input = _compiler_input(authority_core, rules)
+    normalized = _normalized_semantic_meaning(authority_core, rules, compiler_input)
+    expected_reconciliation = {
+        "schema_version": "governance_semantic_reconciliation.v1",
+        "source_id": source["source_policy_id"],
+        "source_hash": source["snapshot_hash"],
+        "extraction_id": draft["interpretation_id"],
+        "operator_interpretation_decisions": copy.deepcopy(draft["statement_decisions"]),
+        "unresolved_ambiguities": [],
+        "semantic_conflicts": [],
+        "interpretation_completeness_posture": "complete",
+        "final_normalized_semantic_meaning": normalized,
     }
-    _exact(receipt, expected_receipt_fields, "domain policy publication receipt")
-    if receipt["receipt_hash"] != artifact_hash(receipt, "receipt_hash"):
-        raise ValueError("domain policy publication receipt hash does not match canonical content")
-    bindings = {
-        "bundle_hash": bundle["bundle_hash"],
+    expected_semantic = build_semantic_commit_bundle(
+        expected_reconciliation,
+        committed_by=semantic["committed_by"],
+        committed_at=semantic["committed_at"],
+    )
+    if semantic != expected_semantic:
+        raise ValueError("semantic commit is not the deterministic result of the bound Constraint IR")
+    expected_compiled = _compile(
+        compiler_input,
+        expected_semantic,
+        {
+            "source_policy": source,
+            "draft_hash": draft["draft_hash"],
+            "interpretation_id": draft["interpretation_id"],
+            "authority": authority_core,
+        },
+    )
+    _validate_cross_artifact_rule_equivalence(
+        confirmed_rules=rules,
+        normalized_meaning=normalized,
+        semantic_commit=expected_semantic,
+        compiler_input=compiler_input,
+        compiled_contract=expected_compiled,
+    )
+    if compiled != expected_compiled:
+        raise ValueError("compiled contract is not the deterministic lowering of the semantic commit")
+    expected_provenance = {
+        "interpretation_id": draft["interpretation_id"],
+        "interpretation_hash": draft["draft_hash"],
         "source_snapshot_hash": source["snapshot_hash"],
-        "domain_pack_hash": pack["canonical_hash"],
+        "source_statements_hash": canonical_sha256(bundle["source_statements"]),
+        "direct_parses_hash": canonical_sha256(bundle["direct_parses"]),
+        "statement_decisions_hash": canonical_sha256(bundle["statement_decisions"]),
+        "source_to_constraint_mappings_hash": canonical_sha256(bundle["source_to_constraint_mappings"]),
+        "canonical_cnl_previews_hash": canonical_sha256(bundle["canonical_cnl_previews"]),
         "constraint_ir_hash": bundle["constraint_ir"]["ir_hash"],
+        "runtime_fact_schema_hash": bundle["runtime_fact_schema"]["schema_hash"],
+        "domain_pack_hash": pack["canonical_hash"],
+        "semantic_commit_id": semantic["semantic_commit_id"],
         "semantic_commit_hash": semantic["semantic_commit_hash"],
         "semantic_commit_bundle_hash": semantic["bundle_hash"],
         "compiled_contract_hash": compiled["contract_hash"],
-        "embedded_authority_bundle_hash": canonical_sha256(bundle["authority_bundle_v1"]),
-        "embedded_publication_receipt_hash": bundle["publication_receipt_v1"]["receipt_hash"],
-        "authority_ref": authority["authority_ref"],
+        "authority_identity_hash": authority["authority_identity_hash"],
+        "approval_record_hash": approval["approval_record_hash"],
+        "publication_manifest_hash": canonical_sha256(manifest),
     }
-    for field, expected in bindings.items():
-        if receipt[field] != expected:
-            raise ValueError(f"domain policy publication receipt {field} binding is invalid")
-    if receipt["provenance_complete"] is not True:
-        raise ValueError("domain policy publication receipt must declare complete provenance")
-    manifest = bundle["authority_bundle_v1"]["publication_manifest"]
-    if (
-        receipt["publication_id"] != manifest["publication_id"]
-        or receipt["published_at"] != manifest["published_at"]
-        or receipt["published_by"] != manifest["published_by"]
-    ):
-        raise ValueError("domain policy publication receipt metadata is inconsistent")
-    return {
-        "valid": True,
-        "provenance_complete": True,
+    if provenance != expected_provenance:
+        raise ValueError("authority_bundle.v2 provenance bindings are inconsistent")
+    if semantic["source_hash"] != source["snapshot_hash"]:
+        raise ValueError("semantic commit does not bind the exact source")
+    if compiled["compiled_from"]["semantic_commit_hash"] != semantic["semantic_commit_hash"]:
+        raise ValueError("compiled contract does not bind the semantic commit")
+    if compiled["authority_ref"] != authority["authority_ref"]:
+        raise ValueError("compiled contract authority identity is inconsistent")
+    if approval["approval_record_hash"] != artifact_hash(approval, "approval_record_hash"):
+        raise ValueError("approval record hash is invalid")
+    if approval["approved_constraint_ir_hash"] != bundle["constraint_ir"]["ir_hash"] or approval["approved_semantic_commit_hash"] != semantic["semantic_commit_hash"]:
+        raise ValueError("approval record bindings are inconsistent")
+    contract_entry = manifest["contracts"][0]
+    if contract_entry["contract_hash"] != compiled["contract_hash"] or contract_entry["source_hash"] != source["snapshot_hash"]:
+        raise ValueError("publication manifest contract bindings are inconsistent")
+    expected_manifest = {
+        "schema_version": "publication_manifest.v1",
+        "publication_id": manifest["publication_id"],
+        "published_at": manifest["published_at"],
+        "published_by": manifest["published_by"],
+        "contracts": [
+            {
+                "contract_id": compiled["contract_id"],
+                "contract_version": compiled["contract_version"],
+                "contract_hash": compiled["contract_hash"],
+                "source_hash": source["snapshot_hash"],
+                "path": f"contracts/{compiled['contract_id']}-{compiled['contract_version']}.contract.json",
+            }
+        ],
+        "reviews": [{"path": f"reviews/{source['source_policy_id']}.domain-policy.json"}],
+        "snapshots": [{"path": f"snapshots/{source['source_policy_id']}.source.json"}],
+    }
+    if manifest != expected_manifest:
+        raise ValueError("publication manifest is not the deterministic v2 manifest")
+    if _utc_datetime(approval["approved_at"], "approved_at") > _utc_datetime(semantic["committed_at"], "committed_at"):
+        raise ValueError("approval must precede semantic commitment")
+    if _utc_datetime(semantic["committed_at"], "committed_at") > _utc_datetime(manifest["published_at"], "published_at"):
+        raise ValueError("semantic commitment must precede publication")
+    return {"schema_version": AUTHORITY_BUNDLE_V2, "profile": "domain_pack_provenance_complete_v2", "provenance_complete": True, "bundle_hash": bundle["bundle_hash"]}
+
+
+def _validate_publication_receipt_v2(bundle: dict[str, Any], receipt: dict[str, Any]) -> dict[str, Any]:
+    status = _validate_authority_bundle_v2(bundle)
+    expected_fields = {
+        "schema_version", "receipt_id", "publication_id", "authority_ref", "published_at",
+        "published_by", "bundle_hash", "source_snapshot_hash", "source_statements_hash",
+        "statement_decisions_hash", "constraint_ir_hash", "runtime_fact_schema_hash",
+        "domain_pack", "semantic_commit_id", "semantic_commit_hash",
+        "semantic_commit_bundle_hash", "compiled_contract_ref", "compiled_contract_hash",
+        "authority_identity_hash", "approval_record_hash", "publication_manifest_hash",
+        "provenance_complete", "receipt_hash",
+    }
+    _exact(receipt, expected_fields, "publication_receipt.v2")
+    if receipt["schema_version"] != PUBLICATION_RECEIPT_V2 or receipt["provenance_complete"] is not True:
+        raise ValueError("publication receipt must be provenance-complete publication_receipt.v2")
+    if receipt["receipt_hash"] != artifact_hash(receipt, "receipt_hash"):
+        raise ValueError("publication_receipt.v2 canonical hash is invalid")
+    provenance = bundle["provenance_bindings"]
+    compiled = bundle["compiled_authority_contract"]
+    manifest = bundle["publication_manifest"]
+    expected = {
+        "receipt_id": "receipt-v2-" + bundle["bundle_hash"].removeprefix("sha256:"),
+        "publication_id": manifest["publication_id"],
+        "authority_ref": bundle["authority"]["authority_ref"],
+        "published_at": manifest["published_at"],
+        "published_by": manifest["published_by"],
         "bundle_hash": bundle["bundle_hash"],
-        "receipt_hash": receipt["receipt_hash"],
+        "source_snapshot_hash": provenance["source_snapshot_hash"],
+        "source_statements_hash": provenance["source_statements_hash"],
+        "statement_decisions_hash": provenance["statement_decisions_hash"],
+        "constraint_ir_hash": provenance["constraint_ir_hash"],
+        "runtime_fact_schema_hash": provenance["runtime_fact_schema_hash"],
+        "domain_pack": bundle["domain_pack"],
+        "semantic_commit_id": provenance["semantic_commit_id"],
+        "semantic_commit_hash": provenance["semantic_commit_hash"],
+        "semantic_commit_bundle_hash": provenance["semantic_commit_bundle_hash"],
+        "compiled_contract_ref": f"{compiled['contract_id']}@{compiled['contract_version']}",
+        "compiled_contract_hash": provenance["compiled_contract_hash"],
+        "authority_identity_hash": provenance["authority_identity_hash"],
+        "approval_record_hash": provenance["approval_record_hash"],
+        "publication_manifest_hash": provenance["publication_manifest_hash"],
     }
+    for field, value in expected.items():
+        if receipt[field] != value:
+            raise ValueError(f"publication_receipt.v2 {field} binding is invalid")
+    return {**status, "schema_version": PUBLICATION_RECEIPT_V2, "receipt_hash": receipt["receipt_hash"]}
 
 
-def _constraint_from_legacy_rule(
-    rule: dict[str, Any], statement_text: str, pack: dict[str, Any]
-) -> dict[str, Any]:
-    rule_type = rule["rule_type"]
-    if rule_type == "required_actor_role":
-        role = rule["role"]
-        if role not in pack["role_kinds"]:
-            raise ValueError("direct role is outside the pack vocabulary")
-        return _constraint(
-            pack,
-            action="modify",
-            resource={"kind": "repository_change", "match": "any", "value": None},
-            effect="require",
-            acting_role=role,
-        )
-    if rule_type == "target":
-        return _constraint(
-            pack,
-            action="modify",
-            resource={"kind": "repository_path", "match": rule["match"], "value": rule["value"]},
-            effect=rule["effect"],
-        )
-    if rule_type == "approval_threshold":
-        role = rule["requires_role"]
-        if role not in pack["role_kinds"]:
-            raise ValueError("direct approval role is outside the pack vocabulary")
-        action = _approval_action(statement_text)
-        amount = _canonical_decimal(rule["value"])
-        return _constraint(
-            pack,
-            action=action,
-            resource={"kind": "financial_request", "match": "any", "value": None},
-            effect="require",
-            condition=_amount_condition(rule["operator"], amount),
-            approvals=[{"minimum": 1, "role": role, "evidence_fact": "approval.count"}],
-        )
-    if rule_type == "separation_of_duties":
-        return _constraint(
-            pack,
-            action="approve",
-            resource={"kind": "financial_request", "match": "any", "value": None},
-            effect="require",
-            separation=[
-                {
-                    "roles": ["requester", "approver"],
-                    "principal_facts": ["requester.principal_id", "approver.principal_id"],
-                }
-            ],
-        )
-    raise ValueError(f"legacy rule type is not lowerable by this domain pack: {rule_type}")
+def _constraint_from_legacy_rule(rule: dict[str, Any], pack: dict[str, Any]) -> dict[str, Any]:
+    if rule["rule_type"] == "required_actor_role":
+        if rule["role"] not in pack["role_kinds"]:
+            raise ValueError("direct role is outside repository pack vocabulary")
+        return _constraint(action="modify", resource={"kind": "repository_change", "match": "any", "value": None}, effect="require", acting_role=rule["role"])
+    if rule["rule_type"] == "target":
+        return _constraint(action="modify", resource={"kind": "repository_path", "match": rule["match"], "value": rule["value"]}, effect=rule["effect"])
+    raise ValueError("the repository pack does not compile this legacy rule category")
 
 
-def _constraint_from_control(
-    control: dict[str, Any], selections: dict[str, Any], pack: dict[str, Any]
-) -> dict[str, Any]:
-    produces = control["produces"]
-    if produces == "acting_role_requirement":
-        return _constraint(
-            pack,
-            action="modify",
-            resource={"kind": "repository_change", "match": "any", "value": None},
-            effect="require",
-            acting_role=selections["role"],
-        )
-    if produces in {"exact_path_access", "prefix_path_access"}:
-        match = "exact" if produces == "exact_path_access" else "prefix"
-        return _constraint(
-            pack,
-            action="modify",
-            resource={"kind": "repository_path", "match": match, "value": selections["path"]},
-            effect=selections["effect"],
-        )
-    if produces == "approval_threshold":
-        return _constraint(
-            pack,
-            action=selections["action"],
-            resource={"kind": "financial_request", "match": "any", "value": None},
-            effect="require",
-            condition=_amount_condition(selections["operator"], selections["amount"]),
-            approvals=[
-                {"minimum": 1, "role": selections["role"], "evidence_fact": "approval.count"}
-            ],
-        )
-    if produces == "requester_approver_separation":
-        return _constraint(
-            pack,
-            action="approve",
-            resource={"kind": "financial_request", "match": "any", "value": None},
-            effect="require",
-            separation=[
-                {
-                    "roles": ["requester", "approver"],
-                    "principal_facts": ["requester.principal_id", "approver.principal_id"],
-                }
-            ],
-        )
-    raise ValueError("mapping control cannot produce a known constraint")
+def _constraint_from_control(control: dict[str, Any], selections: dict[str, Any], pack: dict[str, Any]) -> dict[str, Any]:
+    emitter = control["emitter_id"]
+    if emitter == ACTING_ROLE_EMITTER_ID:
+        return _constraint(action="modify", resource={"kind": "repository_change", "match": "any", "value": None}, effect="require", acting_role=selections["role"])
+    if emitter in {EXACT_PATH_EMITTER_ID, PREFIX_PATH_EMITTER_ID}:
+        match = "exact" if emitter == EXACT_PATH_EMITTER_ID else "prefix"
+        return _constraint(action="modify", resource={"kind": "repository_path", "match": match, "value": selections["path"]}, effect=selections["effect"])
+    raise ValueError(f"mapping control requires unavailable emitter: {emitter}")
 
 
-def _constraint(
-    pack: dict[str, Any],
-    *,
-    action: str,
-    resource: dict[str, Any],
-    effect: str,
-    acting_role: str | None = None,
-    condition: dict[str, Any] | None = None,
-    approvals: list[dict[str, Any]] | None = None,
-    evidence: list[dict[str, Any]] | None = None,
-    separation: list[dict[str, Any]] | None = None,
-    exceptions: list[dict[str, Any]] | None = None,
-) -> dict[str, Any]:
-    approvals = approvals or []
-    evidence = evidence or []
-    separation = separation or []
-    exceptions = exceptions or []
+def _constraint(*, action: str, resource: dict[str, Any], effect: str, acting_role: str | None = None) -> dict[str, Any]:
     facts = {"actor.subject_kind", "proposal.action", "proposal.resource.kind"}
-    if resource["match"] != "any":
+    if resource["value"] is not None:
         facts.add("proposal.resource.path")
     if acting_role:
         facts.add("actor.role")
-    facts |= _condition_facts(condition)
-    for item in approvals:
-        facts.add(item["evidence_fact"])
-    for item in evidence:
-        facts.add(item["fact"])
-    for item in separation:
-        facts.update(item["principal_facts"])
-    for item in exceptions:
-        facts |= _condition_facts(item["condition"])
     return {
         "subject": {"kind": "subject_kind", "value": "agent"},
         "acting_role": {"kind": "role", "value": acting_role} if acting_role else None,
         "action": action,
         "resource": resource,
         "effect": effect,
-        "condition": condition,
-        "obligations": {
-            "approvals": approvals,
-            "evidence": evidence,
-            "separation_of_duties": separation,
-        },
-        "exceptions": exceptions,
+        "condition": None,
+        "obligations": {"approvals": [], "evidence": [], "separation_of_duties": []},
+        "exceptions": [],
         "required_runtime_facts": sorted(facts),
     }
 
@@ -810,104 +730,111 @@ def _constraint(
 def _finalize_constraint(constraint: dict[str, Any]) -> dict[str, Any]:
     core = copy.deepcopy(constraint)
     core.pop("constraint_id", None)
-    result = {"constraint_id": "constraint-" + canonical_sha256(core).removeprefix("sha256:"), **core}
-    return result
+    return {"constraint_id": "constraint-" + canonical_sha256(core).removeprefix("sha256:"), **core}
 
 
 def _build_ir(constraints: list[dict[str, Any]], pack: dict[str, Any]) -> dict[str, Any]:
-    result = finalize_constraint_ir(
-        {
-            "schema_version": "constraint_ir.v1",
-            "domain_pack": _pack_ref(pack),
-            "runtime_fact_schema_hash": pack["runtime_fact_schema"]["schema_hash"],
-            "constraints": copy.deepcopy(constraints),
-        }
-    )
+    result = finalize_constraint_ir({"schema_version": "constraint_ir.v1", "domain_pack": _pack_ref(pack), "runtime_fact_schema_hash": pack["runtime_fact_schema"]["schema_hash"], "constraints": copy.deepcopy(constraints)})
     validate_constraint_ir(result, domain_pack=pack)
     return result
 
 
-def _mapping_decision(
-    draft: dict[str, Any],
-    statement: dict[str, Any],
-    control: dict[str, Any],
-    selections: dict[str, Any],
-    constraint: dict[str, Any],
-    mapper_identity: str,
-    mapped_at: str,
-) -> dict[str, Any]:
-    mapped_at = _utc(mapped_at, "mapped_at")
-    _nonempty(mapper_identity, "mapper_identity")
+def _direct_parse(statement: dict[str, Any], constraint_ids: list[str], pack: dict[str, Any]) -> dict[str, Any]:
+    core = {"statement_id": statement["statement_id"], "start_byte": statement["start_byte"], "end_byte": statement["end_byte"], "constraint_ids": constraint_ids, "compiler_id": pack["grammar_compiler"]["compiler_id"], "compiler_version": pack["grammar_compiler"]["compiler_version"]}
+    return {"parse_id": "direct-parse-" + canonical_sha256(core).removeprefix("sha256:"), **core, "parse_hash": canonical_sha256(core)}
+
+
+def _statement_decision(draft: dict[str, Any], statement: dict[str, Any], *, disposition: str, mapper_identity: str, mapped_at: str, reason_code: str, human_reason: str | None, control: dict[str, Any] | None, selections: dict[str, Any] | None, constraint: dict[str, Any] | None) -> dict[str, Any]:
+    mapper_identity = _nonempty(mapper_identity, "mapper_identity")
     if len(mapper_identity) > 256:
         raise ValueError("mapper_identity must contain at most 256 characters")
-    decision: dict[str, Any] = {
+    common = {
         "schema_version": POLICY_MAPPING_DECISION_V1,
         "source_document_hash": draft["source_policy"]["snapshot_hash"],
         "statement_id": statement["statement_id"],
         "start_byte": statement["start_byte"],
         "end_byte": statement["end_byte"],
         "domain_pack": copy.deepcopy(draft["domain_pack"]),
-        "control_id": control["control_id"],
-        "control_selections": copy.deepcopy(selections),
-        "selected_subject": copy.deepcopy(constraint["subject"]),
-        "selected_role": copy.deepcopy(constraint["acting_role"]),
-        "selected_action": constraint["action"],
-        "selected_resource": copy.deepcopy(constraint["resource"]),
-        "selected_effect": constraint["effect"],
-        "selected_typed_conditions": copy.deepcopy(constraint["condition"]),
-        "selected_obligations": copy.deepcopy(constraint["obligations"]),
-        "selected_exceptions": copy.deepcopy(constraint["exceptions"]),
-        "required_runtime_facts": copy.deepcopy(constraint["required_runtime_facts"]),
+        "disposition": disposition,
+        "reason_code": reason_code,
+        "human_reason": human_reason,
         "mapper_identity": mapper_identity,
-        "mapped_at": mapped_at,
-        "constraint_id": constraint["constraint_id"],
+        "mapped_at": _utc(mapped_at, "mapped_at"),
     }
-    decision["decision_hash"] = artifact_hash(decision, "decision_hash")
-    return decision
+    if disposition == "enforced":
+        common.update(
+            {
+                "control_id": control["control_id"],
+                "emitter_id": control["emitter_id"],
+                "control_selections": copy.deepcopy(selections),
+                "selected_subject": copy.deepcopy(constraint["subject"]),
+                "selected_role": copy.deepcopy(constraint["acting_role"]),
+                "selected_action": constraint["action"],
+                "selected_resource": copy.deepcopy(constraint["resource"]),
+                "selected_effect": constraint["effect"],
+                "selected_typed_conditions": copy.deepcopy(constraint["condition"]),
+                "selected_obligations": copy.deepcopy(constraint["obligations"]),
+                "selected_exceptions": copy.deepcopy(constraint["exceptions"]),
+                "required_runtime_facts": copy.deepcopy(constraint["required_runtime_facts"]),
+                "constraint_id": constraint["constraint_id"],
+            }
+        )
+    common["decision_hash"] = artifact_hash(common, "decision_hash")
+    return common
 
 
-def _apply_canonical_decision(
-    draft: dict[str, Any], decision: dict[str, Any], *, reconstructing: bool
-) -> dict[str, Any]:
+def _apply_canonical_decision(draft: dict[str, Any], decision: dict[str, Any], *, reconstructing: bool) -> dict[str, Any]:
     result = copy.deepcopy(draft)
     pack = _pack_for_draft(result)
     statement = _statement(result, decision["statement_id"])
-    if statement["classification"] != "requires_mapping":
-        raise ValueError("mapping decision targets a statement that does not require mapping")
-    control = mapping_control_index(pack).get(decision["control_id"])
-    if control is None or control["control_id"] not in statement["available_mapping_control_ids"]:
-        raise ValueError("mapping decision selects an unavailable control")
-    selections = _validate_selections(control, decision["control_selections"])
-    constraint = _finalize_constraint(_constraint_from_control(control, selections, pack))
-    expected = _mapping_decision(
+    if statement["classification"] != "pending":
+        raise ValueError("statement decision targets a non-pending statement")
+    disposition = decision["disposition"]
+    control = None
+    selections = None
+    constraint = None
+    if disposition == "enforced":
+        controls = mapping_control_index(pack)
+        control = controls.get(decision.get("control_id"))
+        if control is None or control["control_id"] not in statement["available_mapping_control_ids"]:
+            raise ValueError("statement decision selects an unavailable enforcement control")
+        selections = _validate_selections(control, decision.get("control_selections"))
+        constraint = _finalize_constraint(_constraint_from_control(control, selections, pack))
+    elif disposition == "informational":
+        if decision.get("reason_code") not in _INFORMATIONAL_REASONS:
+            raise ValueError("informational decision reason is invalid")
+    elif disposition == "unsupported":
+        if decision.get("reason_code") not in _UNSUPPORTED_REASONS:
+            raise ValueError("unsupported decision reason is invalid")
+    else:
+        raise ValueError("statement decision disposition is invalid")
+    expected = _statement_decision(
         result,
         statement,
-        control,
-        selections,
-        constraint,
-        decision["mapper_identity"],
-        decision["mapped_at"],
+        disposition=disposition,
+        mapper_identity=decision["mapper_identity"],
+        mapped_at=decision["mapped_at"],
+        reason_code=decision["reason_code"],
+        human_reason=decision["human_reason"],
+        control=control,
+        selections=selections,
+        constraint=constraint,
     )
     if decision != expected:
-        raise ValueError("mapping decision is modified or inconsistent with its bounded control")
-    result["mapping_decisions"].append(copy.deepcopy(expected))
-    if result["constraint_ir"] is None:
-        constraints = [constraint]
-    else:
-        constraints = copy.deepcopy(result["constraint_ir"]["constraints"]) + [constraint]
-    result["constraint_ir"] = _build_ir(constraints, pack)
-    preview = {"constraint_id": constraint["constraint_id"], "preview": _cnl_preview(constraint)}
-    result["canonical_cnl_previews"].append(preview)
-    mapping = _source_mapping(
-        statement, [constraint["constraint_id"]], "human_mapping", expected["decision_hash"]
-    )
-    result["source_to_constraint_mappings"].append(mapping)
-    statement["classification"] = "mapped"
-    statement["mapping_reason"] = None
+        raise ValueError("statement decision is modified or inconsistent")
+    result["statement_decisions"].append(copy.deepcopy(decision))
+    statement["classification"] = disposition
     statement["available_mapping_control_ids"] = []
+    statement["decision_hash"] = decision["decision_hash"]
+    constraints = copy.deepcopy(result["constraint_ir"]["constraints"]) if result["constraint_ir"] else []
+    if constraint is not None:
+        constraints.append(constraint)
+        result["source_to_constraint_mappings"].append(_source_mapping(statement, [constraint["constraint_id"]], "human_mapping", decision["decision_hash"]))
+        result["canonical_cnl_previews"].append({"constraint_id": constraint["constraint_id"], "preview": _cnl_preview(constraint)})
+    result["constraint_ir"] = _build_ir(constraints, pack) if constraints else None
     result["status"] = _draft_status(result["source_statements"], constraints)
     result["draft_hash"] = artifact_hash(result, "draft_hash")
-    if not reconstructing:
+    if not reconstructing and result["constraint_ir"] is not None:
         validate_constraint_ir(result["constraint_ir"], domain_pack=pack)
     return result
 
@@ -927,7 +854,7 @@ def _reconstruct_domain_draft(draft: dict[str, Any]) -> dict[str, Any]:
             authority_id=draft["authority"]["authority_id"],
             authority_version=draft["authority"]["authority_version"],
         )
-        for decision in draft["mapping_decisions"]:
+        for decision in draft["statement_decisions"]:
             base = _apply_canonical_decision(base, decision, reconstructing=True)
     except (KeyError, TypeError, ValueError) as exc:
         raise ValueError("domain-policy interpretation cannot be reconstructed") from exc
@@ -936,62 +863,54 @@ def _reconstruct_domain_draft(draft: dict[str, Any]) -> dict[str, Any]:
     return base
 
 
-def _validate_mapping_decision_record(
-    decision: dict[str, Any], bundle: dict[str, Any], pack: dict[str, Any]
-) -> None:
-    if decision.get("schema_version") != POLICY_MAPPING_DECISION_V1:
-        raise ValueError("domain policy bundle contains an unknown mapping decision schema")
-    if decision.get("decision_hash") != artifact_hash(decision, "decision_hash"):
-        raise ValueError("mapping decision canonical hash is invalid")
-    if decision["source_document_hash"] != bundle["source_policy"]["snapshot_hash"]:
-        raise ValueError("mapping decision source document hash is invalid")
-    if decision["domain_pack"] != _pack_ref(pack):
-        raise ValueError("mapping decision domain-pack binding is invalid")
-    statements = {item["statement_id"]: item for item in bundle["source_statements"]}
-    statement = statements.get(decision["statement_id"])
-    if statement is None or (
-        decision["start_byte"], decision["end_byte"]
-    ) != (statement["start_byte"], statement["end_byte"]):
-        raise ValueError("mapping decision statement identity or byte span is invalid")
-
-
 def _lower_constraint(constraint: dict[str, Any]) -> dict[str, Any]:
-    if constraint["exceptions"] or constraint["obligations"]["evidence"]:
-        raise ValueError("repository-changes lowering does not support exceptions or evidence obligations")
-    resource = constraint["resource"]
-    obligations = constraint["obligations"]
+    if constraint["exceptions"] or any(constraint["obligations"].values()) or constraint["condition"] is not None:
+        raise ValueError("repository-changes lowering received an unsupported Constraint IR concept")
     if constraint["acting_role"] is not None:
-        rule = {
-            "rule_type": "required_actor_role",
-            "role": constraint["acting_role"]["value"],
-        }
-    elif resource["kind"] == "repository_path":
-        rule = {
-            "rule_type": "target",
-            "effect": constraint["effect"],
-            "match": resource["match"],
-            "value": resource["value"],
-        }
-    elif obligations["approvals"]:
-        comparison = constraint["condition"]["operands"][0]
-        literal = comparison["literal"]["value"]
-        numeric: int | float = int(literal) if "." not in literal else float(literal)
-        rule = {
-            "rule_type": "approval_threshold",
-            "field": "amount",
-            "operator": comparison["operator"],
-            "value": numeric,
-            "requires_role": obligations["approvals"][0]["role"],
-        }
-    elif obligations["separation_of_duties"]:
-        rule = {
-            "rule_type": "separation_of_duties",
-            "roles": copy.deepcopy(obligations["separation_of_duties"][0]["roles"]),
-        }
+        rule = {"rule_type": "required_actor_role", "role": constraint["acting_role"]["value"]}
+    elif constraint["resource"]["kind"] == "repository_path":
+        rule = {"rule_type": "target", "effect": constraint["effect"], "match": constraint["resource"]["match"], "value": constraint["resource"]["value"]}
     else:
-        raise ValueError("Constraint IR concept is not supported by repository-changes lowering")
+        raise ValueError("Constraint IR concept is not supported by repository lowering")
     rule["rule_id"] = "rule-" + canonical_sha256(rule).removeprefix("sha256:")
     return rule
+
+
+def _validate_selections(control: dict[str, Any], selections: Any) -> dict[str, Any]:
+    if not isinstance(selections, dict):
+        raise ValueError("mapping selections must be an object")
+    schema = control["selection_schema"]
+    _exact(selections, set(schema), "mapping selections")
+    result = copy.deepcopy(selections)
+    for name, field in schema.items():
+        value = result[name]
+        value_type = field["type"]
+        if value_type == "enum" and value not in field["enum_values"]:
+            raise ValueError(f"mapping selection {name} is outside the control enum")
+        if value_type == "string" and (not isinstance(value, str) or not value):
+            raise ValueError(f"mapping selection {name} must be a non-empty string")
+        if value_type == "integer" and (not isinstance(value, int) or isinstance(value, bool)):
+            raise ValueError(f"mapping selection {name} must be an integer")
+        if value_type == "boolean" and not isinstance(value, bool):
+            raise ValueError(f"mapping selection {name} must be Boolean")
+        if value_type == "decimal" and (not isinstance(value, str) or not _DECIMAL.fullmatch(value)):
+            raise ValueError(f"mapping selection {name} must be a canonical decimal string")
+        if value_type == "timestamp":
+            _utc(value, f"mapping selection {name}")
+        if value_type == "string_set" and (
+            not isinstance(value, list)
+            or value != sorted(set(value))
+            or any(not isinstance(item, str) or not item for item in value)
+        ):
+            raise ValueError(f"mapping selection {name} must be a sorted unique string array")
+        if field["format_id"] is not None:
+            validate_format_value(field["format_id"], value, label=f"mapping selection {name}")
+    return result
+
+
+def _source_mapping(statement: dict[str, Any], constraint_ids: list[str], mode: str, decision_hash: str | None) -> dict[str, Any]:
+    core = {"statement_id": statement["statement_id"], "start_byte": statement["start_byte"], "end_byte": statement["end_byte"], "constraint_ids": constraint_ids, "mode": mode, "statement_decision_hash": decision_hash}
+    return {"mapping_id": "constraint-mapping-" + canonical_sha256(core).removeprefix("sha256:"), **core}
 
 
 def _cnl_preview(constraint: dict[str, Any]) -> str:
@@ -1001,99 +920,24 @@ def _cnl_preview(constraint: dict[str, Any]) -> str:
     if resource["value"] is not None:
         resource_text += f' "{resource["value"]}"'
     if constraint["acting_role"]:
-        return (
-            f"REQUIRE {subject} ACTING AS {constraint['acting_role']['value']} TO "
-            f"{constraint['action']} {resource_text}."
-        )
-    approvals = constraint["obligations"]["approvals"]
-    if approvals:
-        comparison = constraint["condition"]["operands"][0]
-        literal = comparison["literal"]
-        return (
-            f"REQUIRE {approvals[0]['role']} APPROVAL FOR {subject} TO {constraint['action']} "
-            f"{resource_text} WHEN ALL({comparison['fact']} {comparison['operator']} "
-            f"{literal['type']}(\"{literal['value']}\", {literal['unit']}))."
-        )
-    separation = constraint["obligations"]["separation_of_duties"]
-    if separation:
-        return (
-            f"REQUIRE SEPARATE PRINCIPALS FOR {', '.join(separation[0]['roles'])} "
-            f"WHEN {subject} {constraint['action']} {resource_text}."
-        )
+        return f"REQUIRE {subject} ACTING AS {constraint['acting_role']['value']} TO {constraint['action']} {resource_text}."
     return f"{constraint['effect'].upper()} {subject} TO {constraint['action']} {resource_text}."
 
 
-def _validate_selections(
-    control: dict[str, Any], selections: dict[str, Any]
-) -> dict[str, Any]:
-    if not isinstance(selections, dict):
-        raise ValueError("mapping selections must be an object")
-    schema = control["selection_schema"]
-    _exact(selections, set(schema), "mapping selections")
-    result = copy.deepcopy(selections)
-    for name, field in schema.items():
-        value = result[name]
-        if field["type"] == "enum":
-            if value not in field["enum"]:
-                raise ValueError(f"mapping selection {name} is outside the control's enum")
-        elif field["type"] == "decimal":
-            if not isinstance(value, str) or not _DECIMAL.fullmatch(value):
-                raise ValueError(f"mapping selection {name} must be a canonical decimal string")
-        elif field["type"] == "repository_path":
-            # Full path validation occurs through strict Constraint IR validation.
-            if not isinstance(value, str) or not value:
-                raise ValueError(f"mapping selection {name} must be a non-empty path")
-    return result
-
-
-def _source_mapping(
-    statement: dict[str, Any],
-    constraint_ids: list[str],
-    mode: str,
-    decision_hash: str | None,
-) -> dict[str, Any]:
-    core = {
-        "statement_id": statement["statement_id"],
-        "start_byte": statement["start_byte"],
-        "end_byte": statement["end_byte"],
-        "constraint_ids": constraint_ids,
-        "mode": mode,
-        "mapping_decision_hash": decision_hash,
-    }
-    return {
-        "mapping_id": "constraint-mapping-" + canonical_sha256(core).removeprefix("sha256:"),
-        **core,
-    }
-
-
-def _draft_status(
-    statements: list[dict[str, Any]], constraints: list[dict[str, Any]]
-) -> dict[str, Any]:
-    requires = sum(item["classification"] == "requires_mapping" for item in statements)
-    return {
-        "statement_classification_complete": True,
-        "requires_mapping_count": requires,
-        "enforceable_constraint_count": len(constraints),
-        "ready_for_finalization": requires == 0 and bool(constraints),
-        "publication_ready": False,
-    }
+def _draft_status(statements: list[dict[str, Any]], constraints: list[dict[str, Any]]) -> dict[str, Any]:
+    pending = sum(item["classification"] == "pending" for item in statements)
+    return {"statement_classification_complete": pending == 0, "pending_statement_count": pending, "enforceable_constraint_count": len(constraints), "ready_for_finalization": pending == 0 and bool(constraints), "publication_ready": False}
 
 
 def _pack_ref(pack: dict[str, Any]) -> dict[str, str]:
-    return {
-        "domain_pack_id": pack["domain_pack_id"],
-        "domain_pack_version": pack["domain_pack_version"],
-        "domain_pack_hash": pack["canonical_hash"],
-    }
+    return {"domain_pack_id": pack["domain_pack_id"], "domain_pack_version": pack["domain_pack_version"], "domain_pack_hash": pack["canonical_hash"]}
 
 
 def _pack_for_draft(draft: dict[str, Any]) -> dict[str, Any]:
     ref = draft["domain_pack"]
     pack = get_builtin_domain_pack(ref["domain_pack_id"], ref["domain_pack_version"])
-    if ref != _pack_ref(pack):
-        raise ValueError("domain-policy interpretation has a tampered domain-pack binding")
-    if draft["runtime_fact_schema"] != pack["runtime_fact_schema"]:
-        raise ValueError("domain-policy interpretation has a tampered runtime fact schema")
+    if ref != _pack_ref(pack) or draft["runtime_fact_schema"] != pack["runtime_fact_schema"]:
+        raise ValueError("domain-policy interpretation has a tampered pack/runtime binding")
     return pack
 
 
@@ -1102,46 +946,6 @@ def _statement(draft: dict[str, Any], statement_id: str) -> dict[str, Any]:
     if len(matches) != 1:
         raise ValueError("statement_id does not identify one source statement")
     return matches[0]
-
-
-def _amount_condition(operator: str, amount: str) -> dict[str, Any]:
-    return {
-        "kind": "group",
-        "operator": "all",
-        "operands": [
-            {
-                "kind": "comparison",
-                "operator": operator,
-                "fact": "request.amount",
-                "literal": {"type": "decimal", "value": amount, "unit": "USD"},
-            }
-        ],
-    }
-
-
-def _condition_facts(condition: dict[str, Any] | None) -> set[str]:
-    if condition is None:
-        return set()
-    if condition["kind"] == "comparison":
-        return {condition["fact"]}
-    return {fact for operand in condition["operands"] for fact in _condition_facts(operand)}
-
-
-def _approval_action(text: str) -> str:
-    first = text.split(maxsplit=1)[0].lower()
-    return {
-        "transfers": "transfer",
-        "purchases": "purchase",
-        "payments": "payment",
-        "invoices": "invoice",
-        "requests": "request",
-    }.get(first, "transfer")
-
-
-def _canonical_decimal(value: int | float) -> str:
-    if isinstance(value, int):
-        return str(value)
-    return format(value, "f").rstrip("0").rstrip(".")
 
 
 def _utc(value: Any, label: str) -> str:
@@ -1170,10 +974,7 @@ def _nonempty(value: Any, label: str) -> str:
     return value
 
 
-def _exact(value: dict[str, Any], expected: set[str], label: str) -> None:
-    if not isinstance(value, dict) or set(value) != expected:
-        actual = set(value) if isinstance(value, dict) else set()
-        raise ValueError(
-            f"{label} fields are invalid; unknown={sorted(actual - expected)}, "
-            f"missing={sorted(expected - actual)}"
-        )
+def _exact(value: Any, expected: set[str], label: str) -> None:
+    actual = set(value) if isinstance(value, dict) else set()
+    if not isinstance(value, dict) or actual != expected:
+        raise ValueError(f"{label} fields are invalid; unknown={sorted(actual - expected)}, missing={sorted(expected - actual)}")

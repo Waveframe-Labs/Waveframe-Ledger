@@ -23,13 +23,13 @@ from governance_ledger.domain_policy import (
     finalize_domain_policy_authority,
     inspect_policy_mapping_controls,
     interpret_policy_with_domain_pack,
-    validate_domain_policy_publication,
 )
 from governance_ledger.diff import diff_reviews
 from governance_ledger.extract import extract_constraints
 from governance_ledger.inspect import format_artifact, format_contract_list, list_contracts, show_artifact
 from governance_ledger.lifecycle import transition_review_status
 from governance_ledger.provenance import build_review_provenance
+from governance_ledger.publication_provenance import validate_authority_bundle, validate_publication_receipt
 from governance_ledger.publish import approve_review_file, publish_review_file
 from governance_ledger.registry import load_contract_registry, resolve_authority_ref, update_contract_registry
 from governance_ledger.report import review_constraints, validate_constraints
@@ -91,7 +91,8 @@ __all__ = [
     "validate_constraint_ir",
     "validate_constraints",
     "validate_domain_pack",
-    "validate_domain_policy_publication",
+    "validate_authority_bundle",
+    "validate_publication_receipt",
     "validate_runtime_fact_compatibility",
     "validate_runtime_fact_schema",
 ]

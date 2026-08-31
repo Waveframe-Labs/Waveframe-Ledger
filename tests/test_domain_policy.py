@@ -13,15 +13,18 @@ import pytest
 from referencing import Registry, Resource
 
 from governance_ledger.constraint_ir import (
+    artifact_hash,
     finalize_constraint_ir,
     finalize_runtime_fact_schema,
     validate_constraint_ir,
     validate_runtime_fact_compatibility,
+    validate_runtime_fact_schema,
 )
 from governance_ledger.customer_policy import (
     _interpret_customer_policy_v0_6_compatibility,
     finalize_customer_policy_authority,
     interpret_customer_policy,
+    interpret_customer_policy_text,
 )
 from governance_ledger.domain_packs import (
     get_builtin_domain_pack,
@@ -33,10 +36,9 @@ from governance_ledger.domain_policy import (
     finalize_domain_policy_authority,
     inspect_policy_mapping_controls,
     interpret_policy_with_domain_pack,
-    validate_domain_policy_publication,
 )
 from governance_ledger.publication_provenance import (
-    classify_authority_bundle_provenance,
+    canonical_sha256,
     validate_authority_bundle,
     validate_publication_receipt,
 )
@@ -61,16 +63,14 @@ HUMAN = {
     "published_by": "publisher",
     "published_at": "2026-08-30T20:00:00Z",
 }
-DIRECT_SOURCE = (
+REPOSITORY_SOURCE = (
     b"Repository changes may be made only by repository maintainers. "
     b"Agents may modify README.md. "
-    b"Agents must not modify files under deployment/. "
-    b"Transfers above $1000000 require manager approval. "
-    b"Requester and approver must be separate."
+    b"Agents must not modify files under deployment/."
 )
 
 
-def _draft(source: bytes = DIRECT_SOURCE) -> dict:
+def _draft(source: bytes = REPOSITORY_SOURCE) -> dict:
     return interpret_policy_with_domain_pack(
         source,
         domain_pack_id=PACK_ID,
@@ -79,41 +79,60 @@ def _draft(source: bytes = DIRECT_SOURCE) -> dict:
     )
 
 
-def _mapped(source: bytes = b"Engineers should update the readme.") -> dict:
-    draft = _draft(source)
-    statement_id = draft["source_statements"][0]["statement_id"]
-    application = apply_policy_mapping_decision(
+def _decide(
+    draft: dict,
+    *,
+    disposition: str,
+    control_id: str | None = None,
+    selections: dict | None = None,
+    reason_code: str | None = None,
+) -> dict:
+    statement = next(item for item in draft["source_statements"] if item["classification"] == "pending")
+    return apply_policy_mapping_decision(
         draft,
-        statement_id=statement_id,
-        control_id="exact-path-access",
-        selections={"effect": "allow", "path": "README.md"},
+        statement_id=statement["statement_id"],
+        disposition=disposition,
+        control_id=control_id,
+        selections=selections,
+        reason_code=reason_code,
         mapper_identity="mapper-1",
         mapped_at="2026-08-30T19:00:00Z",
+    )["updated_interpretation"]
+
+
+def _mapped(source: bytes = b"Engineers should update the readme.") -> dict:
+    return _decide(
+        _draft(source),
+        disposition="enforced",
+        control_id="exact-path-access",
+        selections={"effect": "allow", "path": "README.md"},
     )
-    return application["updated_interpretation"]
 
 
 def _final(draft: dict | None = None, **overrides: object) -> dict:
-    return finalize_domain_policy_authority(
-        draft or _draft(), **{**HUMAN, **overrides}
+    return finalize_domain_policy_authority(draft or _draft(), **{**HUMAN, **overrides})
+
+
+def _registry() -> Registry:
+    schemas = []
+    for path in (ROOT / "schemas").glob("*.json"):
+        schema = json.loads(path.read_text(encoding="utf-8"))
+        if "$id" in schema:
+            schemas.append(schema)
+    return Registry().with_resources(
+        (schema["$id"], Resource.from_contents(schema)) for schema in schemas
     )
 
 
-def _rehash_ir(ir: dict) -> dict:
-    return finalize_constraint_ir({key: value for key, value in ir.items() if key != "ir_hash"})
+def _schema_validate(value: dict, filename: str) -> None:
+    schema = json.loads((ROOT / "schemas" / filename).read_text(encoding="utf-8"))
+    jsonschema.Draft202012Validator(schema, registry=_registry()).validate(value)
 
 
-def test_builtin_pack_has_separate_identity_version_and_canonical_immutable_copy() -> None:
+def test_builtin_pack_identity_hash_and_copied_values_are_stable() -> None:
     listed = list_builtin_domain_packs()
-    assert listed == [
-        {
-            "domain_pack_id": PACK_ID,
-            "domain_pack_version": PACK_VERSION,
-            "name": "Repository changes",
-            "description": listed[0]["description"],
-            "canonical_hash": listed[0]["canonical_hash"],
-        }
-    ]
+    assert len(listed) == 1
+    assert (listed[0]["domain_pack_id"], listed[0]["domain_pack_version"]) == (PACK_ID, PACK_VERSION)
     first = get_builtin_domain_pack(PACK_ID, PACK_VERSION)
     first["name"] = "tampered"
     second = get_builtin_domain_pack(PACK_ID, PACK_VERSION)
@@ -121,478 +140,364 @@ def test_builtin_pack_has_separate_identity_version_and_canonical_immutable_copy
     assert validate_domain_pack(second)["canonical_hash"] == listed[0]["canonical_hash"]
 
 
-def test_domain_pack_identity_hash_tampering_fails_closed() -> None:
+def test_repository_pack_contains_only_repository_concepts() -> None:
     pack = get_builtin_domain_pack(PACK_ID, PACK_VERSION)
-    pack["domain_pack_version"] = "1.0.1"
-    with pytest.raises(ValueError, match="canonical hash"):
+    assert pack["supported_actions"] == ["modify"]
+    assert pack["resource_kinds"] == ["repository_change", "repository_path"]
+    assert pack["subject_kinds"] == ["agent"]
+    assert set(pack["role_kinds"]) == {"repository-maintainer", "repository-reviewer", "security-reviewer"}
+    assert {item["control_id"] for item in pack["allowed_mapping_controls"]} == {
+        "acting-role", "exact-path-access", "prefix-path-access"
+    }
+    serialized = json.dumps(pack, sort_keys=True).lower()
+    for forbidden in ("invoice", "payment", "purchase", "transfer", "financial_request", "request.amount", "approval.count", "usd", "requester", "approver"):
+        assert forbidden not in serialized
+
+
+def test_domain_pack_schema_is_generic_and_does_not_enumerate_emitters() -> None:
+    schema = json.loads((ROOT / "schemas/domain_pack.v1.json").read_text(encoding="utf-8"))
+    control = schema["properties"]["allowed_mapping_controls"]["items"]
+    assert "emitter_id" in control["properties"]
+    assert "enum" not in control["properties"]["emitter_id"]
+    assert "produces" not in json.dumps(schema)
+    assert "repository_path" not in json.dumps(schema)
+
+
+@pytest.mark.parametrize("field,value,message", [
+    ("emitter_id", "uninstalled.emitter.v1", "unavailable emitter"),
+    ("format_id", "uninstalled.format.v1", "unavailable format validator"),
+])
+def test_unknown_emitter_and_format_validator_fail_closed(field: str, value: str, message: str) -> None:
+    pack = get_builtin_domain_pack(PACK_ID, PACK_VERSION)
+    if field == "emitter_id":
+        pack["allowed_mapping_controls"][0][field] = value
+    else:
+        pack["allowed_mapping_controls"][1]["selection_schema"]["path"][field] = value
+    pack["canonical_hash"] = artifact_hash(pack, "canonical_hash")
+    with pytest.raises(ValueError, match=message):
         validate_domain_pack(pack)
+
+
+def test_pack_identity_cannot_reuse_an_installed_compiler_binding() -> None:
     pack = get_builtin_domain_pack(PACK_ID, PACK_VERSION)
-    pack["canonical_hash"] = "sha256:" + "0" * 64
-    with pytest.raises(ValueError, match="canonical hash"):
+    pack["domain_pack_id"] = "lookalike-pack"
+    pack["canonical_hash"] = artifact_hash(pack, "canonical_hash")
+    with pytest.raises(ValueError, match="identity is not bound"):
         validate_domain_pack(pack)
 
 
-def test_pack_contains_scoped_contract_and_deterministic_vectors() -> None:
+def test_rehashed_builtin_content_cannot_replace_an_installed_immutable_version() -> None:
     pack = get_builtin_domain_pack(PACK_ID, PACK_VERSION)
-    assert set(pack["test_vectors"]) == {"positive", "negative", "invalid"}
-    assert all(pack["test_vectors"][kind] for kind in pack["test_vectors"])
-    assert pack["grammar_compiler"]["compiler_id"] == "repository-changes-sentence-grammar"
-    assert pack["compiler_lowering"]["lowering_id"].endswith("contract-compiler")
-    assert "repository-maintainer" in pack["role_kinds"]
-    assert "repository maintainer" in pack["synonyms"]["repository-maintainer"]
+    pack["description"] = "Modified but internally rehashed content."
+    pack["canonical_hash"] = artifact_hash(pack, "canonical_hash")
+    with pytest.raises(ValueError, match="installed immutable version"):
+        validate_domain_pack(pack)
 
 
-def test_direct_interpretation_is_repeatable_and_preserves_all_v06_behaviors() -> None:
+def test_runtime_derivations_are_only_canonical_proposal_pointers() -> None:
+    schema = copy.deepcopy(get_builtin_domain_pack(PACK_ID, PACK_VERSION)["runtime_fact_schema"])
+    schema["facts"][0]["derivation"] = {"kind": "deterministic_expression", "source": "actor.role"}
+    schema["schema_hash"] = artifact_hash(schema, "schema_hash")
+    with pytest.raises(ValueError, match="unknown fields|derivation"):
+        validate_runtime_fact_schema(schema)
+
+
+def test_repository_direct_interpretation_is_repeatable() -> None:
     first = _draft()
-    second = _draft()
-    assert first == second
+    assert first == _draft()
     assert first["status"] == {
         "statement_classification_complete": True,
-        "requires_mapping_count": 0,
-        "enforceable_constraint_count": 5,
+        "pending_statement_count": 0,
+        "enforceable_constraint_count": 3,
         "ready_for_finalization": True,
         "publication_ready": False,
     }
-    result = _final(first)
-    assert result["canonical_compiler_input"] == {
-        "contract_id": "repository-authority",
-        "contract_version": "1.0.0",
-        "authority": {"required_roles": ["repository-maintainer"]},
-        "targets": {
-            "allow": [{"match": "exact", "value": "README.md"}],
-            "deny": [{"match": "prefix", "value": "deployment/"}],
-        },
-        "approvals": {
-            "thresholds": [
-                {
-                    "field": "amount",
-                    "operator": ">",
-                    "value": 1000000,
-                    "requires_role": "manager",
-                }
-            ]
-        },
-        "constraints": [
-            {"type": "separation_of_duties", "roles": ["requester", "approver"]}
-        ],
-    }
+    assert {item["action"] for item in first["constraint_ir"]["constraints"]} == {"modify"}
 
 
-@pytest.mark.parametrize(
-    "source,expected",
-    [
-        (b"Agents may normally modify README.md.", "requires_mapping"),
-        (b"Agents may modify README.md. Agents must not modify README.md.", "requires_mapping"),
-        (b"Agents should change docs.", "requires_mapping"),
-        (b"This policy describes repository work.", "informational"),
-    ],
-)
-def test_pack_preserves_ambiguity_without_inferring_meaning(source: bytes, expected: str) -> None:
+@pytest.mark.parametrize("source", [
+    b"Transfers above $1000000 require manager approval.",
+    b"Requester and approver must be separate.",
+    b"Invoices above $500 require approval.",
+])
+def test_finance_prose_is_never_directly_compiled_by_repository_pack(source: bytes) -> None:
     draft = _draft(source)
-    assert all(item["classification"] == expected for item in draft["source_statements"])
+    assert draft["constraint_ir"] is None
+    assert draft["source_statements"][0]["classification"] == "pending"
     assert draft["status"]["ready_for_finalization"] is False
 
 
-def test_controls_are_human_readable_and_bounded() -> None:
-    draft = _draft(b"Engineers should update the readme.")
-    statement_id = draft["source_statements"][0]["statement_id"]
-    result = inspect_policy_mapping_controls(draft, statement_id)
-    assert {item["control_id"] for item in result["controls"]} == {
-        "acting-role",
-        "approval-threshold",
-        "exact-path-access",
-        "prefix-path-access",
-        "requester-approver-separation",
+def test_every_unmatched_nonempty_statement_is_pending_not_informational() -> None:
+    draft = _draft(b"This paragraph is merely descriptive.")
+    assert draft["source_statements"][0]["classification"] == "pending"
+    assert draft["status"]["pending_statement_count"] == 1
+
+
+def test_mapping_inspection_has_pack_controls_and_fixed_dispositions() -> None:
+    draft = _draft(b"This paragraph needs a decision.")
+    controls = inspect_policy_mapping_controls(draft, draft["source_statements"][0]["statement_id"])
+    assert {item["control_id"] for item in controls["enforcement_controls"]} == {
+        "acting-role", "exact-path-access", "prefix-path-access"
     }
-    exact = next(item for item in result["controls"] if item["control_id"] == "exact-path-access")
-    assert exact["selection_schema"]["effect"]["enum"] == ["allow", "deny"]
-    assert exact["selection_schema"]["path"]["pattern"] == "exact"
+    assert {item["disposition"] for item in controls["disposition_options"]} == {"informational", "unsupported"}
 
 
-def test_mapping_decision_produces_every_required_deterministic_output() -> None:
-    draft = _draft(b"Engineers should update the readme.")
-    statement = draft["source_statements"][0]
-    result = apply_policy_mapping_decision(
-        draft,
-        statement_id=statement["statement_id"],
-        control_id="exact-path-access",
-        selections={"effect": "allow", "path": "README.md"},
-        mapper_identity="mapper-1",
-        mapped_at="2026-08-30T19:00:00Z",
-    )
-    decision = result["mapping_decision"]
-    assert decision["source_document_hash"] == draft["source_policy"]["snapshot_hash"]
-    assert (decision["start_byte"], decision["end_byte"]) == (
-        statement["start_byte"],
-        statement["end_byte"],
-    )
-    assert decision["domain_pack"] == draft["domain_pack"]
-    assert decision["selected_subject"] == {"kind": "subject_kind", "value": "agent"}
-    assert decision["selected_action"] == "modify"
-    assert decision["selected_effect"] == "allow"
-    assert decision["mapper_identity"] == "mapper-1"
-    assert decision["mapped_at"] == "2026-08-30T19:00:00Z"
-    assert result["canonical_cnl_preview"] == 'ALLOW agent TO modify repository_path:exact "README.md".'
-    assert result["validation_result"]["constraint_ir"]["valid"] is True
-    assert result["validation_result"]["runtime_fact_compatibility"]["compatible"] is True
-    assert result["source_to_constraint_mapping"]["mode"] == "human_mapping"
+@pytest.mark.parametrize("disposition,reason", [("informational", "descriptive"), ("unsupported", "outside-domain")])
+def test_non_enforced_decisions_produce_no_constraint(disposition: str, reason: str) -> None:
+    draft = _draft(b"Agents may modify README.md. This clause needs review.")
+    before = copy.deepcopy(draft["constraint_ir"])
+    decided = _decide(draft, disposition=disposition, reason_code=reason)
+    assert decided["constraint_ir"] == before
+    decision = decided["statement_decisions"][0]
+    assert decision["disposition"] == disposition
+    for absent in ("control_id", "selected_subject", "selected_action", "selected_resource", "constraint_id"):
+        assert absent not in decision
+    assert len(decided["source_to_constraint_mappings"]) == 1
 
 
-@pytest.mark.parametrize(
-    "control,selections",
-    [
-        ("acting-role", {"role": "repository-maintainer"}),
-        (
-            "approval-threshold",
-            {"action": "transfer", "operator": ">=", "amount": "2500", "role": "manager"},
-        ),
-        ("exact-path-access", {"effect": "deny", "path": "secrets.txt"}),
-        ("prefix-path-access", {"effect": "allow", "path": "src/"}),
-        ("requester-approver-separation", {}),
-    ],
-)
-def test_every_mapping_control_produces_valid_ir(control: str, selections: dict) -> None:
-    draft = _draft(b"Map this company clause.")
-    # Non-normative prose is informational by design; use explicit normative text.
-    draft = _draft(b"Engineers should follow the selected control.")
-    statement_id = draft["source_statements"][0]["statement_id"]
-    result = apply_policy_mapping_decision(
-        draft,
-        statement_id=statement_id,
-        control_id=control,
-        selections=selections,
-        mapper_identity="mapper-1",
-        mapped_at="2026-08-30T19:00:00Z",
-    )
-    assert result["validation_result"]["constraint_ir"]["valid"] is True
+def test_non_enforced_only_policy_still_has_no_enforceable_rules() -> None:
+    decided = _decide(_draft(b"Background context."), disposition="informational", reason_code="context-only")
+    assert decided["constraint_ir"] is None
+    assert decided["status"]["ready_for_finalization"] is False
+    with pytest.raises(ValueError, match="explicit human decision"):
+        _final(decided)
 
 
-@pytest.mark.parametrize(
-    "selections",
-    [
-        {"effect": "allow", "path": "README.md", "free_form_rule": {"effect": "deny"}},
-        {"effect": "override", "path": "README.md"},
-        {"effect": "allow", "path": "../secret"},
-    ],
-)
-def test_arbitrary_rule_injection_and_unbounded_selections_are_rejected(selections: dict) -> None:
+def test_pending_clause_blocks_finalization() -> None:
+    with pytest.raises(ValueError, match="explicit human decision"):
+        _final(_draft(b"Agents may modify README.md. Pending prose."))
+
+
+def test_bounded_enforcement_rejects_arbitrary_rule_injection() -> None:
     draft = _draft(b"Engineers should update the readme.")
     statement_id = draft["source_statements"][0]["statement_id"]
-    with pytest.raises(ValueError):
+    with pytest.raises(TypeError):
         apply_policy_mapping_decision(
-            draft,
-            statement_id=statement_id,
-            control_id="exact-path-access",
-            selections=selections,
-            mapper_identity="mapper-1",
-            mapped_at="2026-08-30T19:00:00Z",
+            draft, statement_id=statement_id, disposition="enforced", control_id="exact-path-access",
+            selections={"effect": "allow", "path": "README.md"}, mapper_identity="mapper", mapped_at="2026-08-30T19:00:00Z",
+            arbitrary_rule={"effect": "allow"},  # type: ignore[call-arg]
+        )
+    with pytest.raises(ValueError, match="unknown"):
+        apply_policy_mapping_decision(
+            draft, statement_id=statement_id, disposition="enforced", control_id="exact-path-access",
+            selections={"effect": "allow", "path": "README.md", "injected": True}, mapper_identity="mapper", mapped_at="2026-08-30T19:00:00Z",
         )
 
 
-@pytest.mark.parametrize(
-    "field,value",
-    [
-        ("source_document_hash", "sha256:" + "0" * 64),
-        ("statement_id", "statement-" + "0" * 64),
-        ("start_byte", 1),
-        ("end_byte", 2),
-        ("domain_pack", {"domain_pack_id": PACK_ID, "domain_pack_version": PACK_VERSION, "domain_pack_hash": "sha256:" + "0" * 64}),
-        ("selected_effect", "deny"),
-        ("decision_hash", "sha256:" + "0" * 64),
-    ],
-)
-def test_mapping_decision_source_hash_span_pack_and_semantics_tampering_fails(
-    field: str, value: object
-) -> None:
-    draft = _mapped()
-    draft["mapping_decisions"][0][field] = value
-    draft["draft_hash"] = "sha256:" + "0" * 64
-    with pytest.raises(ValueError, match="reconstructed|modified|inconsistent"):
-        finalize_domain_policy_authority(draft, **HUMAN)
-
-
-def test_direct_cnl_and_guided_mapping_produce_equivalent_ir() -> None:
-    direct = _draft(b"Agents may modify README.md.")
+def test_mapping_decision_is_source_hash_span_pack_and_replay_bound() -> None:
     mapped = _mapped()
-    assert direct["constraint_ir"]["constraints"] == mapped["constraint_ir"]["constraints"]
-    assert direct["constraint_ir"]["ir_hash"] == mapped["constraint_ir"]["ir_hash"]
-    assert direct["canonical_cnl_previews"] == mapped["canonical_cnl_previews"]
-
-
-def test_constraint_ir_rejects_unknown_fields_operators_symbols_and_untyped_values() -> None:
-    pack = get_builtin_domain_pack(PACK_ID, PACK_VERSION)
-    base = _draft(b"Transfers above $100 require manager approval.")["constraint_ir"]
-    cases = []
-    unknown_field = copy.deepcopy(base)
-    unknown_field["constraints"][0]["magic"] = True
-    cases.append(unknown_field)
-    unknown_operator = copy.deepcopy(base)
-    unknown_operator["constraints"][0]["condition"]["operands"][0]["operator"] = "approximately"
-    cases.append(unknown_operator)
-    unknown_symbol = copy.deepcopy(base)
-    unknown_symbol["constraints"][0]["action"] = "teleport"
-    cases.append(unknown_symbol)
-    untyped = copy.deepcopy(base)
-    untyped["constraints"][0]["condition"]["operands"][0]["literal"] = 100
-    cases.append(untyped)
-    implicit_precedence = copy.deepcopy(base)
-    implicit_precedence["constraints"][0]["condition"] = {
-        "and": [base["constraints"][0]["condition"]]
-    }
-    cases.append(implicit_precedence)
-    for value in cases:
+    for mutation in ("source_document_hash", "start_byte", "decision_hash"):
+        tampered = copy.deepcopy(mapped)
+        decision = tampered["statement_decisions"][0]
+        decision[mutation] = "sha256:" + "0" * 64 if "hash" in mutation else decision[mutation] + 1
+        tampered["draft_hash"] = artifact_hash(tampered, "draft_hash")
         with pytest.raises(ValueError):
-            validate_constraint_ir(_rehash_ir(value), domain_pack=pack)
+            _final(tampered)
 
 
-@pytest.mark.parametrize(
-    "field,value,match",
-    [
-        ("type", "integer", "type"),
-        ("canonical_unit", "EUR", "unit"),
-        ("comparison_operators", ["=="], "operator"),
-    ],
-)
-def test_runtime_fact_type_unit_and_operator_mismatches_return_diagnostics(
-    field: str, value: object, match: str
-) -> None:
+def test_direct_and_guided_mapping_produce_equivalent_ir() -> None:
+    direct = _draft(b"Agents may modify README.md.")["constraint_ir"]
+    mapped = _mapped()["constraint_ir"]
+    assert direct == mapped
+
+
+def test_repository_path_safety_is_pack_validator_scoped() -> None:
+    with pytest.raises(ValueError, match="unsafe path"):
+        _decide(
+            _draft(b"Map this clause."), disposition="enforced", control_id="exact-path-access",
+            selections={"effect": "allow", "path": "../secret"},
+        )
+
+
+def test_synthetic_non_repository_resource_has_no_repository_path_semantics(monkeypatch: pytest.MonkeyPatch) -> None:
+    import governance_ledger.domain_packs as packs_module
+
     pack = get_builtin_domain_pack(PACK_ID, PACK_VERSION)
-    ir = _draft(b"Transfers above $100 require manager approval.")["constraint_ir"]
+    pack["domain_pack_id"] = "synthetic-document-fixture"
+    pack["resource_kinds"] = ["document_identifier"]
+    pack["resource_contracts"] = [{
+        "resource_kind": "document_identifier", "permitted_match_modes": ["exact"], "value_type": "string",
+        "enum_values": None, "null_allowed": False, "format_id": None, "value_fact_id": "proposal.resource.identifier",
+    }]
     runtime = copy.deepcopy(pack["runtime_fact_schema"])
-    fact = next(item for item in runtime["facts"] if item["fact_id"] == "request.amount")
-    fact[field] = value
-    runtime = finalize_runtime_fact_schema({key: val for key, val in runtime.items() if key != "schema_hash"})
-    result = validate_runtime_fact_compatibility(ir, runtime, domain_pack=pack)
-    assert result["compatible"] is False
-    assert any(match in item["message"] for item in result["diagnostics"])
-
-
-def test_missing_runtime_fact_returns_actionable_diagnostic_and_blocks_publication() -> None:
-    pack = get_builtin_domain_pack(PACK_ID, PACK_VERSION)
-    draft = _draft(b"Transfers above $100 require manager approval.")
-    runtime = copy.deepcopy(pack["runtime_fact_schema"])
-    runtime["facts"] = [item for item in runtime["facts"] if item["fact_id"] != "request.amount"]
-    runtime = finalize_runtime_fact_schema({key: val for key, val in runtime.items() if key != "schema_hash"})
-    compatibility = validate_runtime_fact_compatibility(
-        draft["constraint_ir"], runtime, domain_pack=pack
-    )
-    assert compatibility["compatible"] is False
-    assert any(
-        item["message"]
-        == "This rule requires request.amount, but the selected runtime schema does not provide it."
-        for item in compatibility["diagnostics"]
-    )
-    with pytest.raises(ValueError, match="requires request.amount"):
-        _final(draft, runtime_fact_schema=runtime)
-
-
-def test_contradictory_effects_and_empty_enforceable_sets_are_rejected() -> None:
-    pack = get_builtin_domain_pack(PACK_ID, PACK_VERSION)
-    allow = _draft(b"Agents may modify README.md.")["constraint_ir"]
-    deny = copy.deepcopy(allow["constraints"][0])
-    deny["effect"] = "deny"
-    contradictory = _rehash_ir({**allow, "constraints": [allow["constraints"][0], deny]})
-    with pytest.raises(ValueError, match="contradictory"):
-        validate_constraint_ir(contradictory, domain_pack=pack)
-    empty = _rehash_ir({**allow, "constraints": []})
-    with pytest.raises(ValueError, match="at least one enforceable rule"):
-        validate_constraint_ir(empty, domain_pack=pack)
-
-
-def test_explicit_exception_has_declared_precedence_but_is_not_silently_lowered() -> None:
-    pack = get_builtin_domain_pack(PACK_ID, PACK_VERSION)
-    ir = copy.deepcopy(_draft(b"Agents must not modify files under deployment/.")["constraint_ir"])
-    constraint = ir["constraints"][0]
-    constraint["exceptions"] = [
-        {
-            "exception_id": "emergency-change",
-            "effect": "allow",
-            "condition": {
-                "kind": "group",
-                "operator": "all",
-                "operands": [
-                    {
-                        "kind": "comparison",
-                        "operator": "==",
-                        "fact": "actor.role",
-                        "literal": {"type": "enum", "value": "security-reviewer", "unit": None},
-                    }
-                ],
-            },
-        }
-    ]
-    constraint["required_runtime_facts"] = sorted(
-        set(constraint["required_runtime_facts"]) | {"actor.role"}
-    )
-    ir = _rehash_ir(ir)
+    runtime["facts"] = [item for item in runtime["facts"] if item["fact_id"] != "proposal.resource.path"]
+    kind = next(item for item in runtime["facts"] if item["fact_id"] == "proposal.resource.kind")
+    kind["enum_values"] = ["document_identifier"]
+    runtime["facts"].append({
+        "fact_id": "proposal.resource.identifier", "type": "string", "enum_values": None, "canonical_unit": None,
+        "required": True, "derivation": {"kind": "proposal_field", "field_path": "/resource/identifier"}, "comparison_operators": ["==", "!="],
+    })
+    pack["runtime_fact_schema"] = finalize_runtime_fact_schema({key: value for key, value in runtime.items() if key != "schema_hash"})
+    trust = copy.deepcopy(packs_module._TRUSTED_COMPILERS)
+    key = (pack["grammar_compiler"]["compiler_id"], pack["grammar_compiler"]["compiler_version"])
+    trust[key]["domain_packs"].add((pack["domain_pack_id"], pack["domain_pack_version"]))
+    monkeypatch.setattr(packs_module, "_TRUSTED_COMPILERS", trust)
+    pack["canonical_hash"] = artifact_hash(pack, "canonical_hash")
+    validate_domain_pack(pack)
+    constraint = {
+        "subject": {"kind": "subject_kind", "value": "agent"}, "acting_role": None, "action": "modify",
+        "resource": {"kind": "document_identifier", "match": "exact", "value": "invoice:123"}, "effect": "allow", "condition": None,
+        "obligations": {"approvals": [], "evidence": [], "separation_of_duties": []}, "exceptions": [],
+        "required_runtime_facts": sorted(["actor.subject_kind", "proposal.action", "proposal.resource.kind", "proposal.resource.identifier"]),
+    }
+    ir = finalize_constraint_ir({
+        "schema_version": "constraint_ir.v1",
+        "domain_pack": {"domain_pack_id": pack["domain_pack_id"], "domain_pack_version": pack["domain_pack_version"], "domain_pack_hash": pack["canonical_hash"]},
+        "runtime_fact_schema_hash": pack["runtime_fact_schema"]["schema_hash"], "constraints": [constraint],
+    })
     assert validate_constraint_ir(ir, domain_pack=pack)["valid"] is True
-    # The built-in lowerer has no existing compiler representation for exceptions.
-    draft = _draft(b"Agents must not modify files under deployment/.")
-    draft["constraint_ir"] = ir
-    with pytest.raises(ValueError, match="modified|inconsistent"):
-        _final(draft)
 
 
-def test_constraint_ir_supports_exact_principals_and_evidence_obligations() -> None:
+def test_constraint_ir_rejects_unknown_symbols_and_contradictory_effects() -> None:
+    pack = get_builtin_domain_pack(PACK_ID, PACK_VERSION)
+    ir = copy.deepcopy(_draft(b"Agents may modify README.md.")["constraint_ir"])
+    ir["constraints"][0]["action"] = "transfer"
+    ir = finalize_constraint_ir({key: value for key, value in ir.items() if key != "ir_hash"})
+    with pytest.raises(ValueError, match="unknown action"):
+        validate_constraint_ir(ir, domain_pack=pack)
+    ir = copy.deepcopy(_draft(b"Agents may modify README.md.")["constraint_ir"])
+    second = copy.deepcopy(ir["constraints"][0])
+    second["effect"] = "deny"
+    ir["constraints"].append(second)
+    ir = finalize_constraint_ir({key: value for key, value in ir.items() if key != "ir_hash"})
+    with pytest.raises(ValueError, match="contradictory"):
+        validate_constraint_ir(ir, domain_pack=pack)
+
+
+def test_explicit_exception_precedence_is_canonical() -> None:
     pack = get_builtin_domain_pack(PACK_ID, PACK_VERSION)
     ir = copy.deepcopy(_draft(b"Agents may modify README.md.")["constraint_ir"])
     constraint = ir["constraints"][0]
-    constraint["subject"] = {"kind": "principal_id", "value": "service-account-17"}
-    constraint["effect"] = "require"
-    constraint["obligations"]["evidence"] = [
-        {"evidence_type": "change-record", "fact": "evidence.change_record_id"}
-    ]
-    constraint["required_runtime_facts"] = sorted(
-        (set(constraint["required_runtime_facts"]) - {"actor.subject_kind"})
-        | {"actor.principal_id", "evidence.change_record_id"}
-    )
-    ir = _rehash_ir(ir)
+    constraint["exceptions"] = [{
+        "exception_id": "security-reviewer-exception", "effect": "deny",
+        "condition": {"kind": "comparison", "operator": "==", "fact": "actor.role", "literal": {"type": "enum", "value": "security-reviewer", "unit": None}},
+    }]
+    constraint["required_runtime_facts"] = sorted([*constraint["required_runtime_facts"], "actor.role"])
+    ir = finalize_constraint_ir({key: value for key, value in ir.items() if key != "ir_hash"})
     assert validate_constraint_ir(ir, domain_pack=pack)["valid"] is True
 
 
-def test_domain_publication_binds_complete_provenance_without_mutating_v1_semantics() -> None:
-    result = _final(_mapped())
-    bundle = result["domain_policy_authority_bundle"]
-    receipt = result["domain_policy_publication_receipt"]
-    assert validate_domain_policy_publication(bundle, receipt)["provenance_complete"] is True
-    assert bundle["provenance_complete"] is True
-    assert bundle["domain_pack"] == result["validated_interpretation"]["domain_pack"]
-    assert bundle["constraint_ir"] == result["validated_interpretation"]["constraint_ir"]
-    assert bundle["mapping_decisions"] == result["validated_interpretation"]["mapping_decisions"]
-    assert bundle["semantic_commit_bundle"] == result["semantic_commit_bundle"]
-    assert bundle["compiled_authority_contract"] == result["compiled_authority_contract"]
-    assert bundle["authority_bundle_v1"]["schema_version"] == "authority_bundle.v1"
-    assert bundle["publication_receipt_v1"]["schema_version"] == "publication_receipt.v1"
-    assert classify_authority_bundle_provenance(bundle["authority_bundle_v1"]) == "legacy_provenance_incomplete"
+def test_missing_runtime_fact_and_type_operator_mismatches_are_actionable() -> None:
+    pack = get_builtin_domain_pack(PACK_ID, PACK_VERSION)
+    ir = _draft(b"Agents may modify README.md.")["constraint_ir"]
+    runtime = copy.deepcopy(pack["runtime_fact_schema"])
+    runtime["facts"] = [item for item in runtime["facts"] if item["fact_id"] != "proposal.resource.path"]
+    runtime = finalize_runtime_fact_schema({key: value for key, value in runtime.items() if key != "schema_hash"})
+    result = validate_runtime_fact_compatibility(ir, runtime, domain_pack=pack)
+    assert result["compatible"] is False
+    assert "requires proposal.resource.path" in " ".join(item["message"] for item in result["diagnostics"])
+    runtime = copy.deepcopy(pack["runtime_fact_schema"])
+    fact = next(item for item in runtime["facts"] if item["fact_id"] == "proposal.resource.path")
+    fact["type"] = "integer"
+    fact["comparison_operators"] = ["=="]
+    runtime = finalize_runtime_fact_schema({key: value for key, value in runtime.items() if key != "schema_hash"})
+    codes = {item["code"] for item in validate_runtime_fact_compatibility(ir, runtime, domain_pack=pack)["diagnostics"]}
+    assert {"runtime_fact_type_mismatch", "runtime_fact_comparison_operators_mismatch"} <= codes
 
 
-@pytest.mark.parametrize(
-    "path",
-    [
-        ("domain_pack", "domain_pack_hash"),
-        ("source_statements", 0, "start_byte"),
-        ("mapping_decisions", 0, "decision_hash"),
-        ("constraint_ir", "ir_hash"),
-        ("semantic_commit_bundle", "semantic_commit_hash"),
-        ("compiled_authority_contract", "contract_hash"),
-        ("authority", "authority_ref"),
-        ("authority_bundle_v1", "contract_hash"),
-    ],
-)
-def test_domain_publication_complete_provenance_tamper_matrix(path: tuple[object, ...]) -> None:
+def test_v2_is_one_complete_native_bundle_and_receipt_binds_it() -> None:
+    result = _final()
+    bundle = result["authority_bundle"]
+    receipt = result["publication_receipt"]
+    assert bundle["schema_version"] == "authority_bundle.v2"
+    assert receipt["schema_version"] == "publication_receipt.v2"
+    assert "authority_bundle" not in bundle and "publication_receipt" not in bundle
+    assert "authority_bundle_v1" not in json.dumps(bundle)
+    assert receipt["bundle_hash"] == bundle["bundle_hash"]
+    assert validate_authority_bundle(bundle)["provenance_complete"] is True
+    assert validate_publication_receipt(bundle, receipt)["provenance_complete"] is True
+
+
+def test_v2_schemas_validate_complete_artifacts_and_reject_malformed_nested_values() -> None:
     result = _final(_mapped())
-    bundle = copy.deepcopy(result["domain_policy_authority_bundle"])
-    target: object = bundle
-    for part in path[:-1]:
-        target = target[part]  # type: ignore[index]
-    leaf = path[-1]
-    current = target[leaf]  # type: ignore[index]
-    target[leaf] = current + "-tampered" if isinstance(current, str) else 1  # type: ignore[index]
-    with pytest.raises(ValueError):
-        validate_domain_policy_publication(bundle, result["domain_policy_publication_receipt"])
+    for value, filename in (
+        (get_builtin_domain_pack(PACK_ID, PACK_VERSION), "domain_pack.v1.json"),
+        (result["authority_bundle"]["constraint_ir"], "constraint_ir.v1.json"),
+        (result["authority_bundle"]["runtime_fact_schema"], "runtime_fact_schema.v1.json"),
+        (result["authority_bundle"]["statement_decisions"][0], "policy_mapping_decision.v1.json"),
+        (result["authority_bundle"], "authority_bundle.v2.json"),
+        (result["publication_receipt"], "publication_receipt.v2.json"),
+    ):
+        _schema_validate(value, filename)
+    malformed = copy.deepcopy(result["authority_bundle"])
+    malformed["source_statements"][0]["unexpected"] = True
+    with pytest.raises(jsonschema.ValidationError):
+        _schema_validate(malformed, "authority_bundle.v2.json")
+    malformed = copy.deepcopy(result["authority_bundle"])
+    malformed["approval_record"].pop("approved_by")
+    with pytest.raises(jsonschema.ValidationError):
+        _schema_validate(malformed, "authority_bundle.v2.json")
+
+
+def test_schema_valid_semantic_tampering_fails_runtime_reconstruction() -> None:
+    bundle = copy.deepcopy(_final()["authority_bundle"])
+    bundle["compiled_authority_contract"]["target_requirements"]["allow"][0]["value"] = "OTHER.md"
+    compiled = bundle["compiled_authority_contract"]
+    compiled["contract_hash"] = artifact_hash(compiled, "contract_hash")
+    bundle["publication_manifest"]["contracts"][0]["contract_hash"] = compiled["contract_hash"]
+    bundle["provenance_bindings"]["compiled_contract_hash"] = compiled["contract_hash"]
+    bundle["provenance_bindings"]["publication_manifest_hash"] = canonical_sha256(bundle["publication_manifest"])
+    bundle["bundle_hash"] = artifact_hash(bundle, "bundle_hash")
+    _schema_validate(bundle, "authority_bundle.v2.json")
+    with pytest.raises(ValueError, match="deterministic lowering"):
+        validate_authority_bundle(bundle)
+
+
+def test_receipt_tampering_and_schema_version_mismatch_fail_closed() -> None:
+    result = _final()
+    receipt = copy.deepcopy(result["publication_receipt"])
+    receipt["constraint_ir_hash"] = "sha256:" + "0" * 64
+    receipt["receipt_hash"] = artifact_hash(receipt, "receipt_hash")
+    with pytest.raises(ValueError, match="constraint_ir_hash"):
+        validate_publication_receipt(result["authority_bundle"], receipt)
+    with pytest.raises(ValueError, match="versions do not match"):
+        validate_publication_receipt(result["authority_bundle"], {"schema_version": "publication_receipt.v1"})
 
 
 def test_one_byte_source_change_propagates_through_downstream_identities() -> None:
     first = _final(_draft(b"Agents may modify README.md."))
-    second = _final(_draft(b"Agents may modify README.md.\n"))
-    for field in (
-        "source_snapshot_hash",
-        "interpretation_hash",
-        "semantic_commit_bundle_hash",
-        "compiled_contract_hash",
-        "authority_bundle_v1_hash",
-        "publication_receipt_v1_hash",
-        "domain_policy_bundle_hash",
-        "domain_policy_receipt_hash",
-    ):
+    second = _final(_draft(b"Agents may modify READNE.md."))
+    for field in ("source_snapshot_hash", "interpretation_hash", "constraint_ir_hash", "semantic_commit_hash", "compiled_contract_hash", "authority_bundle_hash", "publication_receipt_hash"):
         assert first["canonical_hashes"][field] != second["canonical_hashes"][field]
 
 
-def test_legacy_v06_api_is_an_exact_compatibility_delegate_with_stable_hashes() -> None:
+def test_legacy_v06_api_and_hashes_are_exactly_unchanged() -> None:
     source = (
         b"Repository changes may be made only by repository maintainers.\n"
         b"Agents may modify README.md.\n"
         b"Agents must not modify files under deployment/."
     )
-    identities = {
-        "source_policy_id": "repo-change-policy",
-        "source_revision": "revision-2026-08",
-        "authority_id": "repo-change-authority",
-        "authority_version": "6.0.0",
-    }
+    identities = {"source_policy_id": "repo-change-policy", "source_revision": "revision-2026-08", "authority_id": "repo-change-authority", "authority_version": "6.0.0"}
     public = interpret_customer_policy(source, **identities)
-    compatibility = _interpret_customer_policy_v0_6_compatibility(source, **identities)
-    assert public == compatibility
+    assert public == _interpret_customer_policy_v0_6_compatibility(source, **identities)
+    assert interpret_customer_policy_text(source.decode(), **identities) == public
     assert public["draft_hash"] == "sha256:02a21d437bdb6c029c3bbc8a98d766dbffb696e103154aeb595d76f3af471bec"
     final = finalize_customer_policy_authority(
-        public,
-        resolutions=[],
-        approval_id="approval-1",
-        approved_by="reviewer",
-        approved_at="2026-08-29T13:59:00Z",
-        committed_by="committer",
-        committed_at="2026-08-29T13:59:30Z",
-        publication_id="publication-1",
-        published_by="publisher",
-        published_at="2026-08-29T14:00:00Z",
+        public, resolutions=[], approval_id="approval-1", approved_by="reviewer", approved_at="2026-08-29T13:59:00Z",
+        committed_by="committer", committed_at="2026-08-29T13:59:30Z", publication_id="publication-1", published_by="publisher", published_at="2026-08-29T14:00:00Z",
     )
     assert final["canonical_hashes"]["authority_bundle_hash"] == "sha256:b1fc5e8a717adc07c0f3f8ec0d6b0b760cfe0bc7a28c3654e3e9366c480c9749"
     assert final["canonical_hashes"]["publication_receipt_hash"] == "sha256:6b5b7a69aebd0ec9d6ffcade311c38d99f85b101aae8a3f119b27b68a2916cb3"
 
 
-@pytest.mark.parametrize(
-    "source",
-    [
-        b"Agents may normally modify README.md.",
-        b"Agents may modify ../secret.",
-        b"Agents may modify README.md. Agents must not modify README.md.",
-        b"Agents should update docs.",
-    ],
-)
-def test_legacy_v06_rejected_or_unready_behavior_is_unchanged(source: bytes) -> None:
-    try:
-        public = interpret_customer_policy(source, **IDENTITIES)
-    except ValueError as public_error:
-        with pytest.raises(type(public_error), match="target"):
-            _interpret_customer_policy_v0_6_compatibility(source, **IDENTITIES)
-    else:
-        assert public == _interpret_customer_policy_v0_6_compatibility(source, **IDENTITIES)
+def test_legacy_finance_grammar_remains_available_only_through_v06_api() -> None:
+    source = b"Transfers above $1000000 require manager approval. Requester and approver must be separate."
+    draft = interpret_customer_policy(source, **IDENTITIES)
+    assert [item["rule_type"] for item in draft["proposed_rules"]] == ["approval_threshold", "separation_of_duties"]
+    result = finalize_customer_policy_authority(
+        draft, resolutions=[], approval_id="approval-1", approved_by="reviewer", approved_at="2026-08-30T19:30:00Z",
+        committed_by="committer", committed_at="2026-08-30T19:45:00Z", publication_id="publication-1", published_by="publisher", published_at="2026-08-30T20:00:00Z",
+    )
+    assert result["canonical_compiler_input"]["approvals"]["thresholds"][0]["value"] == 1000000
+    assert result["canonical_compiler_input"]["constraints"] == [{"type": "separation_of_duties", "roles": ["requester", "approver"]}]
 
 
-def test_released_v1_legacy_artifacts_remain_readable() -> None:
+def test_released_v1_artifacts_remain_readable() -> None:
     fixture = ROOT / "tests/fixtures/golden_path/contracts/finance-policy-1.0.0.authority-bundle.json"
     bundle = json.loads(fixture.read_text(encoding="utf-8"))
-    receipt = json.loads(
-        (fixture.parent / "finance-policy-1.0.0.publication-receipt.json").read_text(encoding="utf-8")
-    )
+    receipt = json.loads((fixture.parent / "finance-policy-1.0.0.publication-receipt.json").read_text(encoding="utf-8"))
     assert validate_authority_bundle(bundle)["provenance_complete"] is False
     assert validate_publication_receipt(bundle, receipt)["provenance_complete"] is False
-
-
-def test_new_artifacts_validate_against_their_json_schemas() -> None:
-    pack = get_builtin_domain_pack(PACK_ID, PACK_VERSION)
-    draft = _mapped()
-    result = _final(draft)
-    schemas = {
-        json.loads(path.read_text(encoding="utf-8"))["$id"]: json.loads(
-            path.read_text(encoding="utf-8")
-        )
-        for path in (ROOT / "schemas").glob("*.json")
-        if "$id" in json.loads(path.read_text(encoding="utf-8"))
-    }
-    registry = Registry().with_resources(
-        (uri, Resource.from_contents(schema)) for uri, schema in schemas.items()
-    )
-    for artifact, filename in (
-        (pack["runtime_fact_schema"], "runtime_fact_schema.v1.json"),
-        (draft["constraint_ir"], "constraint_ir.v1.json"),
-        (pack, "domain_pack.v1.json"),
-        (draft["mapping_decisions"][0], "policy_mapping_decision.v1.json"),
-        (result["domain_policy_authority_bundle"], "domain_policy_authority_bundle.v1.json"),
-        (result["domain_policy_publication_receipt"], "domain_policy_publication_receipt.v1.json"),
-    ):
-        schema = json.loads((ROOT / "schemas" / filename).read_text(encoding="utf-8"))
-        jsonschema.Draft202012Validator(schema, registry=registry).validate(artifact)
 
 
 def test_domain_workflow_is_guard_filesystem_and_network_free(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -612,7 +517,7 @@ def test_domain_workflow_is_guard_filesystem_and_network_free(tmp_path: Path, mo
     assert sys.modules.get("waveframe_guard") is guard_before
 
 
-def test_base_install_imports_and_runs_without_guard_in_fresh_interpreter() -> None:
+def test_base_install_runs_without_guard_in_a_fresh_interpreter() -> None:
     script = """
 import sys
 from governance_ledger import interpret_policy_with_domain_pack
@@ -621,7 +526,5 @@ d = interpret_policy_with_domain_pack(b'Agents may modify README.md.', domain_pa
 assert d['status']['ready_for_finalization']
 assert 'waveframe_guard' not in sys.modules
 """
-    completed = subprocess.run(
-        [sys.executable, "-c", script], text=True, capture_output=True, check=False
-    )
+    completed = subprocess.run([sys.executable, "-c", script], text=True, capture_output=True, check=False)
     assert completed.returncode == 0, completed.stderr

@@ -149,11 +149,11 @@ Local checkout path resolution is not part of production behavior.
 
 ## Deterministic Domain-Pack Policy Compiler
 
-Ledger's production policy boundary is a selected, immutable domain pack rather than a universal company-policy grammar. The first built-in pack is `repository-changes` / `1.0.0`. It binds scoped vocabulary, runtime facts, typed Constraint IR semantics, deterministic grammar and lowering identities, bounded human mapping controls, conformance vectors, and a canonical hash.
+Ledger's production policy boundary is a selected, immutable domain pack rather than a universal company-policy grammar. The only built-in pack is `repository-changes` / `1.0.0`; it contains repository concepts only. It binds scoped vocabulary, typed resource contracts, runtime facts, typed Constraint IR semantics, trusted grammar/emitter/format/lowering identities, conformance vectors, and a canonical hash.
 
-Clauses inside the selected grammar compile directly. Other normative clauses require a pack-bounded human mapping decision suitable for a future Console form; users do not author policy JSON or rule JSON. Arbitrary prose cannot be automatically interpreted without AI, and this workflow uses no AI, probabilistic inference, embeddings, external inference, spaCy heuristics, or network lookup. Missing runtime facts block publication rather than weakening a rule.
+Clauses inside the selected grammar compile directly. Every other nonempty clause remains pending until a human explicitly chooses one pack-bounded enforcement control, `informational`, or `unsupported`. Users do not author policy JSON or rule JSON. Arbitrary prose cannot be automatically interpreted without AI, and this workflow uses no AI, probabilistic inference, embeddings, external inference, spaCy heuristics, or network lookup. Missing runtime facts block publication rather than weakening a rule.
 
-See [Deterministic Domain-Pack Policy Compiler](docs/DOMAIN_PACK_COMPILER.md) for the representation boundaries, guided-mapping workflow, exact public APIs, built-in example, provenance chain, and additive schema decision.
+See [Deterministic Domain-Pack Policy Compiler](docs/DOMAIN_PACK_COMPILER.md) for the representation boundaries, guided-mapping workflow, exact public APIs, repository/finance compatibility boundary, and native `authority_bundle.v2` provenance chain.
 
 ## v0.6 Customer-Policy Compatibility Service
 
@@ -422,8 +422,8 @@ Canonical schemas live in [schemas/](schemas/), including:
 - [runtime_fact_schema.v1.json](schemas/runtime_fact_schema.v1.json): exact proposal/derived runtime fact contracts.
 - [constraint_ir.v1.json](schemas/constraint_ir.v1.json): Waveframe-owned typed enforcement Constraint IR.
 - [policy_mapping_decision.v1.json](schemas/policy_mapping_decision.v1.json): exact-source-bound human mapping decisions.
-- [domain_policy_authority_bundle.v1.json](schemas/domain_policy_authority_bundle.v1.json): additive complete domain-policy lineage envelope.
-- [domain_policy_publication_receipt.v1.json](schemas/domain_policy_publication_receipt.v1.json): receipt binding the domain-policy envelope.
+- [authority_bundle.v2.json](schemas/authority_bundle.v2.json): complete native domain-pack authority bundle with strict component bindings.
+- [publication_receipt.v2.json](schemas/publication_receipt.v2.json): receipt binding the complete v2 authority bundle.
 
 - [governance_source.v1.json](schemas/governance_source.v1.json): governance source identity.
 - [governance_diagnostic.v1.json](schemas/governance_diagnostic.v1.json): governance diagnostics.

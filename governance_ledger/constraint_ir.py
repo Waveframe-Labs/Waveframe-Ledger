@@ -126,10 +126,16 @@ def validate_runtime_fact_schema(schema: dict[str, Any]) -> dict[str, Any]:
         derivation = fact["derivation"]
         if derivation is not None:
             _object(derivation, f"{label}.derivation")
-            _exact(derivation, {"kind", "source"}, f"{label}.derivation")
-            if derivation["kind"] not in {"proposal_field", "deterministic_expression"}:
+            _exact(derivation, {"kind", "field_path"}, f"{label}.derivation")
+            if derivation["kind"] != "proposal_field":
                 raise ValueError(f"{label}.derivation.kind is unknown")
-            _nonempty(derivation["source"], f"{label}.derivation.source")
+            field_path = derivation["field_path"]
+            if not isinstance(field_path, str) or not re.fullmatch(
+                r"(?:/[A-Za-z0-9._~-]+)+", field_path
+            ):
+                raise ValueError(
+                    f"{label}.derivation.field_path must be a canonical proposal pointer"
+                )
         operators = fact["comparison_operators"]
         if (
             not isinstance(operators, list)
@@ -338,20 +344,24 @@ def _validate_constraint(
     resource = constraint["resource"]
     _object(resource, f"{label}.resource")
     _exact(resource, {"kind", "match", "value"}, f"{label}.resource")
-    if resource["kind"] not in pack["resource_kinds"]:
+    contracts = {
+        item["resource_kind"]: item for item in pack["resource_contracts"]
+    }
+    if resource["kind"] not in contracts:
         raise ValueError(f"{label}.resource contains an unknown resource kind")
-    if resource["match"] not in {"any", "exact", "prefix"}:
-        raise ValueError(f"{label}.resource.match is unknown")
-    if resource["match"] == "any":
-        if resource["value"] is not None:
-            raise ValueError(f"{label}.resource.value must be null for an any selector")
-    else:
-        _repository_path(resource["value"], resource["match"], f"{label}.resource.value")
+    resource_contract = contracts[resource["kind"]]
+    if resource["match"] not in resource_contract["permitted_match_modes"]:
+        raise ValueError(
+            f"{label}.resource.match is not permitted for {resource['kind']}"
+        )
+    _validate_resource_value(
+        resource["value"], resource_contract, resource["match"], f"{label}.resource.value"
+    )
     if constraint["effect"] not in _EFFECTS:
         raise ValueError(f"{label}.effect is unknown")
     referenced |= {"proposal.action", "proposal.resource.kind"}
-    if resource["match"] != "any":
-        referenced.add("proposal.resource.path")
+    if resource["value"] is not None:
+        referenced.add(resource_contract["value_fact_id"])
     if role is not None:
         referenced.add("actor.role")
     referenced |= _validate_condition(constraint["condition"], f"{label}.condition", facts)
@@ -515,7 +525,66 @@ def _validate_literal(literal: dict[str, Any], label: str, fact: dict[str, Any])
             raise ValueError(f"{label}.value must be canonical UTC") from exc
 
 
-def _repository_path(value: Any, match: str, label: str) -> None:
+def validate_format_value(
+    format_id: str, value: Any, *, match_mode: str | None = None, label: str = "value"
+) -> None:
+    """Invoke one exact installed deterministic format validator."""
+    validator = _TRUSTED_FORMAT_VALIDATORS.get(format_id)
+    if validator is None:
+        raise ValueError(f"{label} requires unavailable format validator: {format_id}")
+    validator(value, match_mode, label)
+
+
+def is_trusted_format_validator(format_id: str) -> bool:
+    """Return whether an exact format validator is installed locally."""
+    return format_id in _TRUSTED_FORMAT_VALIDATORS
+
+
+def _validate_resource_value(
+    value: Any,
+    contract: dict[str, Any],
+    match_mode: str,
+    label: str,
+) -> None:
+    if value is None:
+        if not contract["null_allowed"]:
+            raise ValueError(f"{label} must not be null")
+        return
+    value_type = contract["value_type"]
+    if value_type == "string" and (not isinstance(value, str) or not value):
+        raise ValueError(f"{label} must be a non-empty string")
+    if value_type == "integer" and (
+        not isinstance(value, int) or isinstance(value, bool)
+    ):
+        raise ValueError(f"{label} must be an integer")
+    if value_type == "boolean" and not isinstance(value, bool):
+        raise ValueError(f"{label} must be Boolean")
+    if value_type == "decimal" and (
+        not isinstance(value, str) or not _DECIMAL.fullmatch(value)
+    ):
+        raise ValueError(f"{label} must be a canonical decimal string")
+    if value_type == "timestamp":
+        if not isinstance(value, str) or not _CANONICAL_UTC.fullmatch(value):
+            raise ValueError(f"{label} must be canonical UTC")
+        try:
+            datetime.fromisoformat(value[:-1] + "+00:00")
+        except ValueError as exc:
+            raise ValueError(f"{label} must be canonical UTC") from exc
+    if value_type == "enum":
+        if value not in contract["enum_values"]:
+            raise ValueError(f"{label} is not in the resource enum")
+    if value_type == "string_set" and (
+        not isinstance(value, list)
+        or value != sorted(set(value))
+        or any(not isinstance(item, str) or not item for item in value)
+    ):
+        raise ValueError(f"{label} must be a sorted unique string array")
+    format_id = contract["format_id"]
+    if format_id is not None:
+        validate_format_value(format_id, value, match_mode=match_mode, label=label)
+
+
+def _repository_relative_path(value: Any, match: str | None, label: str) -> None:
     if not isinstance(value, str) or not value:
         raise ValueError(f"{label} must be a non-empty repository-relative path")
     if value.startswith(("/", "\\")) or re.match(r"[A-Za-z]:", value) or "\\" in value:
@@ -526,12 +595,21 @@ def _repository_path(value: Any, match: str, label: str) -> None:
         if not value.endswith("/"):
             raise ValueError(f"{label} prefix must end with a slash")
         segments = value[:-1].split("/")
-    else:
+    elif match == "exact":
         if value.endswith("/"):
             raise ValueError(f"{label} exact path must not end with a slash")
         segments = value.split("/")
+    else:
+        segments = value[:-1].split("/") if value.endswith("/") else value.split("/")
     if not segments or any(segment in {"", ".", ".."} for segment in segments):
         raise ValueError(f"{label} contains an unsafe path segment")
+
+
+_TRUSTED_FORMAT_VALIDATORS = {
+    "waveframe.repository-changes.format.repository-relative-path.v1": (
+        _repository_relative_path
+    )
+}
 
 
 def _verify_hash(value: dict[str, Any], field: str, label: str) -> None:

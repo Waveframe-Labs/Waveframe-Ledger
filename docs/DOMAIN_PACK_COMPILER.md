@@ -1,71 +1,60 @@
 # Deterministic Domain-Pack Policy Compiler
 
-## Scope and promise
+## Scope
 
-A Waveframe domain pack is an immutable, versioned compiler contract for one bounded policy domain. It is more than a lexicon: it binds scoped vocabulary and synonyms to typed concepts, canonical units, a runtime-fact schema, one deterministic grammar/compiler identity, guided mapping controls, semantic validation rules, one compiler-lowering identity, positive/negative/invalid conformance vectors, and a canonical hash.
+A Waveframe domain pack is an immutable, versioned compiler contract for one bounded policy domain. It is more than a lexicon: it binds scoped vocabulary and synonyms, typed resource contracts, types and units, an exact runtime-fact schema, one installed deterministic grammar/compiler, namespaced mapping-control emitters, semantic validation rules, one compiler lowering, conformance vectors, and a canonical hash.
 
-This production slice ships one built-in pack: `repository-changes` version `1.0.0`. It does not install packs remotely and does not implement a marketplace or hosted registry. A later platform slice can let an organization host private packs, but a private pack will still need immutable identity/version/hash selection and the same local validation contract; mutable global vocabulary is not part of the design.
+This slice ships only `repository-changes` / `1.0.0`. Packs are canonical data bound to exact trusted implementations installed with Ledger. Arbitrary data-only packs, remote executable plugins, remote installation, a marketplace, and a hosted registry are not supported. A later platform slice may let organizations host private pack artifacts, but execution will still require a locally trusted implementation bound by exact identity, version, and hash.
 
-No function in this workflow calls an AI model, probabilistic classifier, embeddings service, external inference service, spaCy heuristic, or network lookup. Arbitrary company prose cannot be automatically interpreted under that constraint. Waveframe does not claim otherwise.
+No domain-pack operation calls an AI model, probabilistic classifier, embedding service, external inference service, spaCy heuristic, network lookup, or filesystem. Arbitrary company prose cannot be automatically interpreted under this contract, and Ledger does not claim otherwise.
 
-## Four distinct representations
+## Representations
 
-The representations have deliberately separate purposes:
+The original policy is the customer's exact UTF-8 bytes and their complete ordered statement spans. Canonical controlled language (CNL) is a deterministic human-readable preview of selected meaning. Waveframe-owned `constraint_ir.v1` is the canonical typed enforcement meaning; it is not Rego, Cedar, DMN, or JSON Logic. The compiled authority is the existing deterministic compiler output produced by the pack's trusted lowering.
 
-1. **Original policy** is the customer's exact UTF-8 bytes. Ledger preserves those bytes, their SHA-256, and a complete ordered partition into statement byte spans.
-2. **Canonical controlled language (CNL)** is a deterministic, human-readable preview of the selected meaning. It is review material, not the authority compiler's canonical data model.
-3. **Constraint IR** is Waveframe-owned `constraint_ir.v1`: strict typed enforcement meaning. It is not Rego, Cedar, DMN, or JSON Logic.
-4. **Compiled authority** is the existing Contract Compiler output used by Ledger's publication pipeline. A pack's named lowering converts supported Constraint IR concepts to that existing boundary.
+CNL is derived from Constraint IR and is never an injection surface. Console users will later choose bounded form or decision-table controls; they do not author policy JSON or rule JSON.
 
-A CNL preview is always derived from typed meaning. Editing preview text cannot inject a rule.
+## Constraint IR, resources, and runtime facts
 
-## Constraint IR and runtime facts
+`constraint_ir.v1` represents subject/principal selectors, acting roles, actions, typed resource selectors, allow/deny/require effects, explicitly grouped Boolean conditions, typed literals and canonical units, approval and evidence obligations, separation of duties, explicit conditional exceptions, and exact required runtime facts.
 
-`constraint_ir.v1` represents a subject-kind or exact-principal selector, optional acting role, action, resource selector, allow/deny/require effect, explicitly grouped Boolean conditions, typed literals with canonical units, approval and evidence obligations, separation-of-duty obligations, explicit condition-bearing exceptions, and an exact sorted set of required runtime facts.
+The generic IR has no repository-path rule. Each pack declares a strict resource contract per resource kind: permitted match modes, value type, null policy, optional enum, exact optional format-validator identity, and value fact. Ledger invokes only a validator bound to the pack's exact trusted compiler. Unknown emitters and format validators fail closed. Repository-relative path safety is therefore strict only when the repository pack selects its namespaced validator.
 
-Runtime facts are defined by `runtime_fact_schema.v1`. Each fact has a canonical dotted identity, type, optional enum, canonical unit, required/optional status, deterministic derivation description where applicable, and supported comparison operators. Literal types and units must exactly match their fact. Boolean composition uses explicit `group` nodes (`all`, `any`, or unary `not`); object ordering or implicit precedence never carries meaning.
+`runtime_fact_schema.v1` gives each fact an exact dotted identity, type, optional enum, canonical unit, required status, supported operators, and optional proposal-field derivation as a canonical pointer such as `/resource/path`. Version 1 has no free-form expression derivation and executes no speculative expressions.
 
-Validation rejects unknown fields, unknown operators or symbols, incompatible comparisons, implicit precedence, untyped values, unavailable facts, undeclared referenced facts, contradictory allow/deny effects, malformed exceptions, and empty enforceable rule sets.
+Runtime-fact availability is a publication gate. Ledger rejects unavailable or mismatched facts rather than omitting a condition. A diagnostic is actionable, for example: “This rule requires account.created_at, but the selected runtime schema does not provide it.”
 
-Runtime-fact availability is a publication gate because an unenforceable condition is not partial success. If a rule uses `account.created_at` and the selected schema lacks it, the diagnostic is:
+Validation also rejects unknown fields, symbols, operators, incompatible comparisons, implicit precedence, untyped values, contradictory effects, malformed exceptions, and empty enforceable rule sets.
 
-> This rule requires account.created_at, but the selected runtime schema does not provide it.
+## Direct parsing and explicit statement decisions
 
-Ledger never drops that condition or silently weakens the rule.
+A matching clause is parsed deterministically. Every other nonempty statement is `pending`; no global keyword heuristic infers that it is informational.
 
-Explicit exceptions are nested on their parent constraint and carry their own effect and explicitly grouped condition. That makes exception precedence inspectable. The built-in repository lowering does not currently expose exception or evidence controls because the existing compiler boundary has no corresponding representation; publication fails rather than omitting them.
+`inspect_policy_mapping_controls(...)` returns the selected pack's enforcement controls plus two fixed non-enforcement dispositions. `apply_policy_mapping_decision(...)` records exactly one disposition:
 
-## Guided human mapping without JSON
+- `enforced` selects one available pack control and produces a constraint;
+- `informational` explicitly records why no constraint is intended;
+- `unsupported` explicitly records why no constraint can be produced by this pack.
 
-Directly recognized clauses produce CNL, Constraint IR, and a source-to-constraint mapping. A normative clause outside the deterministic grammar becomes `requires_mapping`; Ledger does not guess its meaning.
+All dispositions bind the exact source hash, statement ID and byte span, pack identity/version/hash, bounded reason, mapper, canonical UTC time, and decision hash. Only enforced decisions contain a control, selections, typed enforcement fields, and constraint ID. Unknown selection fields, arbitrary rule injection, changed source/span/pack bindings, and modified decisions fail replay.
 
-`allowed_mapping_controls` in the selected pack describe bounded fields that a future Console can render as forms or decision tables. The Console user selects named choices and enters validated values such as one repository-relative path. They do not author policy JSON or rule JSON.
+Finalization requires every nonempty statement to have a direct parse or explicit decision, no pending statement, and at least one enforceable constraint. Informational and unsupported statements remain visible and provenance-bound and never silently disappear.
 
-A successful mapping creates `policy_mapping_decision.v1`, binding:
+## Built-in repository pack and v0.6 compatibility
 
-- the exact source-document hash, statement ID, and byte span;
-- exact domain-pack identity, version, and hash;
-- the selected pack control and its bounded selections;
-- selected subject/role, action, resource, effect, typed condition, obligations, exceptions, and required runtime facts;
-- mapper identity, canonical UTC mapping time, generated constraint identity, and canonical decision hash.
+`repository-changes` / `1.0.0` contains only repository concepts: agent subjects; repository-maintainer, repository-reviewer, and security-reviewer roles; the `modify` action; repository-change and repository-path resources; proposal facts; and acting-role, exact-path allow/deny, and path-prefix allow/deny controls.
 
-The decision produces a canonical CNL preview, typed Constraint IR, source-to-constraint mapping, and both IR/runtime validation results. Unknown selection fields, unknown enum members, unsafe paths, free-form rules, modified spans, and modified hashes fail closed. Finalization reconstructs the interpretation from exact source bytes and replays every decision through the pack control, so recomputing only an outer hash cannot authorize changed meaning.
+It contains no finance action, resource, fact, unit, synonym, control, or vector. Finance prose is pending when this pack is selected and needs an explicit human disposition. A finance pack is intentionally outside this slice.
 
-## Built-in repository-change pack
-
-`repository-changes` / `1.0.0` moves the v0.6 repository sentence grammar behind a domain-specific boundary. Its implementation may continue using its existing exact regular expressions; regexes are an implementation detail, not a public grammar class.
-
-The direct grammar preserves acting-role requirements, exact-path allow/deny, path-prefix allow/deny, numeric approval thresholds, requester/approver separation, and the existing ambiguity/conflict behavior. The pack's guided controls express the same five categories. Pack vocabulary is local to this artifact.
-
-The legacy APIs remain exact v0.6 compatibility wrappers. They intentionally do not add pack metadata, because doing so would change released canonical hashes:
+The released v0.6 compatibility APIs retain their byte-identical behavior and hashes, including approval thresholds, requester/approver separation, ambiguity handling, and finance examples:
 
 - `interpret_customer_policy(...)`
 - `interpret_customer_policy_text(...)`
 - `finalize_customer_policy_authority(...)`
 
-## Public API path
+Those APIs intentionally remain on their isolated compatibility path and continue to emit v1 publication artifacts.
 
-All new APIs are available from `governance_ledger`:
+## Public API
 
 ```python
 from governance_ledger import (
@@ -75,16 +64,15 @@ from governance_ledger import (
     inspect_policy_mapping_controls,
     interpret_policy_with_domain_pack,
     list_builtin_domain_packs,
+    validate_authority_bundle,
     validate_constraint_ir,
     validate_domain_pack,
-    validate_domain_policy_publication,
+    validate_publication_receipt,
     validate_runtime_fact_compatibility,
     validate_runtime_fact_schema,
 )
 
-packs = list_builtin_domain_packs()
 pack = get_builtin_domain_pack("repository-changes", "1.0.0")
-
 draft = interpret_policy_with_domain_pack(
     exact_policy_bytes,
     domain_pack_id="repository-changes",
@@ -95,16 +83,11 @@ draft = interpret_policy_with_domain_pack(
     authority_version="1.0.0",
 )
 
-ir_result = validate_constraint_ir(draft["constraint_ir"], domain_pack=pack)
-runtime_result = validate_runtime_fact_compatibility(
-    draft["constraint_ir"], pack["runtime_fact_schema"], domain_pack=pack
-)
-
-# For a source statement whose classification is `requires_mapping`:
 controls = inspect_policy_mapping_controls(draft, statement_id)
 application = apply_policy_mapping_decision(
     draft,
     statement_id=statement_id,
+    disposition="enforced",
     control_id="exact-path-access",
     selections={"effect": "allow", "path": "README.md"},
     mapper_identity="policy-owner@example.com",
@@ -112,8 +95,17 @@ application = apply_policy_mapping_decision(
 )
 draft = application["updated_interpretation"]
 
-publication = finalize_domain_policy_authority(
+application = apply_policy_mapping_decision(
     draft,
+    statement_id=another_statement_id,
+    disposition="unsupported",
+    reason_code="outside-domain",
+    mapper_identity="policy-owner@example.com",
+    mapped_at="2026-08-30T19:01:00Z",
+)
+
+publication = finalize_domain_policy_authority(
+    application["updated_interpretation"],
     approval_id="approval-001",
     approved_by="policy-owner@example.com",
     approved_at="2026-08-30T19:30:00Z",
@@ -123,30 +115,32 @@ publication = finalize_domain_policy_authority(
     published_by="publisher@example.com",
     published_at="2026-08-30T20:00:00Z",
 )
+
+validate_authority_bundle(publication["authority_bundle"])
+validate_publication_receipt(publication["authority_bundle"], publication["publication_receipt"])
 ```
 
-Direct-only policies skip the mapping calls. A multi-clause policy can apply mapping decisions successively by passing each application's `updated_interpretation` to the next call.
+Direct-only policies skip decision calls. A multi-clause policy applies decisions successively to each application's `updated_interpretation`.
 
-## Publication and compatibility decision
+## Publication boundary and provenance
 
-Released `semantic_commit_bundle.v1`, `authority_bundle.v1`, and `publication_receipt.v1` meanings are unchanged. The new path uses them through the existing Ledger/compiler pipeline, then wraps them in additive `domain_policy_authority_bundle.v1` and `domain_policy_publication_receipt.v1` artifacts.
+Released `semantic_commit_bundle.v1`, `authority_bundle.v1`, and `publication_receipt.v1` remain unchanged. The new workflow emits one native, complete `authority_bundle.v2` and one `publication_receipt.v2`; neither nests a v1 bundle or receipt. The normal public validators dispatch by schema version, so callers work with authority bundles rather than a separate “domain policy bundle” concept.
 
-The embedded `authority_bundle.v1` truthfully remains `legacy_provenance_incomplete`: its released schema has no domain-pack lineage profile. The additive envelope is the object that declares complete new-workflow provenance and binds:
+`authority_bundle.v2` directly binds:
 
 ```text
-exact source bytes
-→ exact statement spans
-→ direct parse or policy_mapping_decision.v1
-→ canonical CNL preview
-→ constraint_ir.v1
-→ runtime_fact_schema.v1
+exact source bytes and identity
+→ complete ordered statement spans
+→ direct parses or explicit policy_mapping_decision.v1 records
+→ source-to-constraint mappings and canonical CNL previews
+→ constraint_ir.v1 and runtime_fact_schema.v1
 → domain_pack.v1 identity/version/hash
 → semantic_commit_bundle.v1
 → compiled_authority_contract.v1
-→ authority identity/version
-→ embedded authority_bundle.v1 and publication_receipt.v1
-→ domain_policy_authority_bundle.v1
-→ domain_policy_publication_receipt.v1
+→ authority identity/version and approval record
+→ publication manifest and complete provenance bindings
+→ authority_bundle.v2
+→ publication_receipt.v2
 ```
 
-The semantic-meaning hash can remain stable when a source-only byte changes, as defined by the released semantic commit contract. Its full bundle hash, compiled lineage, both authority bundles, and both receipts change, preserving source-sensitive lineage without changing v1 hash semantics. Missing historical lineage is never inferred for legacy artifacts.
+The v2 JSON schemas strictly define or reference security-critical nested components. Runtime validation additionally reconstructs source partitions and mapping replay, regenerates the semantic commit and compiled contract, cross-checks all identities and hashes, and verifies the receipt. Schema-valid semantic tampering therefore still fails. Missing lineage is never inferred for historical v1 artifacts.

@@ -36,8 +36,8 @@
       "required": ["kind", "match", "value"],
       "properties": {
         "kind": { "type": "string", "minLength": 1 },
-        "match": { "enum": ["any", "exact", "prefix"] },
-        "value": { "type": ["string", "null"] }
+        "match": { "type": "string", "minLength": 1 },
+        "value": { "type": ["boolean", "integer", "string", "array", "null"], "items": { "type": "string", "minLength": 1 }, "uniqueItems": true }
       }
     },
     "literal": {

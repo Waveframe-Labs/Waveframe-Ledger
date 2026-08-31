@@ -219,9 +219,9 @@ A zero-rule interpretation is not publishable. It remains available for review w
 
 ### 5.8 Domain-pack publication extension
 
-The production domain-pack path is documented in `docs/DOMAIN_PACK_COMPILER.md`. It does not mutate the meaning of `semantic_commit_bundle.v1`, `authority_bundle.v1`, or `publication_receipt.v1`. Instead, `domain_policy_authority_bundle.v1` binds exact source and statements, direct or human-mapped interpretation, canonical CNL, Constraint IR, selected runtime schema, exact pack identity/version/hash, semantic commit, compiled authority, approval, and embedded v1 bundle/receipt. `domain_policy_publication_receipt.v1` binds that envelope.
+The production domain-pack path is documented in `docs/DOMAIN_PACK_COMPILER.md`. It does not mutate the meaning of `semantic_commit_bundle.v1`, `authority_bundle.v1`, or `publication_receipt.v1`. It emits a native `authority_bundle.v2` that directly binds exact source and statements, direct parses and explicit human statement decisions, canonical CNL, Constraint IR, selected runtime schema, exact pack identity/version/hash, semantic commit, compiled authority, approval, manifest, and complete provenance. `publication_receipt.v2` directly binds that complete v2 bundle and its critical component identities and hashes.
 
-Because the released v1 authority bundle has no domain-pack lineage profile, the embedded bundle remains truthfully `legacy_provenance_incomplete`. Readers must use the additive envelope and its receipt when asserting complete domain-pack provenance. Historical v1 artifacts remain readable, and Ledger does not infer this new lineage for them.
+No v1 bundle or receipt is nested inside v2. Version-aware authority validators preserve the exact v1 path and validate v2 by reconstructing statement decisions, semantic commitment, compilation, and publication bindings. Historical v1 artifacts remain readable, and Ledger does not infer new lineage for them.
 
 ## 6. Publication transaction
 

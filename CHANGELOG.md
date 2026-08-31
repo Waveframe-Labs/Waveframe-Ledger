@@ -7,8 +7,9 @@ Development version: `0.7.0.dev0`. This is not a release; published v0.6.0 artif
 ### Added
 
 - Waveframe-owned `constraint_ir.v1`, `runtime_fact_schema.v1`, `domain_pack.v1`, and `policy_mapping_decision.v1` contracts with strict deterministic validation.
-- Built-in `repository-changes` / `1.0.0` domain pack, direct deterministic interpretation, bounded human mapping controls, runtime-fact publication gating, and lowering through the existing Contract Compiler boundary.
-- Additive `domain_policy_authority_bundle.v1` and `domain_policy_publication_receipt.v1` artifacts for complete new-workflow provenance without changing released v1 schema meanings.
+- Built-in repository-only `repository-changes` / `1.0.0` domain pack, direct deterministic interpretation, bounded human statement dispositions, runtime-fact publication gating, and lowering through the existing Contract Compiler boundary.
+- Native `authority_bundle.v2` and `publication_receipt.v2` artifacts for complete new-workflow provenance, without nesting or changing released v1 artifacts.
+- Namespaced trusted emitter/format identities and pack-defined, domain-neutral resource contracts. Every unmatched statement remains pending until an explicit enforced, informational, or unsupported decision.
 
 ### Compatibility
 
