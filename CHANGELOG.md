@@ -1,8 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.7.0 - 2026-08-31
 
-Development version: `0.7.0.dev0`. This is not a release; published v0.6.0 artifacts remain immutable.
+Waveframe Ledger v0.7.0 introduces the deterministic domain-pack compiler and its native v2 publication artifacts while preserving the released v0.6 compatibility path and all published v1 schema meanings.
 
 ### Added
 

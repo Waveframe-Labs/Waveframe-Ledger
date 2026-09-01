@@ -125,7 +125,7 @@ pip install "governance-ledger[guard]"
 ```
 
 The `guard` extra selects `waveframe-guard==0.15.0`, matching the released Guard
-compatibility metadata that tests Guard 0.15.0 with Ledger 0.5.0; the Ledger v0.6.0
+compatibility metadata that tests Guard 0.15.0 with Ledger 0.5.0; the Ledger v0.7.0
 release matrix revalidates that same Guard version. Applications such as Cloud can
 instead inject a compatible evaluator without installing Guard in Ledger's environment:
 
@@ -153,7 +153,7 @@ Ledger's production policy boundary is a selected, immutable domain pack rather 
 
 Clauses inside the selected grammar compile directly. Every other nonempty clause remains pending until a human explicitly chooses one pack-bounded enforcement control, `informational`, or `unsupported`. Users do not author policy JSON or rule JSON. Arbitrary prose cannot be automatically interpreted without AI, and this workflow uses no AI, probabilistic inference, embeddings, external inference, spaCy heuristics, or network lookup. Missing runtime facts block publication rather than weakening a rule.
 
-The new publication path emits standalone `compiled_authority_contract.v2`, limited to the repository pack's current acting-role and exact/prefix path allow/deny lowering. Advanced conditions, evidence, exceptions, approvals, and other obligations remain representable in Constraint IR but fail closed until a trusted lowering supports them. Released v0.6 compatibility outputs remain unchanged.
+The domain-pack publication path emits standalone `compiled_authority_contract.v2`, limited to the repository pack's current acting-role and exact/prefix path allow/deny lowering. Advanced conditions, evidence, exceptions, approvals, and other obligations remain representable in Constraint IR but fail closed until a trusted lowering supports them. Released v0.6 compatibility outputs remain unchanged.
 
 See [Deterministic Domain-Pack Policy Compiler](docs/DOMAIN_PACK_COMPILER.md) for the representation boundaries, guided-mapping workflow, exact public APIs, repository/finance compatibility boundary, and native `authority_bundle.v2` provenance chain.
 

@@ -4,7 +4,7 @@
 
 A Waveframe domain pack is an immutable, versioned compiler contract for one bounded policy domain. It is more than a lexicon: it binds scoped vocabulary and synonyms, typed resource contracts, types and units, an exact runtime-fact schema, one installed deterministic grammar/compiler, namespaced mapping-control emitters, semantic validation rules, one compiler lowering, conformance vectors, and a canonical hash.
 
-This slice ships only `repository-changes` / `1.0.0`. Packs are canonical data bound to exact trusted implementations installed with Ledger. Arbitrary data-only packs, remote executable plugins, remote installation, a marketplace, and a hosted registry are not supported. A later platform slice may let organizations host private pack artifacts, but execution will still require a locally trusted implementation bound by exact identity, version, and hash.
+Waveframe Ledger v0.7.0 ships only `repository-changes` / `1.0.0`. Packs are canonical data bound to exact trusted implementations installed with Ledger. Arbitrary data-only packs, remote executable plugins, remote installation, a marketplace, and a hosted registry are not supported. A later platform release may let organizations host private pack artifacts, but execution will still require a locally trusted implementation bound by exact identity, version, and hash.
 
 No domain-pack operation calls an AI model, probabilistic classifier, embedding service, external inference service, spaCy heuristic, network lookup, or filesystem. Arbitrary company prose cannot be automatically interpreted under this contract, and Ledger does not claim otherwise.
 
@@ -46,7 +46,7 @@ Finalization requires every nonempty statement to have a direct parse or explici
 
 `repository-changes` / `1.0.0` contains only repository concepts: agent subjects; repository-maintainer, repository-reviewer, and security-reviewer roles; the `modify` action; repository-change and repository-path resources; proposal facts; and acting-role, exact-path allow/deny, and path-prefix allow/deny controls.
 
-It contains no finance action, resource, fact, unit, synonym, control, or vector. Finance prose is pending when this pack is selected and needs an explicit human disposition. A finance pack is intentionally outside this slice.
+It contains no finance action, resource, fact, unit, synonym, control, or vector. Finance prose is pending when this pack is selected and needs an explicit human disposition. A finance pack is not included in v0.7.0.
 
 The released v0.6 compatibility APIs retain their byte-identical behavior and hashes, including approval thresholds, requester/approver separation, ambiguity handling, and finance examples:
 
