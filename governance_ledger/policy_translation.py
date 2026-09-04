@@ -157,7 +157,7 @@ def resolve_policy_translation_capability_catalog(
 
 
 def _build_repository_capability_catalog() -> dict[str, Any]:
-    """Return the immutable capabilities implemented by Ledger and Guard v0.16.1.
+    """Return the immutable capabilities implemented by Ledger and Guard v0.17.0.
 
     The catalog is intentionally the intersection of the repository-change compiler
     and Guard's trusted repository-change fact boundary.  Representable Constraint IR

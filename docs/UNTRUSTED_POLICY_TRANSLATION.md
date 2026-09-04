@@ -11,8 +11,8 @@ authorized:
    the exact embedded source bytes, and compiles the confirmed controls.
 4. Ledger publishes the provider-free commitment through the additive v3 authority
    path, while retaining the released v2 compiled-contract format.
-5. Guard enforces the compiled authority without a model or private translation
-   evidence after additive v3 verification support is released.
+5. Guard 0.17.0 verifies the native v3 publication and enforces the compiled authority
+   without a model or private translation evidence.
 
 Ledger does not call a provider, load provider credentials, access the network, or use a
 provider explanation as approval text. The proposal contains an ordered, non-empty,
@@ -114,7 +114,7 @@ than mutating its input.
 ## Current truthful capability coverage
 
 The built-in `waveframe.coding-agent.repository-change@1.0.0` catalog is the exact
-intersection of Ledger's `repository-changes@1.0.0` lowering and Guard 0.16.1's trusted
+intersection of Ledger's `repository-changes@1.0.0` lowering and Guard 0.17.0's trusted
 repository-change runtime-fact boundary. It supports only:
 
 - actor kind `autonomous_agent` (lowered to the released `agent` subject);
@@ -159,17 +159,15 @@ Those capabilities require separately released Contract Compiler/domain-pack low
 and matching Guard runtime fact providers/evaluators. They must not be added to a Ledger
 catalog until both sides exist under immutable identities and hashes.
 
-Guard 0.16.1 independently validates the final v2 publication, but its released Python
-package metadata constrains Ledger to `<0.8.0` and consequently excludes this
-`0.8.0.dev0` checkout. Ledger's compatibility job installs that exact released Guard
-wheel without dependency resolution as supplemental runtime evidence only. It is not
-package compatibility. Ledger 0.8 publication is blocked until a separately reviewed
-Guard release widens and tests the range, Ledger restores an extra pinned to that
-release, and a clean `pip install "governance-ledger[guard]"` plus `pip check` passes.
-It also does not recognize native v3 publication artifacts: its loader, verifier,
-verification evidence, and cache-revalidation branch are explicitly v2-only. The exact
-additive implementation and regression requirements are tracked in
-[Waveframe-Guard#27](https://github.com/Waveframe-Labs/Waveframe-Guard/issues/27).
+Guard 0.17.0 independently validates native v2 and v3 publications. Its published
+Python metadata accepts `governance-ledger>=0.7.0,<0.9.0`; Ledger 0.8.0's optional
+`guard` extra pins the exact release-tested `waveframe-guard==0.17.0`. Guard requires
+Ledger 0.8 or later for native v3 and fails closed rather than downgrading a v3 bundle
+when an older Ledger is installed. Existing v1/v2 loading, verification, caching,
+runtime-fact, and enforcement behavior remains unchanged.
+
+Hosted Cloud authoring and native v3 serving are not yet available. Local publication,
+local registry resolution, and Guard enforcement do not depend on hosted Cloud.
 
 ## Coverage and partial publication
 

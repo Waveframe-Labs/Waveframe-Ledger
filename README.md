@@ -116,16 +116,26 @@ Ledger relies on installed package contracts for integration behavior:
 
 - `cricore-contract-compiler>=0.4.0` (the first released compiler contract with exact/prefix target rules)
 
-The base install does not install Waveframe Guard. Ledger 0.8 development metadata does
-not advertise a `guard` extra because no released Guard has a satisfiable Ledger 0.8
-dependency range. The last resolvable released pairing is Ledger 0.7.0 with Guard
-0.16.1. Guard 0.16.1 declares `governance-ledger>=0.7.0,<0.8.0`.
+The base install does not install Waveframe Guard. Install the release-tested runtime
+integration explicitly:
 
-This is a Ledger 0.8 release blocker. A separately reviewed Guard release must test the
-Ledger 0.8 line and widen its dependency range. Before Ledger 0.8 publication, this
-repository must restore `pip install "governance-ledger[guard]"` for that exact Guard
-release and require `pip check`. The current `--no-deps` Guard 0.16.1 runtime test is
-supplemental behavioral evidence only and is not package-compatibility evidence.
+```powershell
+pip install "governance-ledger[guard]==0.8.0"
+```
+
+Ledger 0.8.0 pins its `guard` extra to `waveframe-guard==0.17.0`. Guard 0.17.0 declares
+`governance-ledger>=0.7.0,<0.9.0`, verifies native v3 publications, and enforces their
+unchanged `compiled_authority_contract.v2` runtime payload. Normal dependency resolution
+and `pip check` are part of release acceptance.
+
+### Release compatibility matrix
+
+| Ledger | Guard | Publication support | Notes |
+| --- | --- | --- | --- |
+| 0.8.0 | 0.17.0 | v1, v2, native v3 | Release-tested pair; selected by the Ledger `guard` extra. |
+| 0.7.0 | 0.17.0 | v1, v2 | Dependency-compatible; native v3 requires Ledger 0.8 or later. |
+| 0.7.0 | 0.16.1 | v1, v2 | Prior release-tested compatibility pair; no native v3 support. |
+
 Applications can inject a compatible evaluator without installing Guard in Ledger's
 environment:
 
@@ -139,9 +149,8 @@ result = replay_admissibility(
 )
 ```
 
-Existing callers that omit `evaluator` may use a separately installed compatible Guard.
-During 0.8 development there is intentionally no advertised Guard extra. Without either
-an evaluator or compatible Guard, Ledger raises an actionable
+Existing callers that omit `evaluator` may use the optional Guard integration. Without
+either an evaluator or compatible Guard, Ledger raises an actionable
 `GuardIntegrationUnavailableError`. Ledger prepares, publishes, replays, and verifies
 authority evidence; Guard evaluates runtime admissibility. Enforcement logic remains
 outside Ledger.
@@ -161,8 +170,9 @@ See [Deterministic Domain-Pack Policy Compiler](docs/DOMAIN_PACK_COMPILER.md) fo
 ## Untrusted policy translation proposals
 
 Ledger provides a model-agnostic `policy_translation_proposal.v1` boundary for coding-agent
-engineering policy. A model proposes; a human confirms; Ledger validates, renders, and
-compiles; Guard enforces the existing v2 publication without a model. Exact source bytes
+engineering policy. An external model or deterministic form may propose; a human confirms;
+Ledger validates, renders, and compiles; Guard enforces published authority without a
+model. Ledger does not call or bundle an AI/model provider. Exact source bytes
 remain bound through the semantic commitment, contract, bundle, receipt, and Guard
 evidence. Ordered proposal run descriptors retain exact request/response hashes and
 attribution, never raw bytes. Optional raw request/response bytes live in a separate,
@@ -188,20 +198,25 @@ runtime payload remains `compiled_authority_contract.v2`.
 
 Customer review uses six deterministic states: Ready to enforce, Needs an answer, Needs
 a connection, Partially enforceable, Not currently enforceable, and Informational.
-Provider/model/prompt details and raw translation evidence remain private and deletable;
-the published commitment, authority, receipt, and runtime contract do not depend on
-them. Guard 0.16.1 accepts existing v2 publications but its loader/verifier is v2-only.
-Native v3 support is tracked in
-[Waveframe-Guard#27](https://github.com/Waveframe-Labs/Waveframe-Guard/issues/27).
+Provider/model/prompt details and raw translation evidence remain private, independently
+deletable, and absent from the package and published authority. The published commitment,
+authority, receipt, and runtime contract do not depend on them. Guard 0.17.0 verifies and
+enforces native v3 publications as well as existing v1/v2 authority. Hosted Cloud
+authoring and native v3 serving are not yet available.
 
 The first catalog truthfully supports only autonomous-agent repository modification,
 repository roles, and exact/prefix path allow/deny controls already implemented by the
-released repository compiler and Guard 0.16.1 boundary. Branch, push, pull-request,
+released repository compiler and Guard 0.17.0 boundary. Branch, push, pull-request,
 reviewer, threshold, separation-of-duties, environment, and evidence semantics fail
 closed. The proposal schema uses portable capability identifiers, while the trusted
 catalog registry—not caller input—decides what is actually available. See [Untrusted
-Policy Translation Proposals](docs/UNTRUSTED_POLICY_TRANSLATION.md).
-for the APIs, provenance proof, coverage rules, and precise limitations.
+Policy Translation Proposals](docs/UNTRUSTED_POLICY_TRANSLATION.md) for the APIs,
+provenance proof, coverage rules, and precise limitations.
+
+The runnable [native v3 multi-control example](examples/native_v3_multi_control.py)
+publishes two exact-path controls from one clause, deletes its private translation
+evidence, loads the v3 bundle and receipt through Guard 0.17.0, allows both published
+paths, and blocks an unpublished path.
 
 ## v0.6 Customer-Policy Compatibility Service
 
@@ -312,10 +327,8 @@ governance-ledger replay-execution `
   --execution-state execution_state.json
 ```
 
-The CLI form uses the optional Guard adapter and therefore requires a separately
-installed, dependency-compatible Guard. Ledger 0.8 development intentionally advertises
-no Guard extra until the release blocker above is resolved. Programmatic callers may use
-evaluator injection instead.
+The CLI form uses the optional Guard adapter and therefore requires
+`governance-ledger[guard]`. Programmatic callers may use evaluator injection instead.
 
 Generate semantic governance artifacts:
 
