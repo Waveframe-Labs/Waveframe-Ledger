@@ -35,11 +35,16 @@ from governance_ledger.policy_translation import (
     apply_policy_translation_disposition,
     approve_policy_translation_proposal,
     create_policy_translation_proposal,
+    create_policy_translation_run,
+    create_policy_translation_run_evidence,
     finalize_policy_translation_authority,
     get_policy_translation_capability_catalog,
     inspect_policy_translation_proposal,
     render_policy_translation_review,
+    validate_policy_translation_capability_catalog,
     validate_policy_translation_proposal,
+    validate_policy_translation_review,
+    validate_policy_translation_run_evidence,
 )
 from governance_ledger.publish import approve_review_file, publish_review_file
 from governance_ledger.registry import load_contract_registry, resolve_authority_ref, update_contract_registry
@@ -89,6 +94,8 @@ __all__ = [
     "apply_policy_translation_disposition",
     "approve_policy_translation_proposal",
     "create_policy_translation_proposal",
+    "create_policy_translation_run",
+    "create_policy_translation_run_evidence",
     "finalize_policy_translation_authority",
     "get_policy_translation_capability_catalog",
     "inspect_policy_translation_proposal",
@@ -112,7 +119,10 @@ __all__ = [
     "validate_authority_bundle",
     "validate_publication_receipt",
     "render_policy_translation_review",
+    "validate_policy_translation_capability_catalog",
     "validate_policy_translation_proposal",
+    "validate_policy_translation_review",
+    "validate_policy_translation_run_evidence",
     "validate_runtime_fact_compatibility",
     "validate_runtime_fact_schema",
 ]

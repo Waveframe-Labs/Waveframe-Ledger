@@ -13,10 +13,19 @@ authorized:
    artifact.
 
 Ledger does not call a provider, load provider credentials, access the network, or use a
-provider explanation as approval text. The exact candidate response may be retained as
-canonical base64 plus a byte-for-byte SHA-256 in private proposal evidence. Schema
-validity proves only structural and capability confinement; it does not prove that the
-provider understood the policy.
+provider explanation as approval text. The proposal contains an ordered, non-empty,
+hash-chained `translation_runs` collection. Each descriptor binds the exact source,
+catalog, provider class and model/deployment attribution, template, request
+configuration, request hash, response hash, canonical timestamps, sequence, and prior
+run hash. It contains no raw request or response bytes. Schema validity proves only
+structural and capability confinement; it does not prove that a provider understood the
+policy.
+
+Optional raw bytes belong in a separate private
+`policy_translation_run_evidence.v1` artifact. That artifact validates independently
+against one run descriptor and may be deleted under retention policy without changing
+the proposal, confirmation, approval, bundle, receipt, or Guard verification. Runtime
+authority never depends on it.
 
 ## Exact source and authority chain
 
@@ -41,16 +50,24 @@ does not need a provider, proposal, or provider explanation at evaluation time. 
 verified bundle/receipt and execution evidence transitively bind the exact source
 snapshot.
 
-Changing one source byte changes the snapshot hash, clause identities, proposal and
-approval identities, semantic commitment, compiled contract, bundle, and receipt.
+Changing one source byte changes the snapshot hash, every bound translation-run
+descriptor, clause identities, proposal, confirmation and approval identities, semantic
+commitment, compiled contract, bundle, and receipt.
 
 ## Public trust stages
 
 The public APIs keep trust transitions explicit:
 
 - `get_policy_translation_capability_catalog()` returns the immutable finite catalog.
-- `create_policy_translation_proposal(...)` canonicalizes exact source and raw candidate
-  evidence; it performs no inference.
+- `validate_policy_translation_capability_catalog(...)` rejects unreachable or
+  internally inconsistent advertised capabilities.
+- `create_policy_translation_run(...)` creates one ordered hash-only attribution
+  descriptor.
+- `create_policy_translation_run_evidence(...)` and
+  `validate_policy_translation_run_evidence(...)` manage optional private raw evidence
+  outside the proposal.
+- `create_policy_translation_proposal(...)` canonicalizes exact source, clauses, and
+  ordered run descriptors; it performs no inference.
 - `validate_policy_translation_proposal(...)` validates structure, exact coverage,
   hashes, source/authority identity, and capability confinement. It returns
   `semantic_validity: not_established`.
@@ -61,6 +78,8 @@ The public APIs keep trust transitions explicit:
   acknowledges one unenforced clause.
 - `render_policy_translation_review(...)` derives operational text from the validated
   control. Provider explanations are never included.
+- `validate_policy_translation_review(...)` validates the strict
+  `policy_translation_review.v1` artifact that approval hash-binds.
 - `approve_policy_translation_proposal(...)` binds the completed confirmation,
   deterministic review, catalog, source, authority, and enforced/unenforced counts.
 - `finalize_policy_translation_authority(...)` replays everything from source bytes and
@@ -84,9 +103,21 @@ repository-change runtime-fact boundary. It supports only:
   equality/prefix operators;
 - enforcement at `waveframe.guard.repository-change.v1`.
 
-Repository paths supplied as source literals must occur byte-for-byte in their clause.
+Source literals carry an absolute byte span, exact UTF-8 surface value, byte-slice hash,
+and deterministic canonical value. Their spans must stay inside the clause and cover a
+whole lexical token: substrings such as `README.md` from `README.md.bak`, `deploy/` from
+`predeploy/`, and role names inside larger identifiers fail closed. Quotes and backticks
+at both edges remain valid lexical boundaries; when accepted by the released path
+grammar, their bytes remain part of the exact path literal rather than being silently
+stripped. Repository-role surface synonyms are canonicalized only by the released
+domain-pack vocabulary.
 Organizational roles or paths not literally established by the source remain typed,
 unresolved questions until a human supplies a value accepted by the catalog.
+
+The catalog derives its advertised facts, operators, effects, binding types, and
+enforcement points from the reachable control definitions. It advertises only `==` and
+`starts_with`; `!=` is intentionally absent because no candidate control and v2 lowering
+use it.
 
 The current catalog fails closed for human/service actors, repository identity, branch,
 push, pull-request open/approve/merge, changed-file count, reviewer identity/team,
@@ -109,7 +140,10 @@ Every clause has one proposal status:
 - `unsupported`;
 - `informational`.
 
-Proposal status is not approval. Every clause still requires a human disposition.
+Proposal validation reconstructs deterministic domain interpretation. A clause already
+recognized as direct must contain the exact corresponding control and executable
+semantics; neither provider output nor a human disposition may downgrade it. Proposal
+status is not approval. Every clause still requires a human disposition.
 Publication fails if a binding or clause is unresolved, if there is no enforceable
 control, or if an unenforced clause lacks explicit acknowledgement. The confirmation,
 approval, and finalization result report exact total, enforced, unenforced, unresolved,

@@ -163,8 +163,10 @@ Ledger provides a model-agnostic `policy_translation_proposal.v1` boundary for c
 engineering policy. A model proposes; a human confirms; Ledger validates, renders, and
 compiles; Guard enforces the existing v2 publication without a model. Exact source bytes
 remain bound through the semantic commitment, contract, bundle, receipt, and Guard
-evidence. Raw provider output and provider explanations are private untrusted evidence,
-never runtime authority or approval text.
+evidence. Ordered proposal run descriptors retain exact request/response hashes and
+attribution, never raw bytes. Optional raw request/response bytes live in a separate,
+private, independently deletable retention artifact. Provider output and explanations
+are evidence, never runtime authority or approval text.
 
 The first catalog truthfully supports only autonomous-agent repository modification,
 repository roles, and exact/prefix path allow/deny controls already implemented by the
@@ -457,6 +459,12 @@ Canonical schemas live in [schemas/](schemas/), including:
 - [governance_review_packet.v1.json](schemas/governance_review_packet.v1.json): governance review packets.
 - [authority_bundle.v1.json](schemas/authority_bundle.v1.json): authority bundles.
 - [publication_receipt.v1.json](schemas/publication_receipt.v1.json): publication receipts.
+- [policy_translation_capability_catalog.v1.json](schemas/policy_translation_capability_catalog.v1.json): finite coding-agent translation capabilities.
+- [policy_translation_proposal.v1.json](schemas/policy_translation_proposal.v1.json): exact-source, ordered-run untrusted proposals.
+- [policy_translation_run_evidence.v1.json](schemas/policy_translation_run_evidence.v1.json): optional private raw run evidence.
+- [policy_translation_confirmation.v1.json](schemas/policy_translation_confirmation.v1.json): bounded human confirmations.
+- [policy_translation_review.v1.json](schemas/policy_translation_review.v1.json): deterministic approval-bound reviews.
+- [policy_translation_approval.v1.json](schemas/policy_translation_approval.v1.json): proposal publication approvals.
 - [authority_lifecycle_event.v1.json](schemas/authority_lifecycle_event.v1.json): append-only authority lifecycle events.
 - [governance_semantic_extraction.v1.json](schemas/governance_semantic_extraction.v1.json): deterministic semantic extraction artifacts.
 - [governance_semantic_provenance.v1.json](schemas/governance_semantic_provenance.v1.json): semantic provenance and source-span bindings.

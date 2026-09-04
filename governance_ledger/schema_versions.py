@@ -17,3 +17,5 @@ POLICY_TRANSLATION_CAPABILITY_CATALOG_V1 = "policy_translation_capability_catalo
 POLICY_TRANSLATION_PROPOSAL_V1 = "policy_translation_proposal.v1"
 POLICY_TRANSLATION_CONFIRMATION_V1 = "policy_translation_confirmation.v1"
 POLICY_TRANSLATION_APPROVAL_V1 = "policy_translation_approval.v1"
+POLICY_TRANSLATION_REVIEW_V1 = "policy_translation_review.v1"
+POLICY_TRANSLATION_RUN_EVIDENCE_V1 = "policy_translation_run_evidence.v1"

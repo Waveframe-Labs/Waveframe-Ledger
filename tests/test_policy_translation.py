@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import base64
 import copy
 import json
 import socket
@@ -16,13 +15,18 @@ from governance_ledger import (
     apply_policy_translation_disposition,
     approve_policy_translation_proposal,
     create_policy_translation_proposal,
+    create_policy_translation_run,
+    create_policy_translation_run_evidence,
     finalize_policy_translation_authority,
     get_policy_translation_capability_catalog,
     inspect_policy_translation_proposal,
     interpret_policy_with_domain_pack,
     render_policy_translation_review,
     validate_authority_bundle,
+    validate_policy_translation_capability_catalog,
     validate_policy_translation_proposal,
+    validate_policy_translation_review,
+    validate_policy_translation_run_evidence,
     validate_publication_receipt,
 )
 from governance_ledger.publication_provenance import bytes_sha256, canonical_sha256
@@ -38,6 +42,30 @@ FACTS = [
 ]
 
 
+def _run(draft: dict, *, sequence: int = 0, previous: str | None = None,
+         provider_class: str = "hosted_model", provider_identifier: str | None = "provider/deployment",
+         response: bytes = b'{"untrusted":"candidate"}') -> dict:
+    catalog = get_policy_translation_capability_catalog()
+    return create_policy_translation_run(
+        source_policy_ref=draft["source_policy"]["source_policy_ref"],
+        source_revision=draft["source_policy"]["source_revision"],
+        source_snapshot_hash=draft["source_policy"]["snapshot_hash"],
+        capability_catalog={key: catalog[key] for key in ("catalog_id", "catalog_version", "catalog_hash")},
+        provider_class=provider_class,
+        provider_identifier=provider_identifier,
+        translation_template_version="template-1",
+        translation_template_hash=bytes_sha256(b"template"),
+        request_configuration_id="request-config-1",
+        request_configuration_hash=bytes_sha256(b"configuration"),
+        request_hash=bytes_sha256(b'{"source":"policy"}'),
+        response_hash=bytes_sha256(response),
+        created_at=NOW,
+        completed_at="2026-09-03T12:00:01Z",
+        sequence_number=sequence,
+        previous_run_hash=previous,
+    )
+
+
 def _base(source: bytes) -> dict:
     return interpret_policy_with_domain_pack(
         source,
@@ -50,7 +78,15 @@ def _base(source: bytes) -> dict:
     )
 
 
-def _path_control(path: str, *, effect: str = "allow", prefix: bool = False) -> dict:
+def _path_control(
+    path: str, *, source: bytes, clause_start: int, clause_end: int,
+    effect: str = "allow", prefix: bool = False,
+) -> dict:
+    encoded = path.encode("utf-8")
+    literal_start = source.find(encoded, clause_start, clause_end)
+    if literal_start < 0:
+        literal_start = clause_start
+    literal_end = literal_start + len(encoded)
     return {
         "control_type": "prefix_path_access" if prefix else "exact_path_access",
         "actor_kind": "autonomous_agent",
@@ -60,7 +96,14 @@ def _path_control(path: str, *, effect: str = "allow", prefix: bool = False) -> 
         "operator": "starts_with" if prefix else "==",
         "effect": effect,
         "enforcement_point": "waveframe.guard.repository-change.v1",
-        "value": {"kind": "source_literal", "value": path},
+        "value": {
+            "kind": "source_literal",
+            "value": path,
+            "canonical_value": path,
+            "start_byte": literal_start,
+            "end_byte": literal_end,
+            "literal_hash": bytes_sha256(source[literal_start:literal_end]),
+        },
         "required_runtime_facts": FACTS,
     }
 
@@ -73,11 +116,20 @@ def _proposal(
     draft = _base(source)
     clauses = []
     for index, statement in enumerate(draft["source_statements"]):
-        if index == 0:
-            path = "README.md" if b"README.md" in source else "READNE.md"
+        if statement["classification"] == "direct":
+            mapping = next(item for item in draft["source_to_constraint_mappings"] if item["statement_id"] == statement["statement_id"])
+            constraint = next(item for item in draft["constraint_ir"]["constraints"] if item["constraint_id"] == mapping["constraint_ids"][0])
+            path = constraint["resource"]["value"]
             status = "enforceable_fully_bound"
-            control = _path_control(path)
-            explanation = provider_explanation
+            control = _path_control(
+                path,
+                source=source,
+                clause_start=statement["start_byte"],
+                clause_end=statement["end_byte"],
+                effect=constraint["effect"],
+                prefix=constraint["resource"]["match"] == "prefix",
+            )
+            explanation = provider_explanation if index == 0 else None
         else:
             status = "informational"
             control = None
@@ -93,6 +145,7 @@ def _proposal(
                 "provider_explanation": explanation,
             }
         )
+    run = _run(draft)
     return create_policy_translation_proposal(
         source,
         source_policy_id="repository-policy",
@@ -101,14 +154,7 @@ def _proposal(
         authority_version="1.0.0",
         clauses=clauses,
         organizational_bindings=[],
-        provider_class="hosted_model",
-        provider_identifier="provider/deployment",
-        translation_template_version="template-1",
-        translation_template_hash=bytes_sha256(b"template"),
-        request_configuration_id="request-config-1",
-        request_configuration_hash=bytes_sha256(b"configuration"),
-        created_at=NOW,
-        candidate_response_bytes=b'{"untrusted":"candidate"}',
+        translation_runs=[run],
     )
 
 
@@ -214,13 +260,15 @@ def test_catalog_is_finite_hashed_and_matches_only_released_runtime_surface() ->
     )
     runtime = {item["fact_id"]: item for item in catalog["facts"]}
     assert sorted(runtime) == [
-        "actor.principal_id",
         "actor.role",
         "actor.subject_kind",
         "proposal.action",
         "proposal.resource.kind",
         "proposal.resource.path",
     ]
+    assert catalog["operators"] == ["==", "starts_with"]
+    assert catalog["effects"] == ["allow", "deny", "require"]
+    assert validate_policy_translation_capability_catalog(catalog) == catalog
     assert catalog["catalog_hash"] == canonical_sha256(
         {key: value for key, value in catalog.items() if key != "catalog_hash"}
     )
@@ -253,14 +301,97 @@ def test_clause_partition_rejects_omission_duplication_overlap_and_reordering(mu
         validate_policy_translation_proposal(proposal)
 
 
-def test_candidate_response_tampering_is_detected_even_if_proposal_is_rehashed() -> None:
+def test_translation_run_tampering_is_detected_even_if_proposal_is_rehashed() -> None:
     proposal = _proposal()
-    proposal["provider_evidence"]["candidate_response_base64"] = base64.b64encode(
-        b"tampered"
-    ).decode("ascii")
+    proposal["translation_runs"][0]["response_hash"] = bytes_sha256(b"tampered")
     _restamp_proposal(proposal)
-    with pytest.raises(ValueError, match="candidate-response hash"):
+    with pytest.raises(ValueError, match="run identity or hash"):
         validate_policy_translation_proposal(proposal)
+
+
+def test_ordered_multi_run_omission_reordering_duplication_and_substitution_fail_closed() -> None:
+    proposal = _proposal()
+    draft = _base(b"Agents may modify README.md. Policy overview.\n")
+    second = _run(draft, sequence=1, previous=proposal["translation_runs"][0]["run_hash"], response=b"second")
+    third = _run(draft, sequence=2, previous=second["run_hash"], response=b"third")
+    proposal["translation_runs"].extend([second, third])
+    _restamp_proposal(proposal)
+    validate_policy_translation_proposal(proposal)
+
+    omitted = copy.deepcopy(proposal)
+    omitted["translation_runs"].pop(1)
+    _restamp_proposal(omitted)
+    with pytest.raises(ValueError, match="missing, reordered, or duplicated|ordering chain"):
+        validate_policy_translation_proposal(omitted)
+
+    reordered = copy.deepcopy(proposal)
+    reordered["translation_runs"][1:] = reversed(reordered["translation_runs"][1:])
+    _restamp_proposal(reordered)
+    with pytest.raises(ValueError, match="missing, reordered, or duplicated|ordering chain"):
+        validate_policy_translation_proposal(reordered)
+
+    duplicated = copy.deepcopy(proposal)
+    duplicated["translation_runs"][2] = copy.deepcopy(duplicated["translation_runs"][1])
+    _restamp_proposal(duplicated)
+    with pytest.raises(ValueError, match="missing, reordered, or duplicated|duplicated"):
+        validate_policy_translation_proposal(duplicated)
+
+    substituted = copy.deepcopy(proposal)
+    substituted["translation_runs"][1] = copy.deepcopy(_proposal()["translation_runs"][0])
+    _restamp_proposal(substituted)
+    with pytest.raises(ValueError, match="missing, reordered, or duplicated|ordering chain"):
+        validate_policy_translation_proposal(substituted)
+
+
+@pytest.mark.parametrize("field", ["source_policy_ref", "source_revision", "source_snapshot_hash", "capability_catalog"])
+def test_run_cross_source_revision_and_catalog_binding(field: str) -> None:
+    proposal = _proposal()
+    run = proposal["translation_runs"][0]
+    if field == "capability_catalog":
+        run[field] = {**run[field], "catalog_hash": bytes_sha256(b"other-catalog")}
+    elif field.endswith("hash"):
+        run[field] = bytes_sha256(b"other-source")
+    else:
+        run[field] = "other"
+    core = {key: value for key, value in run.items() if key not in {"run_id", "run_hash"}}
+    run["run_id"] = "translation-run-" + canonical_sha256(core).removeprefix("sha256:")
+    run["run_hash"] = canonical_sha256({key: value for key, value in run.items() if key != "run_hash"})
+    _restamp_proposal(proposal)
+    with pytest.raises(ValueError, match="substituted across"):
+        validate_policy_translation_proposal(proposal)
+
+
+@pytest.mark.parametrize("provider_class", ["hosted_model", "local_model"])
+def test_model_runs_require_model_or_deployment_identifier(provider_class: str) -> None:
+    proposal = _proposal()
+    draft = _base(b"Agents may modify README.md. Policy overview.\n")
+    proposal["translation_runs"] = [_run(draft, provider_class=provider_class, provider_identifier=None)]
+    _restamp_proposal(proposal)
+    with pytest.raises(ValueError, match="model/deployment identifier"):
+        validate_policy_translation_proposal(proposal)
+
+
+def test_raw_run_evidence_is_optional_private_and_independently_deletable() -> None:
+    proposal = _proposal()
+    run = proposal["translation_runs"][0]
+    raw = create_policy_translation_run_evidence(
+        run,
+        request_bytes=b'{"source":"policy"}',
+        response_bytes=b'{"untrusted":"candidate"}',
+    )
+    assert validate_policy_translation_run_evidence(run, raw) == raw
+    _schema_validate(raw, "policy_translation_run_evidence.v1.json")
+    with pytest.raises(ValueError, match="response evidence hash"):
+        create_policy_translation_run_evidence(
+            run,
+            request_bytes=b'{"source":"policy"}',
+            response_bytes=b"tampered response",
+        )
+    del raw
+    assert validate_policy_translation_proposal(proposal)["valid"] is True
+    result = _final(proposal)
+    assert validate_authority_bundle(result["authority_bundle"])["provenance_complete"] is True
+    assert "request_bytes_base64" not in json.dumps(proposal)
 
 
 def test_provider_explanation_can_contradict_but_never_controls_review_meaning() -> None:
@@ -272,6 +403,16 @@ def test_provider_explanation_can_contradict_but_never_controls_review_meaning()
     assert "five reviewers" not in rendered
     assert review["provider_explanations_used"] is False
     assert review == render_policy_translation_review(copy.deepcopy(proposal))
+    assert validate_policy_translation_review(proposal, None, review) == review
+    _schema_validate(review, "policy_translation_review.v1.json")
+    tampered = copy.deepcopy(review)
+    tampered["clauses"][0]["operational_explanation"] = "Provider-written contradiction."
+    tampered["review_hash"] = canonical_sha256({key: value for key, value in tampered.items() if key != "review_hash"})
+    with pytest.raises(ValueError, match="deterministic rendering"):
+        validate_policy_translation_review(proposal, None, tampered)
+    inspection = inspect_policy_translation_proposal(proposal)
+    assert inspection["view_type"] == "policy_translation_inspection"
+    assert "schema_version" not in inspection
 
 
 @pytest.mark.parametrize(
@@ -303,6 +444,103 @@ def test_type_invalid_value_and_unavailable_runtime_fact_fail_closed() -> None:
     _restamp_proposal(proposal)
     with pytest.raises(ValueError, match="non-empty string"):
         validate_policy_translation_proposal(proposal)
+
+
+@pytest.mark.parametrize(
+    ("source", "partial", "expected"),
+    [
+        (b"Agents may modify README.md.bak.", "README.md", "larger dotted token"),
+        (b"Agents may modify files under predeploy/.", "deploy/", "begins inside a larger token"),
+    ],
+)
+def test_partial_token_source_literal_extraction_is_rejected(source: bytes, partial: str, expected: str) -> None:
+    proposal = _proposal(source)
+    control = proposal["clauses"][0]["candidate_control"]
+    start = source.index(partial.encode("utf-8"))
+    end = start + len(partial.encode("utf-8"))
+    control["value"] = {
+        "kind": "source_literal",
+        "value": partial,
+        "canonical_value": partial,
+        "start_byte": start,
+        "end_byte": end,
+        "literal_hash": bytes_sha256(source[start:end]),
+    }
+    _restamp_control(control)
+    _restamp_proposal(proposal)
+    with pytest.raises(ValueError, match=expected):
+        validate_policy_translation_proposal(proposal)
+
+
+def test_role_literal_inside_larger_identifier_is_rejected() -> None:
+    source = b"Only xrepository maintainers may make repository changes."
+    draft = _base(source)
+    statement = draft["source_statements"][0]
+    literal = "repository maintainers"
+    start = source.index(literal.encode())
+    control = {
+        "control_type": "acting_role", "actor_kind": "autonomous_agent", "action": "modify",
+        "resource_kind": "repository_change", "fact_id": "actor.role", "operator": "==",
+        "effect": "require", "enforcement_point": "waveframe.guard.repository-change.v1",
+        "value": {"kind": "source_literal", "value": literal, "canonical_value": "repository-maintainer", "start_byte": start, "end_byte": start + len(literal), "literal_hash": bytes_sha256(source[start:start + len(literal)])},
+        "required_runtime_facts": ["actor.role", "actor.subject_kind", "proposal.action", "proposal.resource.kind"],
+    }
+    with pytest.raises(ValueError, match="begins inside a larger token"):
+        create_policy_translation_proposal(
+            source, source_policy_id="repository-policy", source_revision="revision-1",
+            authority_id="repository-authority", authority_version="1.0.0",
+            clauses=[{"start_byte": statement["start_byte"], "end_byte": statement["end_byte"], "status": "enforceable_fully_bound", "candidate_control": control, "unresolved_binding_ids": [], "limitation_code": None, "provider_explanation": None}],
+            organizational_bindings=[], translation_runs=[_run(draft)],
+        )
+
+
+@pytest.mark.parametrize("delimiter", ["`", '"'])
+def test_quoted_and_backtick_delimited_paths_preserve_exact_literal_spans(delimiter: str) -> None:
+    source = f"Agents may modify {delimiter}README.md{delimiter}.".encode()
+    proposal = _proposal(source)
+    value = proposal["clauses"][0]["candidate_control"]["value"]
+    assert source[value["start_byte"]:value["end_byte"]] == f"{delimiter}README.md{delimiter}".encode()
+    assert value["canonical_value"] == f"{delimiter}README.md{delimiter}"
+    validate_policy_translation_proposal(proposal)
+
+
+def test_direct_role_surface_literal_is_deterministically_canonicalized() -> None:
+    source = b"Repository changes may be made only by repository maintainers."
+    draft = _base(source)
+    statement = draft["source_statements"][0]
+    literal = "repository maintainers"
+    start = source.index(literal.encode())
+    control = {
+        "control_type": "acting_role", "actor_kind": "autonomous_agent", "action": "modify",
+        "resource_kind": "repository_change", "fact_id": "actor.role", "operator": "==",
+        "effect": "require", "enforcement_point": "waveframe.guard.repository-change.v1",
+        "value": {"kind": "source_literal", "value": literal, "canonical_value": "repository-maintainer", "start_byte": start, "end_byte": start + len(literal), "literal_hash": bytes_sha256(source[start:start + len(literal)])},
+        "required_runtime_facts": ["actor.role", "actor.subject_kind", "proposal.action", "proposal.resource.kind"],
+    }
+    proposal = create_policy_translation_proposal(
+        source, source_policy_id="repository-policy", source_revision="revision-1",
+        authority_id="repository-authority", authority_version="1.0.0",
+        clauses=[{"start_byte": statement["start_byte"], "end_byte": statement["end_byte"], "status": "enforceable_fully_bound", "candidate_control": control, "unresolved_binding_ids": [], "limitation_code": None, "provider_explanation": None}],
+        organizational_bindings=[], translation_runs=[_run(draft)],
+    )
+    assert validate_policy_translation_proposal(proposal)["valid"] is True
+    assert "repository-maintainer" in render_policy_translation_review(proposal)["clauses"][0]["operational_explanation"]
+
+
+@pytest.mark.parametrize("mutation", ["operator", "fact", "control"])
+def test_catalog_rejects_unreachable_or_inconsistent_advertising(mutation: str) -> None:
+    catalog = get_policy_translation_capability_catalog()
+    if mutation == "operator":
+        catalog["operators"].append("!=")
+    elif mutation == "fact":
+        extra = copy.deepcopy(catalog["facts"][0])
+        extra["fact_id"] = "actor.principal_id"
+        catalog["facts"].append(extra)
+    else:
+        catalog["control_types"][0]["action"] = "push"
+    catalog["catalog_hash"] = canonical_sha256({key: value for key, value in catalog.items() if key != "catalog_hash"})
+    with pytest.raises(ValueError, match="inconsistent|unreachable|released lowerings"):
+        validate_policy_translation_capability_catalog(catalog)
 
     proposal = _proposal()
     control = proposal["clauses"][0]["candidate_control"]
@@ -376,14 +614,14 @@ def _binding_proposal() -> dict:
                 "status": "unresolved",
             }
         ],
-        provider_class="guided_deterministic",
-        provider_identifier=None,
-        translation_template_version="template-1",
-        translation_template_hash=bytes_sha256(b"template"),
-        request_configuration_id="request-config-1",
-        request_configuration_hash=bytes_sha256(b"configuration"),
-        created_at=NOW,
-        candidate_response_bytes=b"guided candidate",
+        translation_runs=[
+            _run(
+                _base(source),
+                provider_class="guided_deterministic",
+                provider_identifier=None,
+                response=b"guided candidate",
+            )
+        ],
     )
 
 
@@ -492,7 +730,7 @@ def test_cross_source_and_cross_authority_substitution_fail_closed() -> None:
     source_substitution["source_policy"]["source_policy_id"] = "other-policy"
     source_substitution["source_policy"]["source_policy_ref"] = "other-policy@revision-1"
     _restamp_proposal(source_substitution)
-    with pytest.raises(ValueError, match="clause identity"):
+    with pytest.raises(ValueError, match="substituted across source|clause identity"):
         validate_policy_translation_proposal(source_substitution)
 
     authority_substitution = copy.deepcopy(proposal)
@@ -546,39 +784,38 @@ def test_changed_human_confirmation_or_late_confirmation_invalidates_approval() 
         )
 
 
-def test_directly_compiled_clause_cannot_be_approved_as_unenforced() -> None:
-    proposal = _proposal()
-    state = None
-    state = apply_policy_translation_disposition(
-        proposal,
-        state,
-        clause_id=proposal["clauses"][0]["clause_id"],
-        disposition="unsupported",
-        reason_code="not-enforceable",
-        acknowledge_unenforced=True,
-        confirmed_by="owner",
-        confirmed_at=NOW,
-    )
-    state = apply_policy_translation_disposition(
-        proposal,
-        state,
-        clause_id=proposal["clauses"][1]["clause_id"],
-        disposition="informational",
-        reason_code="context-only",
-        acknowledge_unenforced=True,
-        confirmed_by="owner",
-        confirmed_at=NOW,
-    )
-    with pytest.raises(ValueError, match="at least one enforced"):
-        _approved(proposal, state)
+def test_direct_clause_downgrade_fails_before_approval_even_with_another_enforced_clause() -> None:
+    proposal = _proposal(b"Agents may modify README.md. Agents may modify CHANGELOG.md.")
+    first = proposal["clauses"][0]
+    first["status"] = "unsupported"
+    first["candidate_control"] = None
+    first["provider_explanation"] = "Provider says unsupported."
+    _restamp_proposal(proposal)
+    # Approval validates the proposal first, so a second truthful enforceable clause
+    # cannot conceal the downgrade of deterministic meaning.
+    with pytest.raises(ValueError, match="deterministically recognized source clause cannot be downgraded"):
+        approve_policy_translation_proposal(
+            proposal,
+            {"not": "trusted"},
+            approved_by="owner",
+            approved_at=NOW,
+        )
 
 
 def test_one_byte_source_mutation_changes_every_downstream_normative_identity() -> None:
     first_proposal = _proposal(b"Agents may modify README.md. Policy overview.\n")
     second_proposal = _proposal(b"Agents may modify READNE.md. Policy overview.\n")
-    first = _final(first_proposal)
-    second = _final(second_proposal)
+    first_confirmation = _confirmed(first_proposal)
+    second_confirmation = _confirmed(second_proposal)
+    first_approval = _approved(first_proposal, first_confirmation)
+    second_approval = _approved(second_proposal, second_confirmation)
+    first = finalize_policy_translation_authority(first_proposal, first_confirmation, first_approval, committed_by="ledger-committer", committed_at="2026-09-03T12:04:00Z", publication_id="publication-1", published_by="ledger-publisher", published_at="2026-09-03T12:05:00Z")
+    second = finalize_policy_translation_authority(second_proposal, second_confirmation, second_approval, committed_by="ledger-committer", committed_at="2026-09-03T12:04:00Z", publication_id="publication-1", published_by="ledger-publisher", published_at="2026-09-03T12:05:00Z")
+    assert first_proposal["source_policy"]["snapshot_hash"] != second_proposal["source_policy"]["snapshot_hash"]
+    assert first_proposal["translation_runs"][0]["run_hash"] != second_proposal["translation_runs"][0]["run_hash"]
     assert first_proposal["proposal_hash"] != second_proposal["proposal_hash"]
+    assert first_confirmation["confirmation_hash"] != second_confirmation["confirmation_hash"]
+    assert first_approval["approval_hash"] != second_approval["approval_hash"]
     for field in (
         "source_snapshot_hash",
         "interpretation_hash",
@@ -595,7 +832,8 @@ def test_v2_publication_independently_validates_without_proposal_evidence() -> N
     result = _final(_proposal())
     bundle = result["authority_bundle"]
     receipt = result["publication_receipt"]
-    assert "provider_evidence" not in json.dumps(bundle)
+    assert "translation_runs" not in json.dumps(bundle)
+    assert "request_bytes_base64" not in json.dumps(bundle)
     assert "policy_translation_proposal" not in json.dumps(bundle)
     assert validate_authority_bundle(bundle)["provenance_complete"] is True
     assert validate_publication_receipt(bundle, receipt)["provenance_complete"] is True
@@ -686,4 +924,5 @@ def test_guard_0161_cold_verification_binds_v2_publication_to_exact_source(
     assert evidence["authority_bundle"]["bundle_hash"] == bundle["bundle_hash"]
     assert evidence["publication_receipt"]["receipt_hash"] == receipt["receipt_hash"]
     assert authority.runtime_integrity_hash
-    assert "provider_evidence" not in json.dumps(evidence)
+    assert "translation_runs" not in json.dumps(evidence)
+    assert "request_bytes_base64" not in json.dumps(evidence)

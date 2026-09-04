@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.8.0.dev0 (development)
+
+- Adds the untrusted policy-translation proposal boundary under development. Ordered
+  translation-run descriptors retain hashes and attribution only; optional raw run
+  evidence is a separate, independently deletable private artifact.
+- Preserves every released v0.6/v0.7 schema and compatibility hash. No v0.7.0
+  distribution artifact is modified or republished.
+
 ## Unreleased
 
 - Added the strict, model-agnostic `policy_translation_proposal.v1` authoring boundary,
