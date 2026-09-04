@@ -888,6 +888,10 @@ def _compile_domain_contract_v2(
 
     compiled = _compile(compiler_input, semantic_commit, draft)
     compiled["schema_version"] = COMPILED_AUTHORITY_CONTRACT_V2
+    # compiled_authority_contract.v2 requires the complete target surface even
+    # when an acting-role-only policy has no path rules.  The legacy compiler
+    # omits empty sections, so normalize only this required v2 representation.
+    compiled.setdefault("target_requirements", {"allow": [], "deny": []})
     compiled["contract_hash"] = "sha256:" + compute_contract_hash(compiled)
     _validate_compiled_authority_contract_v2(compiled)
     return compiled

@@ -161,6 +161,15 @@ An older `authority_bundle.v1` that lacks the profile remains readable but is cl
 
 The deterministic domain-pack workflow preserves the released v1 artifacts above and emits native `authority_bundle.v2` plus `publication_receipt.v2` artifacts. The v2 bundle directly binds exact source bytes and ordered statement spans to either a direct pack parse or exact `policy_mapping_decision.v1`, canonical controlled-language previews, `constraint_ir.v1`, the selected `runtime_fact_schema.v1`, exact `domain_pack.v1` identity/version/hash, semantic commit, standalone `compiled_authority_contract.v2`, authority identity/version, approval, publication manifest, and complete provenance bindings. The v2 compiled contract has a distinct schema identity and current repository-only surface; it does not reuse the structurally different released v1 schema identity.
 
+The additive `policy_translation_proposal.v1` authoring boundary binds exact source bytes,
+complete ordered clauses, a finite capability catalog, raw candidate-response hash, and
+provider attribution. It is untrusted evidence, not runtime authority. Separate canonical
+human confirmation and approval bind every organizational answer, clause disposition,
+unenforced acknowledgement, deterministic review, and exact coverage count. Finalization
+reconstructs these from the source bytes and lowers only the confirmed meaning through
+the unchanged v2 chain. Provider evidence is not embedded in, or required to validate,
+the bundle or receipt.
+
 No v1 artifact is embedded in v2 and no released schema is reinterpreted. The public authority and receipt validators dispatch by schema version: v1 validation is unchanged, while v2 validation reconstructs and cross-checks the complete chain. A byte-only source change may preserve the released semantic-meaning hash while changing the semantic commit's full bundle hash, compiled lineage, v2 bundle, and receipt.
 
 Every unmatched nonempty statement stays pending until an explicit human disposition. Enforced decisions bind one pack control, its bounded selection, full typed meaning, required runtime facts, and generated constraint. Informational and unsupported decisions bind a bounded reason but no fake enforcement fields. All decisions bind mapper identity, canonical UTC time, source document hash, statement ID/span, exact pack reference, and decision hash. Finalization reconstructs and replays them; it neither infers arbitrary prose nor accepts caller-authored rule objects.

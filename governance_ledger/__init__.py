@@ -30,6 +30,17 @@ from governance_ledger.inspect import format_artifact, format_contract_list, lis
 from governance_ledger.lifecycle import transition_review_status
 from governance_ledger.provenance import build_review_provenance
 from governance_ledger.publication_provenance import validate_authority_bundle, validate_publication_receipt
+from governance_ledger.policy_translation import (
+    apply_policy_translation_binding,
+    apply_policy_translation_disposition,
+    approve_policy_translation_proposal,
+    create_policy_translation_proposal,
+    finalize_policy_translation_authority,
+    get_policy_translation_capability_catalog,
+    inspect_policy_translation_proposal,
+    render_policy_translation_review,
+    validate_policy_translation_proposal,
+)
 from governance_ledger.publish import approve_review_file, publish_review_file
 from governance_ledger.registry import load_contract_registry, resolve_authority_ref, update_contract_registry
 from governance_ledger.report import review_constraints, validate_constraints
@@ -74,6 +85,13 @@ __all__ = [
     "interpret_customer_policy_text",
     "interpret_policy_with_domain_pack",
     "apply_policy_mapping_decision",
+    "apply_policy_translation_binding",
+    "apply_policy_translation_disposition",
+    "approve_policy_translation_proposal",
+    "create_policy_translation_proposal",
+    "finalize_policy_translation_authority",
+    "get_policy_translation_capability_catalog",
+    "inspect_policy_translation_proposal",
     "list_builtin_domain_packs",
     "list_contracts",
     "load_contract_registry",
@@ -93,6 +111,8 @@ __all__ = [
     "validate_domain_pack",
     "validate_authority_bundle",
     "validate_publication_receipt",
+    "render_policy_translation_review",
+    "validate_policy_translation_proposal",
     "validate_runtime_fact_compatibility",
     "validate_runtime_fact_schema",
 ]

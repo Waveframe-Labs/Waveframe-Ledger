@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.waveframe.dev/policy_translation_confirmation.v1.json",
+  "title": "Waveframe Policy Translation Human Confirmation v1",
+  "type": "object", "additionalProperties": false,
+  "required": ["schema_version", "proposal_id", "proposal_hash", "source_snapshot_hash", "authority_ref", "binding_resolutions", "clause_decisions", "coverage", "confirmation_hash"],
+  "properties": {
+    "schema_version": {"const": "policy_translation_confirmation.v1"},
+    "proposal_id": {"type": "string", "minLength": 1}, "proposal_hash": {"$ref": "#/$defs/sha256"}, "source_snapshot_hash": {"$ref": "#/$defs/sha256"}, "authority_ref": {"type": "string", "minLength": 3},
+    "binding_resolutions": {"type": "array", "items": {"$ref": "#/$defs/resolution"}},
+    "clause_decisions": {"type": "array", "items": {"$ref": "#/$defs/decision"}},
+    "coverage": {"$ref": "#/$defs/coverage"}, "confirmation_hash": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"}, "utc": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"},
+    "resolution": {"type": "object", "additionalProperties": false, "required": ["binding_id", "binding_type", "value", "confirmed_by", "confirmed_at", "resolution_hash"], "properties": {"binding_id": {"type": "string", "minLength": 1}, "binding_type": {"enum": ["repository_exact_path", "repository_path_prefix", "repository_role"]}, "value": {"type": "string", "minLength": 1}, "confirmed_by": {"type": "string", "minLength": 1}, "confirmed_at": {"$ref": "#/$defs/utc"}, "resolution_hash": {"$ref": "#/$defs/sha256"}}},
+    "decision": {"type": "object", "additionalProperties": false, "required": ["clause_id", "disposition", "reason_code", "human_reason", "acknowledged_unenforced", "confirmed_by", "confirmed_at", "decision_hash"], "properties": {"clause_id": {"type": "string", "minLength": 1}, "disposition": {"enum": ["enforced", "unsupported", "informational"]}, "reason_code": {"type": "string", "minLength": 1}, "human_reason": {"type": ["string", "null"], "minLength": 1, "maxLength": 1024}, "acknowledged_unenforced": {"type": "boolean"}, "confirmed_by": {"type": "string", "minLength": 1}, "confirmed_at": {"$ref": "#/$defs/utc"}, "decision_hash": {"$ref": "#/$defs/sha256"}}},
+    "coverage": {"type": "object", "additionalProperties": false, "required": ["total_clause_count", "enforced_clause_count", "unenforced_clause_count", "unresolved_clause_count", "enforced_clause_ids", "unenforced_clause_ids", "acknowledged_unenforced_clause_ids"], "properties": {"total_clause_count": {"type": "integer", "minimum": 1}, "enforced_clause_count": {"type": "integer", "minimum": 0}, "unenforced_clause_count": {"type": "integer", "minimum": 0}, "unresolved_clause_count": {"type": "integer", "minimum": 0}, "enforced_clause_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string"}}, "unenforced_clause_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string"}}, "acknowledged_unenforced_clause_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string"}}}}
+  }
+}

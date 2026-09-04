@@ -61,7 +61,7 @@ def test_built_wheel_has_guard_only_in_the_explicit_optional_extra(
 
     assert len(guard_requirements) == 1
     assert "extra == \"guard\"" in guard_requirements[0]
-    assert "==0.15.0" in guard_requirements[0]
+    assert "==0.16.1" in guard_requirements[0]
     assert not any(
         line.lower().startswith("requires-dist: waveframe-guard")
         and "extra ==" not in line

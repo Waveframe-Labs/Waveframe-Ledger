@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Added the strict, model-agnostic `policy_translation_proposal.v1` authoring boundary,
+  finite coding-agent capability catalog, canonical human confirmation/approval records,
+  deterministic review rendering, exact clause coverage, and unchanged v2 lowering.
+- Updated the optional Guard compatibility pin to released Guard 0.16.1 for its verified
+  v2 publication and repository runtime-fact boundary.
+
 ## 0.7.0 - 2026-08-31
 
 Waveframe Ledger v0.7.0 introduces the deterministic domain-pack compiler and its native v2 publication artifacts while preserving the released v0.6 compatibility path and all published v1 schema meanings.

@@ -157,6 +157,22 @@ The domain-pack publication path emits standalone `compiled_authority_contract.v
 
 See [Deterministic Domain-Pack Policy Compiler](docs/DOMAIN_PACK_COMPILER.md) for the representation boundaries, guided-mapping workflow, exact public APIs, repository/finance compatibility boundary, and native `authority_bundle.v2` provenance chain.
 
+## Untrusted policy translation proposals
+
+Ledger provides a model-agnostic `policy_translation_proposal.v1` boundary for coding-agent
+engineering policy. A model proposes; a human confirms; Ledger validates, renders, and
+compiles; Guard enforces the existing v2 publication without a model. Exact source bytes
+remain bound through the semantic commitment, contract, bundle, receipt, and Guard
+evidence. Raw provider output and provider explanations are private untrusted evidence,
+never runtime authority or approval text.
+
+The first catalog truthfully supports only autonomous-agent repository modification,
+repository roles, and exact/prefix path allow/deny controls already implemented by the
+released repository compiler and Guard 0.16.1 boundary. Branch, push, pull-request,
+reviewer, threshold, separation-of-duties, environment, and evidence semantics fail
+closed. See [Untrusted Policy Translation Proposals](docs/UNTRUSTED_POLICY_TRANSLATION.md)
+for the APIs, provenance proof, coverage rules, and precise limitations.
+
 ## v0.6 Customer-Policy Compatibility Service
 
 The published v0.6 APIs remain stable compatibility wrappers with their exact supported/rejected behavior and canonical hashes. They do not add domain-pack metadata to legacy artifacts:
@@ -420,6 +436,10 @@ Semantic artifacts also carry immutable input hashes. Authority bundles bind con
 
 Canonical schemas live in [schemas/](schemas/), including:
 
+- [policy_translation_capability_catalog.v1.json](schemas/policy_translation_capability_catalog.v1.json): immutable finite coding-agent capability boundary.
+- [policy_translation_proposal.v1.json](schemas/policy_translation_proposal.v1.json): strict exact-source-bound untrusted translation proposal.
+- [policy_translation_confirmation.v1.json](schemas/policy_translation_confirmation.v1.json): bounded human bindings, clause dispositions, acknowledgements, and coverage.
+- [policy_translation_approval.v1.json](schemas/policy_translation_approval.v1.json): approval binding proposal, confirmation, review, source, catalog, authority, and coverage.
 - [domain_pack.v1.json](schemas/domain_pack.v1.json): immutable, versioned deterministic domain-pack contracts.
 - [runtime_fact_schema.v1.json](schemas/runtime_fact_schema.v1.json): exact proposal/derived runtime fact contracts.
 - [constraint_ir.v1.json](schemas/constraint_ir.v1.json): Waveframe-owned typed enforcement Constraint IR.

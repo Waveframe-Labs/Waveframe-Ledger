@@ -20,7 +20,7 @@ dependencies = [
 
 [project.optional-dependencies]
 guard = [
-    "waveframe-guard==0.15.0"
+    "waveframe-guard==0.16.1"
 ]
 dev = [
     "pytest>=7",
