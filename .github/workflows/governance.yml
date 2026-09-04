@@ -29,17 +29,17 @@ jobs:
       - name: Run tests
         run: python -m pytest -q
 
-      - name: Install released Guard compatibility target
+      - name: Install Guard 0.16.1 for supplemental runtime evidence only
         # Guard 0.16.1 declares Ledger <0.8.0, which intentionally excludes this
         # 0.8.0.dev0 checkout. Install its runtime dependencies normally and the
-        # exact released Guard wheel without dependency resolution so this job can
-        # still prove binary/runtime compatibility. A Guard metadata widening is a
-        # separately owned release requirement.
+        # exact released Guard wheel without dependency resolution. This is explicitly
+        # supplemental runtime evidence, not package/dependency compatibility. A new
+        # Guard release and clean resolved-extra installation are Ledger 0.8 blockers.
         run: |
           python -m pip install cricore cricore-proposal-normalizer requests
           python -m pip install --no-deps waveframe-guard==0.16.1
 
-      - name: Test released Guard compatibility
+      - name: Test supplemental Guard 0.16.1 runtime verification
         run: python -m pytest tests/test_guard_optional_compatibility.py -q
 
       - name: Generate draft governance artifacts

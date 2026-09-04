@@ -42,6 +42,9 @@ _CANONICAL_UTC = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z\Z")
 _DECIMAL = re.compile(r"-?(?:0|[1-9]\d*)(?:\.\d*[1-9])?\Z")
 _INFORMATIONAL_REASONS = {"context-only", "descriptive", "non-policy", "other"}
 _UNSUPPORTED_REASONS = {"outside-domain", "not-enforceable", "deferred", "other"}
+_MULTI_EXACT_ALLOW = re.compile(
+    r"Agents may modify ([^\s]+) and ([^\s]+)\.\Z"
+)
 
 
 def interpret_policy_with_domain_pack(
@@ -88,6 +91,37 @@ def interpret_policy_with_domain_pack(
                 ]
             except ValueError:
                 direct_constraints = []
+        if not direct_constraints:
+            statement_text = exact[
+                source_statement["start_byte"] : source_statement["end_byte"]
+            ].decode("utf-8").strip()
+            multi_match = _MULTI_EXACT_ALLOW.fullmatch(statement_text)
+            if multi_match:
+                try:
+                    values = list(multi_match.groups())
+                    for value in values:
+                        validate_format_value(
+                            REPOSITORY_PATH_FORMAT_ID,
+                            value,
+                            match_mode="exact",
+                            label="repository exact path",
+                        )
+                    direct_constraints = [
+                        _finalize_constraint(
+                            _constraint(
+                                action="modify",
+                                resource={
+                                    "kind": "repository_path",
+                                    "match": "exact",
+                                    "value": value,
+                                },
+                                effect="allow",
+                            )
+                        )
+                        for value in values
+                    ]
+                except ValueError:
+                    direct_constraints = []
         statement = {
             "statement_id": source_statement["statement_id"],
             "start_byte": source_statement["start_byte"],

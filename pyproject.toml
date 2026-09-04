@@ -19,13 +19,17 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-guard = [
-    "waveframe-guard==0.16.1"
-]
 dev = [
     "pytest>=7",
     "jsonschema>=4"
 ]
+
+[tool.waveframe.guard-compatibility]
+status = "release-blocked"
+last_resolvable_ledger = "0.7.0"
+last_resolvable_guard = "0.16.1"
+guard_ledger_requirement = ">=0.7.0,<0.8.0"
+required_before_ledger_0_8_release = "Release a Guard version tested with Ledger 0.8, restore the guard extra to that exact version, and pass clean extra installation plus pip check."
 
 [project.scripts]
 governance-ledger = "governance_ledger.cli:main"

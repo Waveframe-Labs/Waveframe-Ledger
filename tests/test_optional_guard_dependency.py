@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+import tomllib
 import venv
 import zipfile
 
@@ -43,7 +44,7 @@ def built_ledger_wheel(tmp_path_factory: pytest.TempPathFactory) -> Path:
     return wheels[0]
 
 
-def test_built_wheel_has_guard_only_in_the_explicit_optional_extra(
+def test_built_wheel_does_not_advertise_an_unsatisfiable_guard_extra(
     built_ledger_wheel: Path,
 ) -> None:
     with zipfile.ZipFile(built_ledger_wheel) as archive:
@@ -59,14 +60,23 @@ def test_built_wheel_has_guard_only_in_the_explicit_optional_extra(
         if line.lower().startswith("requires-dist: waveframe-guard")
     ]
 
-    assert len(guard_requirements) == 1
-    assert "extra == \"guard\"" in guard_requirements[0]
-    assert "==0.16.1" in guard_requirements[0]
-    assert not any(
-        line.lower().startswith("requires-dist: waveframe-guard")
-        and "extra ==" not in line
-        for line in metadata.splitlines()
-    )
+    assert guard_requirements == []
+
+
+def test_guard_0161_dependency_range_is_an_explicit_ledger_08_release_blocker() -> None:
+    project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    assert "guard" not in project["project"]["optional-dependencies"]
+    blocker = project["tool"]["waveframe"]["guard-compatibility"]
+    assert blocker == {
+        "status": "release-blocked",
+        "last_resolvable_ledger": "0.7.0",
+        "last_resolvable_guard": "0.16.1",
+        "guard_ledger_requirement": ">=0.7.0,<0.8.0",
+        "required_before_ledger_0_8_release": (
+            "Release a Guard version tested with Ledger 0.8, restore the guard extra "
+            "to that exact version, and pass clean extra installation plus pip check."
+        ),
+    }
 
 
 def test_clean_environment_installs_and_runs_core_without_guard(
@@ -151,7 +161,7 @@ def test_missing_evaluator_and_guard_raises_actionable_ledger_error(monkeypatch)
 
     with pytest.raises(
         GuardIntegrationUnavailableError,
-        match=r'pip install "governance-ledger\[guard\]"',
+        match=r"does not advertise a Guard extra",
     ) as caught:
         replay_admissibility(
             authority_contract=_authority_contract(),

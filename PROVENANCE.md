@@ -169,11 +169,25 @@ exact request/response hashes, canonical timestamps, and ordering. It contains n
 provider bytes and is untrusted evidence, not runtime authority. Optional raw bytes use
 the separate private `policy_translation_run_evidence.v1` artifact and may be deleted
 without invalidating any normative artifact. Separate canonical
-human confirmation and approval bind every organizational answer, clause disposition,
-unenforced acknowledgement, deterministic review, and exact coverage count. Finalization
+human confirmation and approval bind every organizational answer, each candidate-control
+confirmation, clause coverage decision, residual acknowledgement, deterministic review,
+and exact clause/control coverage count. Finalization
 reconstructs these from the source bytes and lowers only the confirmed meaning through
 the unchanged v2 chain. Proposal and raw provider evidence are not embedded in, or
 required to validate, the bundle or receipt.
+
+Each clause preserves its original source visibly and carries an ordered zero-or-more
+candidate-control list. Each source literal in each control binds an exact contained byte
+span and hash. Partial or entirely unsupported meaning binds exact residual source spans.
+Ledger proves this byte provenance and the exact human-confirmed mappings. It does not
+claim to mathematically prove semantic completeness for arbitrary English; the human
+explicitly confirms clause coverage.
+
+The proposal schema is capability-structural. Exact catalog ID/version/hash resolves
+only through Ledger's internal immutable registry, and every advertised fact, operator,
+effect, binding type, and enforcement point must be reachable from a released control.
+Customers cannot inject or select a catalog. Ordered translation runs are non-overlapping
+and must complete before confirmation and approval.
 
 No v1 artifact is embedded in v2 and no released schema is reinterpreted. The public authority and receipt validators dispatch by schema version: v1 validation is unchanged, while v2 validation reconstructs and cross-checks the complete chain. A byte-only source change may preserve the released semantic-meaning hash while changing the semantic commit's full bundle hash, compiled lineage, v2 bundle, and receipt.
 

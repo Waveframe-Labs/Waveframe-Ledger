@@ -32,6 +32,7 @@ from governance_ledger.provenance import build_review_provenance
 from governance_ledger.publication_provenance import validate_authority_bundle, validate_publication_receipt
 from governance_ledger.policy_translation import (
     apply_policy_translation_binding,
+    apply_policy_translation_control_confirmation,
     apply_policy_translation_disposition,
     approve_policy_translation_proposal,
     create_policy_translation_proposal,
@@ -41,6 +42,7 @@ from governance_ledger.policy_translation import (
     get_policy_translation_capability_catalog,
     inspect_policy_translation_proposal,
     render_policy_translation_review,
+    resolve_policy_translation_capability_catalog,
     validate_policy_translation_capability_catalog,
     validate_policy_translation_proposal,
     validate_policy_translation_review,
@@ -91,6 +93,7 @@ __all__ = [
     "interpret_policy_with_domain_pack",
     "apply_policy_mapping_decision",
     "apply_policy_translation_binding",
+    "apply_policy_translation_control_confirmation",
     "apply_policy_translation_disposition",
     "approve_policy_translation_proposal",
     "create_policy_translation_proposal",
@@ -119,6 +122,7 @@ __all__ = [
     "validate_authority_bundle",
     "validate_publication_receipt",
     "render_policy_translation_review",
+    "resolve_policy_translation_capability_catalog",
     "validate_policy_translation_capability_catalog",
     "validate_policy_translation_proposal",
     "validate_policy_translation_review",

@@ -16,8 +16,11 @@ Ledger does not call a provider, load provider credentials, access the network, 
 provider explanation as approval text. The proposal contains an ordered, non-empty,
 hash-chained `translation_runs` collection. Each descriptor binds the exact source,
 catalog, provider class and model/deployment attribution, template, request
-configuration, request hash, response hash, canonical timestamps, sequence, and prior
-run hash. It contains no raw request or response bytes. Schema validity proves only
+configuration, request hash, response hash, optional explanation hash, canonical
+timestamps, sequence, and prior run hash. A chained run cannot start before its
+predecessor completes, and every run must complete before human confirmation and
+approval. The proposal contains no raw request, response, or provider-written
+explanation. Schema validity proves only
 structural and capability confinement; it does not prove that a provider understood the
 policy.
 
@@ -58,11 +61,15 @@ commitment, compiled contract, bundle, and receipt.
 
 The public APIs keep trust transitions explicit:
 
-- `get_policy_translation_capability_catalog()` returns the immutable finite catalog.
+- `get_policy_translation_capability_catalog()` returns the aggregate immutable catalog
+  currently enforceable by Waveframe. Customers do not choose a catalog or profile.
+- `resolve_policy_translation_capability_catalog(...)` resolves an exact catalog
+  ID/version/hash only from Ledger's trusted registry. Callers cannot inject catalogs.
 - `validate_policy_translation_capability_catalog(...)` rejects unreachable or
   internally inconsistent advertised capabilities.
 - `create_policy_translation_run(...)` creates one ordered hash-only attribution
-  descriptor.
+  descriptor against Ledger's aggregate trusted catalog; it accepts no caller-selected
+  catalog.
 - `create_policy_translation_run_evidence(...)` and
   `validate_policy_translation_run_evidence(...)` manage optional private raw evidence
   outside the proposal.
@@ -74,8 +81,10 @@ The public APIs keep trust transitions explicit:
 - `inspect_policy_translation_proposal(...)` reports exact coverage and unresolved work.
 - `apply_policy_translation_binding(...)` accepts one human answer of a declared bounded
   type.
-- `apply_policy_translation_disposition(...)` confirms one control or explicitly
-  acknowledges one unenforced clause.
+- `apply_policy_translation_control_confirmation(...)` confirms one candidate control;
+  every control in a clause requires its own confirmation.
+- `apply_policy_translation_disposition(...)` confirms the clause-level semantic
+  coverage decision and explicitly acknowledges any residual unsupported meaning.
 - `render_policy_translation_review(...)` derives operational text from the validated
   control. Provider explanations are never included.
 - `validate_policy_translation_review(...)` validates the strict
@@ -86,7 +95,8 @@ The public APIs keep trust transitions explicit:
   lowers through the existing v2 publication implementation.
 
 Proposal, confirmation, and approval objects are immutable canonical values. Applying a
-binding or disposition returns a new confirmation rather than mutating its input.
+binding, control confirmation, or coverage decision returns a new confirmation rather
+than mutating its input.
 
 ## Current truthful capability coverage
 
@@ -114,10 +124,16 @@ domain-pack vocabulary.
 Organizational roles or paths not literally established by the source remain typed,
 unresolved questions until a human supplies a value accepted by the catalog.
 
-The catalog derives its advertised facts, operators, effects, binding types, and
-enforcement points from the reachable control definitions. It advertises only `==` and
-`starts_with`; `!=` is intentionally absent because no candidate control and v2 lowering
-use it.
+The proposal schema uses portable structural identifiers; it does not encode the three
+current control types, fact IDs, operators, effects, binding types, or enforcement point.
+Semantic availability comes only from resolving the proposal's exact catalog reference
+through Ledger's internal trusted registry. The initial registry contains only the
+built-in repository catalog. The catalog derives its advertised facts, operators,
+effects, binding types, and enforcement points from reachable control definitions. It
+advertises only `==` and `starts_with`; `!=` is absent because no candidate control and
+v2 lowering use it. Adding a trusted capability later therefore does not require
+`policy_translation_proposal.v2`, but it still requires released compiler lowering and
+Guard runtime support before the aggregate catalog may advertise it.
 
 The current catalog fails closed for human/service actors, repository identity, branch,
 push, pull-request open/approve/merge, changed-file count, reviewer identity/team,
@@ -133,28 +149,54 @@ catalog until both sides exist under immutable identities and hashes.
 Guard 0.16.1 independently validates the final v2 publication, but its released Python
 package metadata constrains Ledger to `<0.8.0` and consequently excludes this
 `0.8.0.dev0` checkout. Ledger's compatibility job installs that exact released Guard
-wheel without dependency resolution to prove runtime behavior. A future Guard release
-must widen its Ledger range only after its own compatibility review; this repository
-does not alter or work around that published metadata for consumers.
+wheel without dependency resolution as supplemental runtime evidence only. It is not
+package compatibility. Ledger 0.8 publication is blocked until a separately reviewed
+Guard release widens and tests the range, Ledger restores an extra pinned to that
+release, and a clean `pip install "governance-ledger[guard]"` plus `pip check` passes.
 
 ## Coverage and partial publication
 
-Every clause has one proposal status:
+Every clause has an ordered `candidate_controls` array containing zero or more controls.
+Each control carries its own exact source-literal span and hash. Duplicate or
+contradictory controls fail validation. Every clause also has exactly one proposal
+coverage decision:
 
-- `enforceable_fully_bound`;
-- `needs_concrete_answer`;
-- `integration_dependent`;
-- `unsupported`;
+- `fully_represented`;
+- `partially_represented`, with exact residual unsupported spans;
+- `entirely_unsupported`, with exact residual unsupported spans;
 - `informational`.
 
 Proposal validation reconstructs deterministic domain interpretation. A clause already
-recognized as direct must contain the exact corresponding control and executable
-semantics; neither provider output nor a human disposition may downgrade it. Proposal
-status is not approval. Every clause still requires a human disposition.
-Publication fails if a binding or clause is unresolved, if there is no enforceable
-control, or if an unenforced clause lacks explicit acknowledgement. The confirmation,
-approval, and finalization result report exact total, enforced, unenforced, unresolved,
-and acknowledged clause counts and identities.
+recognized as direct must contain every corresponding control in deterministic order
+and exact executable semantics; neither provider output nor a human decision may omit
+one or downgrade the clause. For arbitrary English outside that deterministic grammar,
+Ledger cannot mathematically prove that an untrusted translator extracted every
+meaning. Ledger proves source preservation, capability confinement, and the exact
+mapping the human reviewed; semantic completeness is explicitly human-confirmed.
+
+A clause is not fully represented merely because one meaning was mapped. Partial
+publication requires exact residual spans and the approver's explicit acknowledgement.
+Publication fails if a binding, control confirmation, or clause decision is unresolved,
+if there is no confirmed enforceable control, or if residual/unsupported meaning lacks
+acknowledgement. Coverage reports exact clause and control totals and identities.
+Because a partially represented clause contains both enforced and residual unenforced
+meaning, it truthfully appears in both the enforced-clause and unenforced-clause sets;
+the dedicated partial count removes any ambiguity.
+
+The unchanged v2 path can publish a deterministic source statement that produces
+multiple native constraints (for example, `Agents may modify README.md and
+CHANGELOG.md.`). Released `policy_mapping_decision.v1` can encode only one human-mapped
+control for an otherwise pending statement. Consequently, finalization fails closed if
+an arbitrary pending clause contains multiple human-mapped controls; representing that
+approval meaning requires a separately reviewed normative publication extension, not a
+silent change to v2.
+
+The same v2 limitation applies to a pending clause that mixes an enforced mapping with
+residual unsupported meaning: released `policy_mapping_decision.v1` classifies the whole
+statement with one disposition. Ledger can validate, render, and approve the explicit
+partial boundary, but finalization fails closed because v2 cannot truthfully preserve
+that mixed normative meaning. Publication requires a separately reviewed additive
+normative schema/path; Ledger does not silently label the entire clause enforced.
 
 Released `authority_bundle.v2`, `publication_receipt.v2`,
 `compiled_authority_contract.v2`, all v1 schemas, and the v0.6 compatibility path are

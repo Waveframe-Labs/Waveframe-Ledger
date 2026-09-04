@@ -40,11 +40,13 @@ POLICY_TRANSLATION_RUN_EVIDENCE_V1 = "policy_translation_run_evidence.v1"
 _CATALOG_ID = "waveframe.coding-agent.repository-change"
 _CATALOG_VERSION = "1.0.0"
 _ENFORCEMENT_POINT = "waveframe.guard.repository-change.v1"
-_STATUSES = {
-    "enforceable_fully_bound",
-    "needs_concrete_answer",
-    "integration_dependent",
-    "unsupported",
+_TRUSTED_CATALOG_REGISTRY = {
+    (_CATALOG_ID, _CATALOG_VERSION): "builtin_repository_change",
+}
+_CLAUSE_COVERAGE_STATUSES = {
+    "fully_represented",
+    "partially_represented",
+    "entirely_unsupported",
     "informational",
 }
 _LIMITATIONS = {
@@ -55,6 +57,7 @@ _LIMITATIONS = {
     "unavailable_enforcement_point",
     "unavailable_binding_type",
     "cross_repository_adapter_required",
+    "pull_request_approval_not_supported",
     "other",
 }
 _KNOWN_FAIL_CLOSED_CAPABILITIES = [
@@ -125,6 +128,35 @@ _IDENTITY = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,255}\Z")
 
 
 def get_policy_translation_capability_catalog() -> dict[str, Any]:
+    """Return the aggregate currently enforceable catalog without customer selection."""
+    return _build_repository_capability_catalog()
+
+
+def resolve_policy_translation_capability_catalog(
+    catalog_ref: dict[str, Any],
+) -> dict[str, Any]:
+    """Resolve only immutable catalogs registered in this Ledger installation."""
+    _object(catalog_ref, "capability catalog reference")
+    _exact(
+        catalog_ref,
+        {"catalog_id", "catalog_version", "catalog_hash"},
+        "capability catalog reference",
+    )
+    key = (catalog_ref["catalog_id"], catalog_ref["catalog_version"])
+    if _TRUSTED_CATALOG_REGISTRY.get(key) != "builtin_repository_change":
+        raise ValueError("capability catalog is not registered by this Ledger installation")
+    catalog = _build_repository_capability_catalog()
+    expected = {
+        "catalog_id": catalog["catalog_id"],
+        "catalog_version": catalog["catalog_version"],
+        "catalog_hash": catalog["catalog_hash"],
+    }
+    if catalog_ref != expected:
+        raise ValueError("registered capability catalog hash is unavailable")
+    return catalog
+
+
+def _build_repository_capability_catalog() -> dict[str, Any]:
     """Return the immutable capabilities implemented by Ledger and Guard v0.16.1.
 
     The catalog is intentionally the intersection of the repository-change compiler
@@ -268,14 +300,17 @@ def validate_policy_translation_capability_catalog(catalog: dict[str, Any]) -> d
 
 def create_policy_translation_run(
     *, source_policy_ref: str, source_revision: str, source_snapshot_hash: str,
-    capability_catalog: dict[str, str], provider_class: str,
-    provider_identifier: str | None, translation_template_version: str,
+    provider_class: str, provider_identifier: str | None, translation_template_version: str,
     translation_template_hash: str, request_configuration_id: str,
     request_configuration_hash: str, request_hash: str, response_hash: str,
     created_at: str, completed_at: str, sequence_number: int,
-    previous_run_hash: str | None,
+    previous_run_hash: str | None, explanation_hash: str | None = None,
 ) -> dict[str, Any]:
-    """Create one hash-chained attribution descriptor; no raw bytes are retained."""
+    """Create one hash-chained run against Ledger's aggregate trusted catalog."""
+    catalog = get_policy_translation_capability_catalog()
+    capability_catalog = {
+        key: catalog[key] for key in ("catalog_id", "catalog_version", "catalog_hash")
+    }
     core: dict[str, Any] = {
         "sequence_number": sequence_number,
         "source_policy_ref": source_policy_ref,
@@ -290,21 +325,31 @@ def create_policy_translation_run(
         "request_configuration_hash": request_configuration_hash,
         "request_hash": request_hash,
         "response_hash": response_hash,
+        "explanation_hash": explanation_hash,
         "created_at": created_at,
         "completed_at": completed_at,
         "previous_run_hash": previous_run_hash,
     }
     result = {"run_id": "translation-run-" + canonical_sha256(core).removeprefix("sha256:"), **core}
     result["run_hash"] = artifact_hash(result, "run_hash")
+    _validate_run_descriptor_intrinsic(result)
     return result
 
 
 def create_policy_translation_run_evidence(
-    run: dict[str, Any], *, request_bytes: bytes, response_bytes: bytes
+    run: dict[str, Any], *, request_bytes: bytes, response_bytes: bytes,
+    provider_explanation: str | None = None,
 ) -> dict[str, Any]:
     """Create optional, private raw evidence that may be deleted independently."""
     if not isinstance(request_bytes, bytes) or not isinstance(response_bytes, bytes):
         raise ValueError("run evidence requires exact request and response bytes")
+    _validate_run_descriptor_intrinsic(run)
+    if provider_explanation is not None and (
+        not isinstance(provider_explanation, str)
+        or not provider_explanation.strip()
+        or len(provider_explanation) > 4096
+    ):
+        raise ValueError("provider explanation must be null or bounded non-empty text")
     result = {
         "schema_version": POLICY_TRANSLATION_RUN_EVIDENCE_V1,
         "run_id": run.get("run_id"),
@@ -313,6 +358,12 @@ def create_policy_translation_run_evidence(
         "response_bytes_base64": base64.b64encode(response_bytes).decode("ascii"),
         "request_hash": bytes_sha256(request_bytes),
         "response_hash": bytes_sha256(response_bytes),
+        "provider_explanation": provider_explanation,
+        "explanation_hash": (
+            bytes_sha256(provider_explanation.encode("utf-8"))
+            if provider_explanation is not None
+            else None
+        ),
         "trust_posture": "private_untrusted_retention_evidence",
     }
     result["evidence_hash"] = artifact_hash(result, "evidence_hash")
@@ -323,7 +374,8 @@ def create_policy_translation_run_evidence(
 def validate_policy_translation_run_evidence(run: dict[str, Any], evidence: dict[str, Any]) -> dict[str, Any]:
     """Validate optional raw evidence against a run descriptor without making it authority."""
     _object(evidence, "run evidence")
-    _exact(evidence, {"schema_version", "run_id", "run_hash", "request_bytes_base64", "response_bytes_base64", "request_hash", "response_hash", "trust_posture", "evidence_hash"}, "run evidence")
+    _validate_run_descriptor_intrinsic(run)
+    _exact(evidence, {"schema_version", "run_id", "run_hash", "request_bytes_base64", "response_bytes_base64", "request_hash", "response_hash", "provider_explanation", "explanation_hash", "trust_posture", "evidence_hash"}, "run evidence")
     if evidence["schema_version"] != POLICY_TRANSLATION_RUN_EVIDENCE_V1:
         raise ValueError(f"run evidence must be {POLICY_TRANSLATION_RUN_EVIDENCE_V1}")
     if evidence["run_id"] != run.get("run_id") or evidence["run_hash"] != run.get("run_hash"):
@@ -334,6 +386,15 @@ def validate_policy_translation_run_evidence(run: dict[str, Any], evidence: dict
         raise ValueError("run request evidence hash is invalid")
     if bytes_sha256(response) != evidence["response_hash"] or evidence["response_hash"] != run.get("response_hash"):
         raise ValueError("run response evidence hash is invalid")
+    explanation = evidence["provider_explanation"]
+    if explanation is None:
+        expected_explanation_hash = None
+    else:
+        if not isinstance(explanation, str) or not explanation.strip() or len(explanation) > 4096:
+            raise ValueError("provider explanation must be null or bounded non-empty text")
+        expected_explanation_hash = bytes_sha256(explanation.encode("utf-8"))
+    if evidence["explanation_hash"] != expected_explanation_hash or run.get("explanation_hash") != expected_explanation_hash:
+        raise ValueError("run provider-explanation hash is invalid")
     if evidence["trust_posture"] != "private_untrusted_retention_evidence":
         raise ValueError("raw run evidence must remain private and untrusted")
     if evidence["evidence_hash"] != artifact_hash(evidence, "evidence_hash"):
@@ -373,11 +434,11 @@ def create_policy_translation_proposal(
             {
                 "start_byte",
                 "end_byte",
-                "status",
-                "candidate_control",
+                "coverage_status",
+                "candidate_controls",
                 "unresolved_binding_ids",
                 "limitation_code",
-                "provider_explanation",
+                "residual_unsupported_spans",
             },
             f"clauses[{index}]",
         )
@@ -394,9 +455,37 @@ def create_policy_translation_proposal(
             "end_byte": end,
             "clause_hash": statement_hash,
         }
-        candidate = copy.deepcopy(item["candidate_control"])
-        if isinstance(candidate, dict) and "candidate_control_id" not in candidate:
-            candidate["candidate_control_id"] = "candidate-control-" + canonical_sha256(candidate).removeprefix("sha256:")
+        candidates = copy.deepcopy(item["candidate_controls"])
+        if not isinstance(candidates, list):
+            raise ValueError(f"clauses[{index}].candidate_controls must be an array")
+        for candidate in candidates:
+            if isinstance(candidate, dict) and "candidate_control_id" not in candidate:
+                candidate["candidate_control_id"] = "candidate-control-" + canonical_sha256(candidate).removeprefix("sha256:")
+        residual_spans = []
+        if not isinstance(item["residual_unsupported_spans"], list):
+            raise ValueError(f"clauses[{index}].residual_unsupported_spans must be an array")
+        for residual_index, residual in enumerate(item["residual_unsupported_spans"]):
+            _object(residual, f"clauses[{index}].residual_unsupported_spans[{residual_index}]")
+            _exact(residual, {"start_byte", "end_byte"}, f"clauses[{index}].residual_unsupported_spans[{residual_index}]")
+            residual_start, residual_end = residual["start_byte"], residual["end_byte"]
+            residual_bytes = source_bytes[residual_start:residual_end] if isinstance(residual_start, int) and isinstance(residual_end, int) and 0 <= residual_start < residual_end <= len(source_bytes) else b""
+            residual_core = {
+                "clause_hash": statement_hash,
+                "index": residual_index,
+                "start_byte": residual_start,
+                "end_byte": residual_end,
+                "residual_hash": bytes_sha256(residual_bytes),
+            }
+            residual_spans.append(
+                {
+                    "residual_id": "policy-residual-" + canonical_sha256(residual_core).removeprefix("sha256:"),
+                    "index": residual_index,
+                    "start_byte": residual_start,
+                    "end_byte": residual_end,
+                    "residual_bytes_base64": base64.b64encode(residual_bytes).decode("ascii"),
+                    "residual_hash": bytes_sha256(residual_bytes),
+                }
+            )
         normalized_clauses.append(
             {
                 "clause_id": "policy-clause-" + canonical_sha256(clause_core).removeprefix("sha256:"),
@@ -405,11 +494,11 @@ def create_policy_translation_proposal(
                 "end_byte": end,
                 "clause_bytes_base64": base64.b64encode(piece).decode("ascii"),
                 "clause_hash": statement_hash,
-                "status": item["status"],
-                "candidate_control": candidate,
+                "coverage_status": item["coverage_status"],
+                "candidate_controls": candidates,
                 "unresolved_binding_ids": copy.deepcopy(item["unresolved_binding_ids"]),
                 "limitation_code": item["limitation_code"],
-                "provider_explanation": item["provider_explanation"],
+                "residual_unsupported_spans": residual_spans,
             }
         )
     catalog = get_policy_translation_capability_catalog()
@@ -494,14 +583,10 @@ def validate_policy_translation_proposal(proposal: dict[str, Any]) -> dict[str, 
     if authority["authority_ref"] != f"{authority['authority_id']}@{authority['authority_version']}":
         raise ValueError("authority identity and version are inconsistent")
 
-    catalog = get_policy_translation_capability_catalog()
+    catalog = resolve_policy_translation_capability_catalog(proposal["capability_catalog"])
     expected_ref = {
-        "catalog_id": catalog["catalog_id"],
-        "catalog_version": catalog["catalog_version"],
-        "catalog_hash": catalog["catalog_hash"],
+        key: catalog[key] for key in ("catalog_id", "catalog_version", "catalog_hash")
     }
-    if proposal["capability_catalog"] != expected_ref:
-        raise ValueError("proposal capability-catalog identity, version, or hash is unavailable")
     _validate_translation_runs(proposal["translation_runs"], source, expected_ref)
 
     # Re-run the released source partitioner.  This makes omission, duplication,
@@ -524,10 +609,16 @@ def validate_policy_translation_proposal(proposal: dict[str, Any]) -> dict[str, 
     if len(clauses) != len(expected_statements):
         raise ValueError("proposal omits or duplicates a source clause")
 
-    bindings = _binding_index(proposal["organizational_bindings"])
+    bindings = _binding_index(proposal["organizational_bindings"], catalog)
     used_bindings: set[str] = set()
-    status_counts = {status: 0 for status in sorted(_STATUSES)}
+    status_counts = {status: 0 for status in sorted(_CLAUSE_COVERAGE_STATUSES)}
     for index, (clause, statement) in enumerate(zip(clauses, expected_statements)):
+        if (
+            statement["classification"] == "direct"
+            and isinstance(clause, dict)
+            and clause.get("coverage_status") != "fully_represented"
+        ):
+            raise ValueError("deterministically recognized source clause cannot be downgraded")
         _validate_clause(
             clause,
             index=index,
@@ -536,15 +627,17 @@ def validate_policy_translation_proposal(proposal: dict[str, Any]) -> dict[str, 
             exact_source=exact,
             bindings=bindings,
             used_bindings=used_bindings,
+            catalog=catalog,
         )
         if statement["classification"] == "direct":
-            if clause["status"] != "enforceable_fully_bound":
-                raise ValueError("deterministically recognized source clause cannot be downgraded")
-            actual = _control_semantics(clause["candidate_control"], {})
+            actual = [
+                _control_semantics(control, {})
+                for control in clause["candidate_controls"]
+            ]
             expected = _direct_statement_semantics(draft, statement["statement_id"])
             if actual != expected:
-                raise ValueError("candidate control contradicts the deterministic executable constraint")
-        status_counts[clause["status"]] += 1
+                raise ValueError("candidate controls do not completely match deterministic executable semantics")
+        status_counts[clause["coverage_status"]] += 1
     if used_bindings != set(bindings):
         raise ValueError("organizational bindings must each be referenced by exactly one candidate control")
     return {
@@ -569,13 +662,18 @@ def inspect_policy_translation_proposal(
     validation = validate_policy_translation_proposal(proposal)
     state = _validate_confirmation(proposal, confirmation or _empty_confirmation(proposal))
     resolutions = {item["binding_id"] for item in state["binding_resolutions"]}
-    decisions = {item["clause_id"]: item for item in state["clause_decisions"]}
+    decisions = {
+        item["clause_id"]: item for item in state["clause_coverage_decisions"]
+    }
+    confirmed_controls = {
+        item["candidate_control_id"] for item in state["control_confirmations"]
+    }
     unresolved_bindings = [
         {
             "binding_id": item["binding_id"],
             "binding_type": item["binding_type"],
             "symbol": item["symbol"],
-            "question": item["question"],
+            "question": _render_binding_question(item["binding_type"]),
         }
         for item in proposal["organizational_bindings"]
         if item["binding_id"] not in resolutions
@@ -583,7 +681,12 @@ def inspect_policy_translation_proposal(
     unresolved_clauses = [
         {
             "clause_id": item["clause_id"],
-            "status": item["status"],
+            "coverage_status": item["coverage_status"],
+            "unconfirmed_control_ids": [
+                control["candidate_control_id"]
+                for control in item["candidate_controls"]
+                if control["candidate_control_id"] not in confirmed_controls
+            ],
             "unresolved_binding_ids": [
                 binding for binding in item["unresolved_binding_ids"] if binding not in resolutions
             ],
@@ -598,7 +701,8 @@ def inspect_policy_translation_proposal(
         "unresolved_bindings": unresolved_bindings,
         "unresolved_clauses": unresolved_clauses,
         "publication_ready": state["coverage"]["unresolved_clause_count"] == 0
-        and state["coverage"]["enforced_clause_count"] > 0,
+        and state["coverage"]["unresolved_control_count"] == 0
+        and state["coverage"]["confirmed_control_count"] > 0,
     }
 
 
@@ -614,7 +718,8 @@ def apply_policy_translation_binding(
     """Apply one human-supplied value through its declared bounded binding type."""
     validate_policy_translation_proposal(proposal)
     state = _validate_confirmation(proposal, confirmation or _empty_confirmation(proposal))
-    bindings = _binding_index(proposal["organizational_bindings"])
+    catalog = resolve_policy_translation_capability_catalog(proposal["capability_catalog"])
+    bindings = _binding_index(proposal["organizational_bindings"], catalog)
     if binding_id not in bindings:
         raise ValueError("unknown organizational binding")
     if any(item["binding_id"] == binding_id for item in state["binding_resolutions"]):
@@ -634,68 +739,123 @@ def apply_policy_translation_binding(
     return _finalize_confirmation(proposal, result)
 
 
+def apply_policy_translation_control_confirmation(
+    proposal: dict[str, Any],
+    confirmation: dict[str, Any] | None,
+    *,
+    clause_id: str,
+    candidate_control_id: str,
+    confirmed_by: str,
+    confirmed_at: str,
+) -> dict[str, Any]:
+    """Individually confirm one validated candidate control."""
+    validate_policy_translation_proposal(proposal)
+    state = _validate_confirmation(proposal, confirmation or _empty_confirmation(proposal))
+    clause = next(
+        (item for item in proposal["clauses"] if item["clause_id"] == clause_id),
+        None,
+    )
+    if clause is None:
+        raise ValueError("unknown proposal clause")
+    control = next(
+        (
+            item
+            for item in clause["candidate_controls"]
+            if item["candidate_control_id"] == candidate_control_id
+        ),
+        None,
+    )
+    if control is None:
+        raise ValueError("candidate control does not belong to the selected clause")
+    if any(
+        item["candidate_control_id"] == candidate_control_id
+        for item in state["control_confirmations"]
+    ):
+        raise ValueError("candidate control is already human-confirmed")
+    resolved = {item["binding_id"] for item in state["binding_resolutions"]}
+    required = set(clause["unresolved_binding_ids"])
+    if control["value"]["kind"] == "organizational_binding":
+        required = {control["value"]["binding_id"]}
+    else:
+        required = set()
+    if required - resolved:
+        raise ValueError("candidate control requires a concrete organizational answer")
+    record = {
+        "clause_id": clause_id,
+        "candidate_control_id": candidate_control_id,
+        "confirmed_by": _nonempty(confirmed_by, "control confirmed_by"),
+        "confirmed_at": _utc(confirmed_at, "control confirmed_at"),
+    }
+    record["confirmation_hash"] = artifact_hash(record, "confirmation_hash")
+    result = copy.deepcopy(state)
+    result["control_confirmations"].append(record)
+    return _finalize_confirmation(proposal, result)
+
+
 def apply_policy_translation_disposition(
     proposal: dict[str, Any],
     confirmation: dict[str, Any] | None,
     *,
     clause_id: str,
-    disposition: str,
+    coverage_status: str,
     confirmed_by: str,
     confirmed_at: str,
     reason_code: str,
     human_reason: str | None = None,
-    acknowledge_unenforced: bool = False,
+    acknowledge_unrepresented: bool = False,
 ) -> dict[str, Any]:
-    """Human-confirm exactly one enforceable or explicitly unenforced clause."""
+    """Human-confirm semantic coverage for one complete visible source clause."""
     validate_policy_translation_proposal(proposal)
     state = _validate_confirmation(proposal, confirmation or _empty_confirmation(proposal))
     clauses = {item["clause_id"]: item for item in proposal["clauses"]}
     clause = clauses.get(clause_id)
     if clause is None:
         raise ValueError("unknown proposal clause")
-    if any(item["clause_id"] == clause_id for item in state["clause_decisions"]):
-        raise ValueError("proposal clause already has a human disposition")
-    if disposition not in {"enforced", "unsupported", "informational"}:
-        raise ValueError("disposition must be enforced, unsupported, or informational")
-    if clause_id in _direct_clause_ids(proposal) and disposition != "enforced":
+    if any(item["clause_id"] == clause_id for item in state["clause_coverage_decisions"]):
+        raise ValueError("proposal clause already has a human coverage decision")
+    if coverage_status not in _CLAUSE_COVERAGE_STATUSES:
+        raise ValueError("clause coverage decision is unknown")
+    if coverage_status != clause["coverage_status"]:
+        raise ValueError("human coverage decision must explicitly confirm the reviewed proposal coverage")
+    if clause_id in _direct_clause_ids(proposal) and coverage_status != "fully_represented":
         raise ValueError("deterministically recognized source clause cannot be downgraded")
     resolved = {item["binding_id"] for item in state["binding_resolutions"]}
-    if disposition == "enforced":
-        if clause["candidate_control"] is None:
-            raise ValueError("an enforced disposition requires a validated candidate control")
-        missing = set(clause["unresolved_binding_ids"]) - resolved
-        if missing:
-            raise ValueError("all candidate-control bindings require concrete human answers")
-        if acknowledge_unenforced:
-            raise ValueError("enforced clauses do not use unenforced acknowledgement")
-        if reason_code != "human-confirmed-control" or human_reason is not None:
-            raise ValueError("enforced clauses use only the deterministic human-confirmed-control reason")
-    else:
-        if not acknowledge_unenforced:
-            raise ValueError("every unenforced clause requires explicit approver acknowledgement")
-        allowed = (
-            {"outside-domain", "not-enforceable", "deferred", "other"}
-            if disposition == "unsupported"
-            else {"context-only", "descriptive", "non-policy", "other"}
-        )
-        if reason_code not in allowed:
-            raise ValueError("unenforced clause reason_code is outside the bounded disposition catalog")
-        if reason_code == "other" and (not isinstance(human_reason, str) or not human_reason.strip()):
-            raise ValueError("reason_code other requires a human_reason")
+    missing = set(clause["unresolved_binding_ids"]) - resolved
+    if missing:
+        raise ValueError("all candidate-control bindings require concrete human answers")
+    confirmed = {item["candidate_control_id"] for item in state["control_confirmations"]}
+    unconfirmed = {
+        item["candidate_control_id"] for item in clause["candidate_controls"]
+    } - confirmed
+    if unconfirmed:
+        raise ValueError("every candidate control requires individual human confirmation")
+    if coverage_status == "fully_represented":
+        if acknowledge_unrepresented or reason_code != "human-confirmed-complete" or human_reason is not None:
+            raise ValueError("fully represented clauses use the deterministic complete-coverage decision")
+    elif coverage_status == "partially_represented":
+        if not acknowledge_unrepresented or reason_code != "human-confirmed-partial":
+            raise ValueError("partial representation requires explicit residual-meaning acknowledgement")
+    elif coverage_status == "entirely_unsupported":
+        if not acknowledge_unrepresented or reason_code not in {"outside-domain", "not-enforceable", "deferred", "other"}:
+            raise ValueError("entirely unsupported meaning requires explicit bounded acknowledgement")
+    elif acknowledge_unrepresented or reason_code not in {"context-only", "descriptive", "non-policy", "other"}:
+        raise ValueError("informational coverage decision is inconsistent")
+    if reason_code == "other" and (not isinstance(human_reason, str) or not human_reason.strip()):
+        raise ValueError("reason_code other requires a human_reason")
     if human_reason is not None and (not isinstance(human_reason, str) or not human_reason.strip() or len(human_reason) > 1024):
         raise ValueError("human_reason must be null or 1 to 1024 non-whitespace characters")
     decision = {
         "clause_id": clause_id,
-        "disposition": disposition,
+        "coverage_status": coverage_status,
         "reason_code": reason_code,
         "human_reason": human_reason,
-        "acknowledged_unenforced": acknowledge_unenforced,
+        "acknowledged_unrepresented": acknowledge_unrepresented,
         "confirmed_by": _nonempty(confirmed_by, "confirmed_by"),
         "confirmed_at": _utc(confirmed_at, "confirmed_at"),
     }
     decision["decision_hash"] = artifact_hash(decision, "decision_hash")
     result = copy.deepcopy(state)
-    result["clause_decisions"].append(decision)
+    result["clause_coverage_decisions"].append(decision)
     return _finalize_confirmation(proposal, result)
 
 
@@ -714,23 +874,53 @@ def _build_policy_translation_review(
     validate_policy_translation_proposal(proposal)
     state = _validate_confirmation(proposal, confirmation or _empty_confirmation(proposal))
     resolutions = {item["binding_id"]: item["value"] for item in state["binding_resolutions"]}
-    decisions = {item["clause_id"]: item for item in state["clause_decisions"]}
+    decisions = {
+        item["clause_id"]: item for item in state["clause_coverage_decisions"]
+    }
+    confirmed_controls = {
+        item["candidate_control_id"] for item in state["control_confirmations"]
+    }
+    catalog = resolve_policy_translation_capability_catalog(proposal["capability_catalog"])
+    bindings = _binding_index(proposal["organizational_bindings"], catalog)
     exact = _decode_base64(proposal["source_policy"]["source_bytes_base64"], "source bytes")
     rows = []
     for clause in proposal["clauses"]:
         decision = decisions.get(clause["clause_id"])
-        control = clause["candidate_control"]
+        control_rows = []
+        for control in clause["candidate_controls"]:
+            remaining = []
+            questions = []
+            if control["value"]["kind"] == "organizational_binding":
+                binding_id = control["value"]["binding_id"]
+                if binding_id not in resolutions:
+                    remaining.append(binding_id)
+                    questions.append(
+                        _render_binding_question(bindings[binding_id]["binding_type"])
+                    )
+            control_rows.append(
+                {
+                    "candidate_control_id": control["candidate_control_id"],
+                    "human_confirmed": control["candidate_control_id"] in confirmed_controls,
+                    "operational_explanation": _render_control(control, resolutions),
+                    "remaining_unresolved_bindings": remaining,
+                    "questions": questions,
+                    "technical_details": {
+                        "control_type": control["control_type"],
+                        "fact_id": control["fact_id"],
+                        "operator": control["operator"],
+                        "effect": control["effect"],
+                        "enforcement_point": control["enforcement_point"],
+                    },
+                }
+            )
         rows.append(
             {
                 "clause_id": clause["clause_id"],
                 "source_text": exact[clause["start_byte"] : clause["end_byte"]].decode("utf-8"),
-                "proposal_status": clause["status"],
-                "human_disposition": decision["disposition"] if decision else None,
-                "operational_explanation": _render_control(control, resolutions) if control else _render_noncontrol(clause),
-                "remaining_unresolved_bindings": [
-                    item for item in clause["unresolved_binding_ids"] if item not in resolutions
-                ],
-                "enforcement_point": control["enforcement_point"] if control else None,
+                "proposed_coverage_status": clause["coverage_status"],
+                "human_coverage_status": decision["coverage_status"] if decision else None,
+                "controls": control_rows,
+                "residual_explanation": _render_residual(clause),
             }
         )
     review = {
@@ -786,11 +976,19 @@ def approve_policy_translation_proposal(
     state = _validate_confirmation(proposal, confirmation)
     coverage = state["coverage"]
     if coverage["unresolved_clause_count"]:
-        raise ValueError("publication approval requires a human disposition for every source clause")
-    if coverage["enforced_clause_count"] == 0:
-        raise ValueError("publication approval requires at least one enforced clause")
-    if coverage["unenforced_clause_count"] != len(coverage["acknowledged_unenforced_clause_ids"]):
-        raise ValueError("partial coverage requires acknowledgement of every unenforced clause")
+        raise ValueError("publication approval requires a coverage decision for every source clause")
+    if coverage["unresolved_control_count"]:
+        raise ValueError("publication approval requires individual confirmation of every candidate control")
+    if coverage["confirmed_control_count"] == 0:
+        raise ValueError("publication approval requires at least one confirmed control")
+    if coverage["unrepresented_clause_count"] != len(coverage["acknowledged_unrepresented_clause_ids"]):
+        raise ValueError("partial coverage requires acknowledgement of every unrepresented clause or residual")
+    approval_time = _utc_datetime(approved_at, "approved_at")
+    if any(
+        _utc_datetime(run["completed_at"], "translation run completed_at") > approval_time
+        for run in proposal["translation_runs"]
+    ):
+        raise ValueError("every translation run must complete no later than proposal approval")
     review = render_policy_translation_review(proposal, state)
     approval: dict[str, Any] = {
         "schema_version": POLICY_TRANSLATION_APPROVAL_V1,
@@ -841,25 +1039,42 @@ def finalize_policy_translation_authority(
         authority_version=authority["authority_version"],
     )
     resolutions = {item["binding_id"]: item["value"] for item in state["binding_resolutions"]}
-    decisions = {item["clause_id"]: item for item in state["clause_decisions"]}
+    decisions = {
+        item["clause_id"]: item for item in state["clause_coverage_decisions"]
+    }
     for clause, statement in zip(proposal["clauses"], draft["source_statements"]):
         decision = decisions[clause["clause_id"]]
+        controls = clause["candidate_controls"]
         if statement["classification"] == "direct":
-            if decision["disposition"] != "enforced":
+            if decision["coverage_status"] != "fully_represented":
                 raise ValueError("a deterministically compiled source clause cannot silently become unenforced")
-            expected = _control_semantics(clause["candidate_control"], resolutions)
+            expected = [_control_semantics(control, resolutions) for control in controls]
             actual = _direct_statement_semantics(draft, statement["statement_id"])
             if expected != actual:
-                raise ValueError("candidate control contradicts the deterministic executable constraint")
+                raise ValueError("candidate controls contradict deterministic executable constraints")
             continue
+        if decision["coverage_status"] == "partially_represented":
+            raise ValueError(
+                "released authority_bundle.v2 cannot represent enforced and residual unsupported meaning within one pending source statement"
+            )
+        if len(controls) > 1:
+            raise ValueError(
+                "released authority_bundle.v2 cannot reconstruct multiple human-mapped controls for one pending source statement"
+            )
         kwargs: dict[str, Any] = {
             "statement_id": statement["statement_id"],
-            "disposition": decision["disposition"],
+            "disposition": (
+                "enforced"
+                if decision["coverage_status"] in {"fully_represented", "partially_represented"}
+                else "unsupported"
+                if decision["coverage_status"] == "entirely_unsupported"
+                else "informational"
+            ),
             "mapper_identity": decision["confirmed_by"],
             "mapped_at": decision["confirmed_at"],
         }
-        if decision["disposition"] == "enforced":
-            control_id, selections = _control_selections(clause["candidate_control"], resolutions)
+        if controls:
+            control_id, selections = _control_selections(controls[0], resolutions)
             kwargs.update(control_id=control_id, selections=selections, reason_code="human-mapped")
         else:
             kwargs.update(reason_code=decision["reason_code"], human_reason=decision["human_reason"])
@@ -890,6 +1105,7 @@ def _validate_clause(
     exact_source: bytes,
     bindings: dict[str, dict[str, Any]],
     used_bindings: set[str],
+    catalog: dict[str, Any],
 ) -> None:
     label = f"clauses[{index}]"
     _object(clause, label)
@@ -902,11 +1118,11 @@ def _validate_clause(
             "end_byte",
             "clause_bytes_base64",
             "clause_hash",
-            "status",
-            "candidate_control",
+            "coverage_status",
+            "candidate_controls",
             "unresolved_binding_ids",
             "limitation_code",
-            "provider_explanation",
+            "residual_unsupported_spans",
         },
         label,
     )
@@ -931,50 +1147,134 @@ def _validate_clause(
     expected_id = "policy-clause-" + canonical_sha256(core).removeprefix("sha256:")
     if clause["clause_id"] != expected_id:
         raise ValueError("proposal clause identity is invalid for this exact source")
-    status = clause["status"]
-    if status not in _STATUSES:
-        raise ValueError("proposal clause status is unknown")
+    status = clause["coverage_status"]
+    if status not in _CLAUSE_COVERAGE_STATUSES:
+        raise ValueError("proposal clause coverage status is unknown")
     if clause["limitation_code"] not in _LIMITATIONS:
         raise ValueError("proposal clause limitation code is unknown")
-    explanation = clause["provider_explanation"]
-    if explanation is not None and (not isinstance(explanation, str) or not explanation.strip() or len(explanation) > 4096):
-        raise ValueError("provider explanation must be null or bounded non-empty text")
     unresolved = clause["unresolved_binding_ids"]
     if not isinstance(unresolved, list) or unresolved != sorted(set(unresolved)):
         raise ValueError("unresolved_binding_ids must be a sorted unique array")
-    control = clause["candidate_control"]
-    if status in {"integration_dependent", "unsupported", "informational"}:
-        if control is not None or unresolved:
-            raise ValueError(f"{status} clauses cannot claim an executable control or resolved capability")
-        if status == "integration_dependent" and clause["limitation_code"] is None:
-            raise ValueError("integration-dependent clauses require an explicit limitation code")
-    else:
-        if not isinstance(control, dict):
-            raise ValueError(f"{status} clauses require one candidate control")
-        referenced = _validate_candidate_control(
+    residuals = clause["residual_unsupported_spans"]
+    _validate_residual_spans(
+        residuals,
+        clause=clause,
+        exact_source=exact_source,
+    )
+    controls = clause["candidate_controls"]
+    if not isinstance(controls, list):
+        raise ValueError("candidate_controls must be an ordered array")
+    referenced: list[str] = []
+    seen_control_ids: set[str] = set()
+    seen_semantics: set[str] = set()
+    contradiction_keys: dict[str, str] = {}
+    for control in controls:
+        control_bindings = _validate_candidate_control(
             control,
             exact_source=exact_source,
             clause_start=clause["start_byte"],
             clause_end=clause["end_byte"],
             bindings=bindings,
+            catalog=catalog,
         )
-        if unresolved != sorted(referenced):
-            raise ValueError("candidate control unresolved bindings are inconsistent")
-        if status == "enforceable_fully_bound" and unresolved:
-            raise ValueError("fully bound clauses cannot contain unresolved organizational bindings")
-        if status == "needs_concrete_answer" and not unresolved:
-            raise ValueError("needs-concrete-answer clauses require an unresolved organizational binding")
-        if clause["limitation_code"] is not None:
-            raise ValueError("catalog-valid candidate controls cannot claim an integration limitation")
-        overlap = used_bindings & set(referenced)
-        if overlap:
-            raise ValueError("an organizational binding cannot be guessed or reused across candidate controls")
-        used_bindings.update(referenced)
+        control_id = control["candidate_control_id"]
+        value_semantics = (
+            {
+                "kind": "source_literal",
+                "canonical_value": control["value"]["canonical_value"],
+            }
+            if control["value"]["kind"] == "source_literal"
+            else {
+                "kind": "organizational_binding",
+                "binding_id": control["value"]["binding_id"],
+            }
+        )
+        executable_semantics = {
+            key: control[key]
+            for key in (
+                "control_type", "actor_kind", "action", "resource_kind", "fact_id",
+                "operator", "effect", "enforcement_point", "required_runtime_facts",
+            )
+        }
+        executable_semantics["value"] = value_semantics
+        semantic_hash = canonical_sha256(executable_semantics)
+        if control_id in seen_control_ids or semantic_hash in seen_semantics:
+            raise ValueError("candidate controls contain a duplicate control")
+        seen_control_ids.add(control_id)
+        seen_semantics.add(semantic_hash)
+        contradiction_key = canonical_sha256(
+            {
+                key: value
+                for key, value in executable_semantics.items()
+                if key != "effect"
+            }
+        )
+        prior_effect = contradiction_keys.get(contradiction_key)
+        if prior_effect is not None and prior_effect != control["effect"]:
+            raise ValueError("candidate controls contain contradictory effects")
+        contradiction_keys[contradiction_key] = control["effect"]
+        referenced.extend(control_bindings)
+    if unresolved != sorted(referenced):
+        raise ValueError("candidate controls unresolved bindings are inconsistent")
+    overlap = used_bindings & set(referenced)
+    if overlap or len(referenced) != len(set(referenced)):
+        raise ValueError("an organizational binding cannot be guessed or reused across candidate controls")
+    used_bindings.update(referenced)
+    if status == "fully_represented":
+        if not controls or residuals or clause["limitation_code"] is not None:
+            raise ValueError("fully represented clauses require controls and no residual unsupported meaning")
+    elif status == "partially_represented":
+        if not controls or not residuals or clause["limitation_code"] is None:
+            raise ValueError("partially represented clauses require controls and explicit residual unsupported meaning")
+    elif status == "entirely_unsupported":
+        if controls or unresolved or not residuals or clause["limitation_code"] is None:
+            raise ValueError("entirely unsupported clauses require exact residual meaning and no controls")
+    elif controls or unresolved or residuals or clause["limitation_code"] is not None:
+        raise ValueError("informational clauses cannot claim controls or unsupported residual meaning")
+
+
+def _validate_residual_spans(
+    residuals: Any, *, clause: dict[str, Any], exact_source: bytes
+) -> None:
+    if not isinstance(residuals, list):
+        raise ValueError("residual_unsupported_spans must be an ordered array")
+    previous_end: int | None = None
+    for index, residual in enumerate(residuals):
+        label = f"residual_unsupported_spans[{index}]"
+        _object(residual, label)
+        _exact(
+            residual,
+            {
+                "residual_id", "index", "start_byte", "end_byte",
+                "residual_bytes_base64", "residual_hash",
+            },
+            label,
+        )
+        start, end = residual["start_byte"], residual["end_byte"]
+        if residual["index"] != index or not isinstance(start, int) or isinstance(start, bool) or not isinstance(end, int) or isinstance(end, bool):
+            raise ValueError("residual unsupported spans must use ordered integer positions")
+        if not (clause["start_byte"] <= start < end <= clause["end_byte"]):
+            raise ValueError("residual unsupported span must be contained by its clause")
+        if previous_end is not None and start < previous_end:
+            raise ValueError("residual unsupported spans overlap or are reordered")
+        piece = exact_source[start:end]
+        if _decode_base64(residual["residual_bytes_base64"], f"{label} bytes") != piece or residual["residual_hash"] != bytes_sha256(piece):
+            raise ValueError("residual unsupported span does not reproduce exact source bytes")
+        core = {
+            "clause_hash": clause["clause_hash"],
+            "index": index,
+            "start_byte": start,
+            "end_byte": end,
+            "residual_hash": residual["residual_hash"],
+        }
+        if residual["residual_id"] != "policy-residual-" + canonical_sha256(core).removeprefix("sha256:"):
+            raise ValueError("residual unsupported span identity is invalid")
+        previous_end = end
 
 
 def _validate_candidate_control(
     control: dict[str, Any], *, exact_source: bytes, clause_start: int,
-    clause_end: int, bindings: dict[str, dict[str, Any]]
+    clause_end: int, bindings: dict[str, dict[str, Any]], catalog: dict[str, Any]
 ) -> list[str]:
     _exact(
         control,
@@ -997,25 +1297,31 @@ def _validate_candidate_control(
     if control["candidate_control_id"] != "candidate-control-" + canonical_sha256(core).removeprefix("sha256:"):
         raise ValueError("candidate control identity is not canonical")
     control_type = control["control_type"]
-    if control_type not in _CONTROL_SPECS:
+    control_catalog = {
+        item["control_type"]: item for item in catalog["control_types"]
+    }
+    if control_type not in control_catalog:
         raise ValueError("candidate control uses an unknown or invented control capability")
-    spec = _CONTROL_SPECS[control_type]
-    if control["actor_kind"] != "autonomous_agent":
+    advertised = control_catalog[control_type]
+    spec = _CONTROL_SPECS.get(control_type)
+    if spec is None:
+        raise ValueError("registered catalog control has no installed compiler lowering")
+    if control["actor_kind"] not in catalog["actor_kinds"]:
         raise ValueError("candidate control uses an unknown actor capability")
-    if control["action"] != "modify":
+    if control["action"] not in catalog["actions"] or control["action"] != advertised["action"]:
         raise ValueError("candidate control uses an unknown action capability")
-    if control["resource_kind"] != spec["resource_kind"]:
+    if control["resource_kind"] != advertised["resource_kind"]:
         raise ValueError("candidate control uses an unavailable resource capability")
-    if control["fact_id"] != spec["fact_id"]:
+    if control["fact_id"] != advertised["fact_id"] or control["fact_id"] not in {item["fact_id"] for item in catalog["facts"]}:
         raise ValueError("candidate control uses an unknown or unavailable runtime fact")
-    if control["operator"] != spec["operator"]:
+    if control["operator"] != advertised["operator"] or control["operator"] not in catalog["operators"]:
         raise ValueError("candidate control uses an unknown or type-invalid operator")
-    effects = spec.get("effects", {spec.get("effect")})
-    if control["effect"] not in effects:
+    if control["effect"] not in advertised["effects"] or control["effect"] not in catalog["effects"]:
         raise ValueError("candidate control effect is incompatible with its executable control")
-    if control["enforcement_point"] != _ENFORCEMENT_POINT:
+    points = {item["enforcement_point_id"] for item in catalog["enforcement_points"]}
+    if control["enforcement_point"] not in points:
         raise ValueError("candidate control uses an unknown enforcement point")
-    if control["required_runtime_facts"] != spec["required_runtime_facts"]:
+    if control["required_runtime_facts"] != advertised["required_runtime_facts"]:
         raise ValueError("candidate control requires unknown, unavailable, or omitted runtime facts")
     value = control["value"]
     _object(value, "candidate control value")
@@ -1050,13 +1356,15 @@ def _validate_candidate_control(
         binding = bindings.get(binding_id)
         if binding is None:
             raise ValueError("candidate control references an unknown organizational binding")
-        if binding["binding_type"] not in spec["binding_types"]:
+        if binding["binding_type"] not in spec["binding_types"] or binding["binding_type"] not in advertised["binding_types"]:
             raise ValueError("candidate control organizational binding has an invalid type")
         return [binding_id]
     raise ValueError("candidate control value must be an exact source literal or unresolved organizational binding")
 
 
-def _binding_index(value: Any) -> dict[str, dict[str, Any]]:
+def _binding_index(
+    value: Any, catalog: dict[str, Any] | None = None
+) -> dict[str, dict[str, Any]]:
     if not isinstance(value, list):
         raise ValueError("organizational_bindings must be an array")
     result: dict[str, dict[str, Any]] = {}
@@ -1067,7 +1375,10 @@ def _binding_index(value: Any) -> dict[str, dict[str, Any]]:
         binding_id = _identity(binding["binding_id"], f"{label}.binding_id")
         if binding_id in result:
             raise ValueError("duplicate organizational binding")
-        if binding["binding_type"] not in {item for spec in _CONTROL_SPECS.values() for item in spec["binding_types"]}:
+        advertised_binding_types = set(
+            (catalog or get_policy_translation_capability_catalog())["binding_types"]
+        )
+        if binding["binding_type"] not in advertised_binding_types:
             raise ValueError("unknown organizational binding type")
         _nonempty(binding["symbol"], f"{label}.symbol")
         _nonempty(binding["question"], f"{label}.question")
@@ -1085,19 +1396,10 @@ def _validate_translation_runs(
     seen_ids: set[str] = set()
     seen_hashes: set[str] = set()
     previous: str | None = None
+    previous_completed: datetime | None = None
     for index, run in enumerate(runs):
-        label = f"translation_runs[{index}]"
-        _object(run, label)
-        fields = {
-            "run_id", "run_hash", "sequence_number", "source_policy_ref",
-            "source_revision", "source_snapshot_hash", "capability_catalog",
-            "provider_class", "provider_identifier", "translation_template_version",
-            "translation_template_hash", "request_configuration_id",
-            "request_configuration_hash", "request_hash", "response_hash",
-            "created_at", "completed_at", "previous_run_hash",
-        }
-        _exact(run, fields, label)
-        if not isinstance(run["sequence_number"], int) or isinstance(run["sequence_number"], bool) or run["sequence_number"] != index:
+        _validate_run_descriptor_intrinsic(run)
+        if run["sequence_number"] != index:
             raise ValueError("translation runs are missing, reordered, or duplicated")
         if run["previous_run_hash"] != previous:
             raise ValueError("translation run ordering chain is invalid")
@@ -1105,29 +1407,65 @@ def _validate_translation_runs(
             raise ValueError("translation run is substituted across source bytes or revision")
         if run["capability_catalog"] != catalog_ref:
             raise ValueError("translation run is substituted across capability catalogs")
-        if run["provider_class"] not in {"hosted_model", "local_model", "guided_deterministic", "other"}:
-            raise ValueError("translation run provider class is unknown")
-        if run["provider_class"] in {"hosted_model", "local_model"}:
-            _nonempty(run["provider_identifier"], "model/deployment identifier")
-        elif run["provider_identifier"] is not None:
-            _nonempty(run["provider_identifier"], "provider identifier")
-        for field in ("translation_template_version", "request_configuration_id"):
-            _nonempty(run[field], field)
-        for field in ("translation_template_hash", "request_configuration_hash", "request_hash", "response_hash"):
-            _sha256(run[field], field)
         created = _utc_datetime(run["created_at"], "translation run created_at")
         completed = _utc_datetime(run["completed_at"], "translation run completed_at")
-        if completed < created:
-            raise ValueError("translation run completion precedes creation")
-        core = {key: value for key, value in run.items() if key not in {"run_id", "run_hash"}}
-        expected_id = "translation-run-" + canonical_sha256(core).removeprefix("sha256:")
-        if run["run_id"] != expected_id or run["run_hash"] != artifact_hash(run, "run_hash"):
-            raise ValueError("translation run identity or hash is invalid")
+        if previous_completed is not None and created < previous_completed:
+            raise ValueError("a subsequent translation run cannot begin before the preceding run completes")
         if run["run_id"] in seen_ids or run["run_hash"] in seen_hashes:
             raise ValueError("translation runs are duplicated")
         seen_ids.add(run["run_id"])
         seen_hashes.add(run["run_hash"])
         previous = run["run_hash"]
+        previous_completed = completed
+
+
+def _validate_run_descriptor_intrinsic(run: Any) -> None:
+    _object(run, "translation run")
+    fields = {
+        "run_id", "run_hash", "sequence_number", "source_policy_ref",
+        "source_revision", "source_snapshot_hash", "capability_catalog",
+        "provider_class", "provider_identifier", "translation_template_version",
+        "translation_template_hash", "request_configuration_id",
+        "request_configuration_hash", "request_hash", "response_hash",
+        "explanation_hash", "created_at", "completed_at", "previous_run_hash",
+    }
+    _exact(run, fields, "translation run")
+    sequence = run["sequence_number"]
+    if not isinstance(sequence, int) or isinstance(sequence, bool) or sequence < 0:
+        raise ValueError("translation run sequence_number must be a non-negative integer")
+    if sequence == 0 and run["previous_run_hash"] is not None:
+        raise ValueError("the first translation run cannot name a previous run")
+    if sequence > 0:
+        _sha256(run["previous_run_hash"], "previous_run_hash")
+    _nonempty(run["source_policy_ref"], "translation run source_policy_ref")
+    _nonempty(run["source_revision"], "translation run source_revision")
+    _sha256(run["source_snapshot_hash"], "translation run source_snapshot_hash")
+    _object(run["capability_catalog"], "translation run capability catalog")
+    _exact(run["capability_catalog"], {"catalog_id", "catalog_version", "catalog_hash"}, "translation run capability catalog")
+    _nonempty(run["capability_catalog"]["catalog_id"], "translation run catalog_id")
+    _nonempty(run["capability_catalog"]["catalog_version"], "translation run catalog_version")
+    _sha256(run["capability_catalog"]["catalog_hash"], "translation run catalog_hash")
+    resolve_policy_translation_capability_catalog(run["capability_catalog"])
+    if run["provider_class"] not in {"hosted_model", "local_model", "guided_deterministic", "other"}:
+        raise ValueError("translation run provider class is unknown")
+    if run["provider_class"] in {"hosted_model", "local_model"}:
+        _nonempty(run["provider_identifier"], "model/deployment identifier")
+    elif run["provider_identifier"] is not None:
+        _nonempty(run["provider_identifier"], "provider identifier")
+    for field in ("translation_template_version", "request_configuration_id"):
+        _nonempty(run[field], field)
+    for field in ("translation_template_hash", "request_configuration_hash", "request_hash", "response_hash"):
+        _sha256(run[field], field)
+    if run["explanation_hash"] is not None:
+        _sha256(run["explanation_hash"], "explanation_hash")
+    created = _utc_datetime(run["created_at"], "translation run created_at")
+    completed = _utc_datetime(run["completed_at"], "translation run completed_at")
+    if completed < created:
+        raise ValueError("translation run completion precedes creation")
+    core = {key: value for key, value in run.items() if key not in {"run_id", "run_hash"}}
+    expected_id = "translation-run-" + canonical_sha256(core).removeprefix("sha256:")
+    if run["run_id"] != expected_id or run["run_hash"] != artifact_hash(run, "run_hash"):
+        raise ValueError("translation run identity or hash is invalid")
 
 
 def _validate_literal_boundaries(source: bytes, start: int, end: int) -> None:
@@ -1154,8 +1492,9 @@ def _empty_confirmation(proposal: dict[str, Any]) -> dict[str, Any]:
         "source_snapshot_hash": proposal["source_policy"]["snapshot_hash"],
         "authority_ref": proposal["authority"]["authority_ref"],
         "binding_resolutions": [],
-        "clause_decisions": [],
-        "coverage": _coverage(proposal, []),
+        "control_confirmations": [],
+        "clause_coverage_decisions": [],
+        "coverage": _coverage(proposal, [], []),
     }
     result["confirmation_hash"] = artifact_hash(result, "confirmation_hash")
     return result
@@ -1163,7 +1502,11 @@ def _empty_confirmation(proposal: dict[str, Any]) -> dict[str, Any]:
 
 def _finalize_confirmation(proposal: dict[str, Any], state: dict[str, Any]) -> dict[str, Any]:
     result = copy.deepcopy(state)
-    result["coverage"] = _coverage(proposal, result["clause_decisions"])
+    result["coverage"] = _coverage(
+        proposal,
+        result["control_confirmations"],
+        result["clause_coverage_decisions"],
+    )
     result["confirmation_hash"] = artifact_hash(result, "confirmation_hash")
     _validate_confirmation(proposal, result)
     return result
@@ -1180,7 +1523,8 @@ def _validate_confirmation(proposal: dict[str, Any], state: dict[str, Any]) -> d
             "source_snapshot_hash",
             "authority_ref",
             "binding_resolutions",
-            "clause_decisions",
+            "control_confirmations",
+            "clause_coverage_decisions",
             "coverage",
             "confirmation_hash",
         },
@@ -1199,7 +1543,14 @@ def _validate_confirmation(proposal: dict[str, Any], state: dict[str, Any]) -> d
     )
     if actual_header != expected_header:
         raise ValueError("confirmation is substituted across proposal, source, or authority")
-    bindings = _binding_index(proposal["organizational_bindings"])
+    catalog = resolve_policy_translation_capability_catalog(proposal["capability_catalog"])
+    catalog_ref = {key: catalog[key] for key in ("catalog_id", "catalog_version", "catalog_hash")}
+    _validate_translation_runs(proposal["translation_runs"], proposal["source_policy"], catalog_ref)
+    final_run_completed = _utc_datetime(
+        proposal["translation_runs"][-1]["completed_at"],
+        "translation run completed_at",
+    )
+    bindings = _binding_index(proposal["organizational_bindings"], catalog)
     seen_bindings: set[str] = set()
     for record in state["binding_resolutions"]:
         _exact(record, {"binding_id", "binding_type", "value", "confirmed_by", "confirmed_at", "resolution_hash"}, "binding resolution")
@@ -1211,37 +1562,80 @@ def _validate_confirmation(proposal: dict[str, Any], state: dict[str, Any]) -> d
             raise ValueError("binding resolution type is inconsistent")
         _validate_binding_value(record["binding_type"], record["value"])
         _nonempty(record["confirmed_by"], "binding confirmed_by")
-        _utc(record["confirmed_at"], "binding confirmed_at")
+        if _utc_datetime(record["confirmed_at"], "binding confirmed_at") < final_run_completed:
+            raise ValueError("human confirmation cannot precede the final translation run")
         if record["resolution_hash"] != artifact_hash(record, "resolution_hash"):
             raise ValueError("binding resolution hash is invalid")
     clauses = {item["clause_id"]: item for item in proposal["clauses"]}
+    controls = {
+        control["candidate_control_id"]: (clause, control)
+        for clause in proposal["clauses"]
+        for control in clause["candidate_controls"]
+    }
+    seen_controls: set[str] = set()
+    for record in state["control_confirmations"]:
+        _exact(record, {"clause_id", "candidate_control_id", "confirmed_by", "confirmed_at", "confirmation_hash"}, "control confirmation")
+        control_id = record["candidate_control_id"]
+        if control_id in seen_controls or control_id not in controls:
+            raise ValueError("control confirmation is duplicated or unknown")
+        seen_controls.add(control_id)
+        clause, control = controls[control_id]
+        if record["clause_id"] != clause["clause_id"]:
+            raise ValueError("control confirmation is substituted across clauses")
+        if control["value"]["kind"] == "organizational_binding" and control["value"]["binding_id"] not in seen_bindings:
+            raise ValueError("control confirmation precedes its required organizational answer")
+        _nonempty(record["confirmed_by"], "control confirmed_by")
+        confirmed_at = _utc_datetime(record["confirmed_at"], "control confirmed_at")
+        if confirmed_at < final_run_completed:
+            raise ValueError("human confirmation cannot precede the final translation run")
+        if record["confirmation_hash"] != artifact_hash(record, "confirmation_hash"):
+            raise ValueError("control confirmation hash is invalid")
     direct_clause_ids = _direct_clause_ids(proposal)
     seen_clauses: set[str] = set()
     resolved = {item["binding_id"] for item in state["binding_resolutions"]}
-    for decision in state["clause_decisions"]:
-        _exact(decision, {"clause_id", "disposition", "reason_code", "human_reason", "acknowledged_unenforced", "confirmed_by", "confirmed_at", "decision_hash"}, "clause decision")
+    for decision in state["clause_coverage_decisions"]:
+        _exact(decision, {"clause_id", "coverage_status", "reason_code", "human_reason", "acknowledged_unrepresented", "confirmed_by", "confirmed_at", "decision_hash"}, "clause coverage decision")
         clause_id = decision["clause_id"]
         if clause_id in seen_clauses or clause_id not in clauses:
             raise ValueError("clause decision is duplicated or unknown")
         seen_clauses.add(clause_id)
         clause = clauses[clause_id]
-        if clause_id in direct_clause_ids and decision["disposition"] != "enforced":
+        status = decision["coverage_status"]
+        if status != clause["coverage_status"]:
+            raise ValueError("clause coverage decision does not match the reviewed proposal")
+        if clause_id in direct_clause_ids and status != "fully_represented":
             raise ValueError("deterministically recognized source clause cannot be downgraded")
-        if decision["disposition"] == "enforced":
-            if clause["candidate_control"] is None or set(clause["unresolved_binding_ids"]) - resolved:
-                raise ValueError("enforced clause has unresolved or absent executable meaning")
-            if decision["reason_code"] != "human-confirmed-control" or decision["human_reason"] is not None or decision["acknowledged_unenforced"]:
-                raise ValueError("enforced clause decision is inconsistent")
-        elif decision["disposition"] in {"unsupported", "informational"}:
-            if decision["acknowledged_unenforced"] is not True:
-                raise ValueError("unenforced clause lacks explicit acknowledgement")
+        if set(clause["unresolved_binding_ids"]) - resolved:
+            raise ValueError("clause coverage decision has unresolved organizational meaning")
+        if any(control["candidate_control_id"] not in seen_controls for control in clause["candidate_controls"]):
+            raise ValueError("clause coverage decision requires every control's individual confirmation")
+        if status == "fully_represented":
+            if decision["reason_code"] != "human-confirmed-complete" or decision["human_reason"] is not None or decision["acknowledged_unrepresented"]:
+                raise ValueError("fully represented clause decision is inconsistent")
+        elif status == "partially_represented":
+            if decision["reason_code"] != "human-confirmed-partial" or not decision["acknowledged_unrepresented"]:
+                raise ValueError("partially represented clause lacks residual acknowledgement")
+        elif status == "entirely_unsupported":
+            if decision["reason_code"] not in {"outside-domain", "not-enforceable", "deferred", "other"} or not decision["acknowledged_unrepresented"]:
+                raise ValueError("entirely unsupported clause decision is inconsistent")
+        elif status == "informational":
+            if decision["reason_code"] not in {"context-only", "descriptive", "non-policy", "other"} or decision["acknowledged_unrepresented"]:
+                raise ValueError("informational clause decision is inconsistent")
         else:
-            raise ValueError("clause decision disposition is invalid")
+            raise ValueError("clause coverage decision is invalid")
+        if decision["reason_code"] == "other" and (not isinstance(decision["human_reason"], str) or not decision["human_reason"].strip()):
+            raise ValueError("reason_code other requires a human_reason")
         _nonempty(decision["confirmed_by"], "clause confirmed_by")
-        _utc(decision["confirmed_at"], "clause confirmed_at")
+        confirmed_at = _utc_datetime(decision["confirmed_at"], "clause confirmed_at")
+        if confirmed_at < final_run_completed:
+            raise ValueError("human confirmation cannot precede the final translation run")
         if decision["decision_hash"] != artifact_hash(decision, "decision_hash"):
             raise ValueError("clause decision hash is invalid")
-    expected_coverage = _coverage(proposal, state["clause_decisions"])
+    expected_coverage = _coverage(
+        proposal,
+        state["control_confirmations"],
+        state["clause_coverage_decisions"],
+    )
     if state["coverage"] != expected_coverage:
         raise ValueError("confirmation coverage counts are inconsistent")
     if state["confirmation_hash"] != artifact_hash(state, "confirmation_hash"):
@@ -1249,19 +1643,57 @@ def _validate_confirmation(proposal: dict[str, Any], state: dict[str, Any]) -> d
     return copy.deepcopy(state)
 
 
-def _coverage(proposal: dict[str, Any], decisions: list[dict[str, Any]]) -> dict[str, Any]:
-    enforced = sorted(item["clause_id"] for item in decisions if item["disposition"] == "enforced")
-    unenforced = sorted(item["clause_id"] for item in decisions if item["disposition"] != "enforced")
-    acknowledged = sorted(item["clause_id"] for item in decisions if item["disposition"] != "enforced" and item["acknowledged_unenforced"])
+def _coverage(
+    proposal: dict[str, Any],
+    control_confirmations: list[dict[str, Any]],
+    decisions: list[dict[str, Any]],
+) -> dict[str, Any]:
+    decision_by_clause = {item["clause_id"]: item for item in decisions}
+    status_ids = {
+        status: sorted(
+            clause_id
+            for clause_id, decision in decision_by_clause.items()
+            if decision["coverage_status"] == status
+        )
+        for status in sorted(_CLAUSE_COVERAGE_STATUSES)
+    }
+    enforced = sorted(status_ids["fully_represented"] + status_ids["partially_represented"])
+    # A partially represented clause truthfully appears in both sets: it has at least
+    # one enforced mapping and explicitly acknowledged meaning that remains unenforced.
+    unenforced = sorted(
+        status_ids["partially_represented"]
+        + status_ids["entirely_unsupported"]
+        + status_ids["informational"]
+    )
+    unrepresented = sorted(status_ids["partially_represented"] + status_ids["entirely_unsupported"])
+    acknowledged = sorted(
+        item["clause_id"] for item in decisions if item["acknowledged_unrepresented"]
+    )
+    control_ids = sorted(
+        control["candidate_control_id"]
+        for clause in proposal["clauses"]
+        for control in clause["candidate_controls"]
+    )
+    confirmed_control_ids = sorted(item["candidate_control_id"] for item in control_confirmations)
     total = len(proposal["clauses"])
     return {
         "total_clause_count": total,
         "enforced_clause_count": len(enforced),
         "unenforced_clause_count": len(unenforced),
         "unresolved_clause_count": total - len(decisions),
+        "fully_represented_clause_count": len(status_ids["fully_represented"]),
+        "partially_represented_clause_count": len(status_ids["partially_represented"]),
+        "entirely_unsupported_clause_count": len(status_ids["entirely_unsupported"]),
+        "informational_clause_count": len(status_ids["informational"]),
+        "unrepresented_clause_count": len(unrepresented),
         "enforced_clause_ids": enforced,
         "unenforced_clause_ids": unenforced,
-        "acknowledged_unenforced_clause_ids": acknowledged,
+        "acknowledged_unrepresented_clause_ids": acknowledged,
+        "total_control_count": len(control_ids),
+        "confirmed_control_count": len(confirmed_control_ids),
+        "unresolved_control_count": len(control_ids) - len(confirmed_control_ids),
+        "confirmed_control_ids": confirmed_control_ids,
+        "unresolved_control_ids": sorted(set(control_ids) - set(confirmed_control_ids)),
     }
 
 
@@ -1293,7 +1725,16 @@ def _validate_approval(proposal: dict[str, Any], state: dict[str, Any], approval
     _nonempty(approval["approved_by"], "approved_by")
     _utc(approval["approved_at"], "approved_at")
     approval_time = _utc_datetime(approval["approved_at"], "approved_at")
-    confirmations = [*state["binding_resolutions"], *state["clause_decisions"]]
+    if any(
+        _utc_datetime(run["completed_at"], "translation run completed_at") > approval_time
+        for run in proposal["translation_runs"]
+    ):
+        raise ValueError("every translation run must complete no later than proposal approval")
+    confirmations = [
+        *state["binding_resolutions"],
+        *state["control_confirmations"],
+        *state["clause_coverage_decisions"],
+    ]
     if any(
         _utc_datetime(item["confirmed_at"], "confirmed_at") > approval_time
         for item in confirmations
@@ -1323,10 +1764,18 @@ def _control_semantics(control: dict[str, Any], resolutions: dict[str, str]) -> 
     return {"control_id": control_id, "effect": selections["effect"], "path": selections["path"]}
 
 
-def _direct_statement_semantics(draft: dict[str, Any], statement_id: str) -> dict[str, Any]:
+def _direct_statement_semantics(draft: dict[str, Any], statement_id: str) -> list[dict[str, Any]]:
     mapping = next(item for item in draft["source_to_constraint_mappings"] if item["statement_id"] == statement_id)
-    constraint_id = mapping["constraint_ids"][0]
-    constraint = next(item for item in draft["constraint_ir"]["constraints"] if item["constraint_id"] == constraint_id)
+    constraints = {
+        item["constraint_id"]: item for item in draft["constraint_ir"]["constraints"]
+    }
+    return [
+        _direct_constraint_semantics(constraints[constraint_id])
+        for constraint_id in mapping["constraint_ids"]
+    ]
+
+
+def _direct_constraint_semantics(constraint: dict[str, Any]) -> dict[str, Any]:
     if constraint["acting_role"]:
         return {"control_id": "acting-role", "role": constraint["acting_role"]["value"]}
     match = constraint["resource"]["match"]
@@ -1360,21 +1809,48 @@ def _direct_clause_ids(proposal: dict[str, Any]) -> set[str]:
 def _render_control(control: dict[str, Any], resolutions: dict[str, str]) -> str:
     value = control["value"]
     selected = value.get("canonical_value") if value["kind"] == "source_literal" else resolutions.get(value["binding_id"])
-    rendered = selected if selected is not None else f"UNRESOLVED({value['binding_id']})"
-    point = control["enforcement_point"]
     if control["control_type"] == "acting_role":
-        return f"Autonomous agent must act as repository role {rendered!r} to modify the repository; enforced at {point}."
-    scope = "exact repository path" if control["control_type"] == "exact_path_access" else "repository path prefix"
-    consequence = "allowed" if control["effect"] == "allow" else "denied"
-    return f"Autonomous-agent modification of {scope} {rendered!r} is {consequence}; enforced at {point}."
+        if selected is None:
+            return "A repository role must be confirmed before automated agents may modify this repository."
+        return f"Automated agents must use repository role {selected!r} to modify this repository."
+    if control["control_type"] == "prefix_path_access":
+        if selected is None:
+            if control["effect"] == "deny":
+                return "Automated agents are blocked from modifying files under the repository path prefix you confirm."
+            return "Automated agents may modify files under the repository path prefix you confirm."
+        if control["effect"] == "deny":
+            return f"Automated agents are blocked from modifying files under {selected}."
+        return f"Automated agents may modify files under {selected}."
+    if selected is None:
+        consequence = "are blocked from modifying" if control["effect"] == "deny" else "may modify"
+        return f"Automated agents {consequence} the exact repository path you confirm."
+    if control["effect"] == "deny":
+        return f"Automated agents are blocked from modifying {selected}."
+    return f"Automated agents may modify {selected}."
 
 
-def _render_noncontrol(clause: dict[str, Any]) -> str:
-    if clause["status"] == "integration_dependent":
-        return f"Not enforceable by the current released capability catalog ({clause['limitation_code']})."
-    if clause["status"] == "informational":
-        return "Informational only; no executable constraint is proposed."
-    return "Unsupported by the current released capability catalog; no executable constraint is proposed."
+def _render_binding_question(binding_type: str) -> str:
+    questions = {
+        "repository_role": "Which repository role should this policy require?",
+        "repository_exact_path": "Which exact repository path should this policy apply to?",
+        "repository_path_prefix": "Which repository path prefix should this policy apply to?",
+    }
+    try:
+        return questions[binding_type]
+    except KeyError as exc:
+        raise ValueError(
+            "registered binding type has no deterministic customer question"
+        ) from exc
+
+
+def _render_residual(clause: dict[str, Any]) -> str | None:
+    if clause["coverage_status"] == "informational":
+        return "This clause is informational and does not create an enforcement rule."
+    if not clause["residual_unsupported_spans"]:
+        return None
+    if clause["limitation_code"] == "pull_request_approval_not_supported":
+        return "Waveframe cannot enforce this part yet because pull-request approvals are not currently supported."
+    return "Waveframe cannot enforce the explicitly identified remaining part of this clause yet."
 
 
 def _validate_binding_value(binding_type: str, value: Any) -> None:
