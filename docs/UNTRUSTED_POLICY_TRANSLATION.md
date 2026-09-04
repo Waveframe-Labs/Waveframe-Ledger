@@ -130,6 +130,13 @@ Those capabilities require separately released Contract Compiler/domain-pack low
 and matching Guard runtime fact providers/evaluators. They must not be added to a Ledger
 catalog until both sides exist under immutable identities and hashes.
 
+Guard 0.16.1 independently validates the final v2 publication, but its released Python
+package metadata constrains Ledger to `<0.8.0` and consequently excludes this
+`0.8.0.dev0` checkout. Ledger's compatibility job installs that exact released Guard
+wheel without dependency resolution to prove runtime behavior. A future Guard release
+must widen its Ledger range only after its own compatibility review; this repository
+does not alter or work around that published metadata for consumers.
+
 ## Coverage and partial publication
 
 Every clause has one proposal status:
