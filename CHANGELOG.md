@@ -14,6 +14,15 @@
   `--no-deps` verification is supplemental runtime evidence only.
 - Preserves every released v0.6/v0.7 schema and compatibility hash. No v0.7.0
   distribution artifact is modified or republished.
+- Adds the provider-free `policy_translation_commitment.v1`, native
+  `authority_bundle.v3`, and `publication_receipt.v3` path for confirmed
+  clause-to-many-control meaning and explicitly acknowledged residual meaning. The
+  runtime payload remains the unchanged `compiled_authority_contract.v2`.
+- Adds deterministic six-state customer coverage and full, partial, waiting,
+  unenforced, and informational totals. Published artifacts contain no model,
+  provider, prompt, retry, token-usage, request, response, or private run evidence.
+- Records Waveframe-Guard#27 as the additive v3 verifier follow-on. Guard 0.16.1
+  remains valid v2 regression evidence but does not support native v3 bundles.
 
 ## Unreleased
 

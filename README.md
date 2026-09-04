@@ -181,8 +181,18 @@ explicitly human-confirmed.
 The unchanged v2 publication path supports multiple controls only when the deterministic
 source grammar reconstructs all of them. It cannot encode multiple human-mapped controls,
 or both enforced and residual unsupported meaning, inside one otherwise pending source
-statement. Those cases validate for review but fail closed at finalization pending a
-separately reviewed additive normative publication design.
+statement. The additive `policy_translation_commitment.v1`, `authority_bundle.v3`, and
+`publication_receipt.v3` path publishes those cases without changing v2. Every control
+has its own confirmation, every residual has an explicit acknowledgment, and the
+runtime payload remains `compiled_authority_contract.v2`.
+
+Customer review uses six deterministic states: Ready to enforce, Needs an answer, Needs
+a connection, Partially enforceable, Not currently enforceable, and Informational.
+Provider/model/prompt details and raw translation evidence remain private and deletable;
+the published commitment, authority, receipt, and runtime contract do not depend on
+them. Guard 0.16.1 accepts existing v2 publications but its loader/verifier is v2-only.
+Native v3 support is tracked in
+[Waveframe-Guard#27](https://github.com/Waveframe-Labs/Waveframe-Guard/issues/27).
 
 The first catalog truthfully supports only autonomous-agent repository modification,
 repository roles, and exact/prefix path allow/deny controls already implemented by the
@@ -469,6 +479,9 @@ Canonical schemas live in [schemas/](schemas/), including:
 - [compiled_authority_contract.v2.json](schemas/compiled_authority_contract.v2.json): strict compiled repository surface used by the v2 domain-pack publication path.
 - [authority_bundle.v2.json](schemas/authority_bundle.v2.json): complete native domain-pack authority bundle with strict component bindings.
 - [publication_receipt.v2.json](schemas/publication_receipt.v2.json): receipt binding the complete v2 authority bundle.
+- [policy_translation_commitment.v1.json](schemas/policy_translation_commitment.v1.json): provider-free confirmed-control and acknowledged-residual commitment.
+- [authority_bundle.v3.json](schemas/authority_bundle.v3.json): additive native multi-control and partial-coverage authority bundle.
+- [publication_receipt.v3.json](schemas/publication_receipt.v3.json): receipt binding the complete v3 authority bundle.
 
 - [governance_source.v1.json](schemas/governance_source.v1.json): governance source identity.
 - [governance_diagnostic.v1.json](schemas/governance_diagnostic.v1.json): governance diagnostics.

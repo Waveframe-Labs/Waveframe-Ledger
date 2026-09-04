@@ -191,6 +191,31 @@ and must complete before confirmation and approval.
 
 No v1 artifact is embedded in v2 and no released schema is reinterpreted. The public authority and receipt validators dispatch by schema version: v1 validation is unchanged, while v2 validation reconstructs and cross-checks the complete chain. A byte-only source change may preserve the released semantic-meaning hash while changing the semantic commit's full bundle hash, compiled lineage, v2 bundle, and receipt.
 
+## Multi-Control and Partial-Coverage Publication Provenance
+
+The additive `policy_translation_commitment.v1` removes all translation-run and provider
+attribution from normative publication. It binds exact source reference and snapshot,
+the complete ordered clause partition, every individually confirmed candidate control,
+each resolved customer binding, each exact residual span and acknowledgment, the trusted
+capability-catalog identity, deterministic customer explanations, and canonical coverage
+totals. Its validator reconstructs direct grammar meaning from the embedded source and
+rejects omissions, downgrades, conflicts, substitutions, invalid chronology, and claimed
+coverage inconsistent with published controls and residuals.
+
+Native `authority_bundle.v3` binds that commitment to Constraint IR, the selected runtime
+fact schema and domain pack, explicit grammar/lowering/emitter identities, the semantic
+commit, unchanged `compiled_authority_contract.v2`, authority identity, public approval,
+manifest, and canonical provenance hashes. `publication_receipt.v3` repeats those public
+bindings and binds the v3 bundle hash. Version dispatch requires an exact v3/v3 pair;
+released v2 artifacts are neither upgraded nor reinterpreted.
+
+The public approval and all later identities are derived without the proposal or private
+run evidence. Deleting provider/model/prompt data, raw requests or responses, retries,
+failures, explanations, or token usage therefore cannot invalidate the commitment,
+authority bundle, receipt, or compiled runtime contract. A changed source byte changes
+the source snapshot, clause and commitment identities, public approval, semantic bundle,
+compiled lineage, authority bundle, and receipt.
+
 Every unmatched nonempty statement stays pending until an explicit human disposition. Enforced decisions bind one pack control, its bounded selection, full typed meaning, required runtime facts, and generated constraint. Informational and unsupported decisions bind a bounded reason but no fake enforcement fields. All decisions bind mapper identity, canonical UTC time, source document hash, statement ID/span, exact pack reference, and decision hash. Finalization reconstructs and replays them; it neither infers arbitrary prose nor accepts caller-authored rule objects.
 
 ## Snapshot Hashes
