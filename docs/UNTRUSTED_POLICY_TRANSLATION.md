@@ -8,9 +8,11 @@ authorized:
 2. A human supplies organizational bindings, confirms executable controls, and
    acknowledges every unenforced clause.
 3. Ledger validates, deterministically renders the review, reconstructs the result from
-   the exact embedded source bytes, and compiles it through the released v2 path.
-4. Guard validates and enforces the published authority without a model or proposal
-   artifact.
+   the exact embedded source bytes, and compiles the confirmed controls.
+4. Ledger publishes the provider-free commitment through the additive v3 authority
+   path, while retaining the released v2 compiled-contract format.
+5. Guard enforces the compiled authority without a model or private translation
+   evidence after additive v3 verification support is released.
 
 Ledger does not call a provider, load provider credentials, access the network, or use a
 provider explanation as approval text. The proposal contains an ordered, non-empty,
@@ -40,18 +42,17 @@ modified clauses fail validation.
 
 Human confirmation and approval bind the proposal hash, source snapshot hash, authority
 reference, capability-catalog hash, deterministic review hash, exact coverage counts,
-and every binding/disposition. The derived approval identity is passed through the
-unchanged `authority_bundle.v2` approval record. The approved executable meaning then
-follows the existing normative chain:
+and every binding/disposition. The additive public approval identity binds the
+provider-free commitment, Constraint IR, semantic commit, approver, and chronology. The
+approved executable meaning follows this normative chain:
 
-`exact bytes → snapshot hash/spans → human decisions → Constraint IR → semantic commit → compiled_authority_contract.v2 → authority_bundle.v2 → publication_receipt.v2`
+`exact bytes -> snapshot hash/spans -> confirmed controls and acknowledged residuals -> policy_translation_commitment.v1 -> Constraint IR -> semantic commit -> compiled_authority_contract.v2 -> authority_bundle.v3 -> publication_receipt.v3`
 
-The v2 bundle independently contains and verifies the exact source bytes, spans,
-decisions, Constraint IR, semantic commitment, compiled contract, approval, and receipt
-bindings. Provider output and the proposal are deliberately absent. Guard therefore
-does not need a provider, proposal, or provider explanation at evaluation time. Its
-verified bundle/receipt and execution evidence transitively bind the exact source
-snapshot.
+The v3 bundle independently reconstructs the exact source partition, confirmed controls,
+acknowledged residuals, customer bindings, trusted catalog, compiler identities,
+Constraint IR, semantic commitment, compiled contract, approval, and receipt. The
+proposal and all provider evidence are deliberately absent. Runtime authority therefore
+never depends on retained provider evidence.
 
 Changing one source byte changes the snapshot hash, every bound translation-run
 descriptor, clause identities, proposal, confirmation and approval identities, semantic
@@ -92,7 +93,19 @@ The public APIs keep trust transitions explicit:
 - `approve_policy_translation_proposal(...)` binds the completed confirmation,
   deterministic review, catalog, source, authority, and enforced/unenforced counts.
 - `finalize_policy_translation_authority(...)` replays everything from source bytes and
-  lowers through the existing v2 publication implementation.
+  lowers only cases truthfully representable by the released v2 publication format.
+- `inspect_policy_translation_customer_coverage(...)` renders the six customer states:
+  Ready to enforce, Needs an answer, Needs a connection, Partially enforceable, Not
+  currently enforceable, and Informational.
+- `build_policy_translation_commitment(...)` creates the provider-free normative
+  commitment containing confirmed controls and acknowledged residuals.
+- `validate_policy_translation_commitment(...)` reconstructs a standalone commitment
+  against its exact source and approval time.
+- `finalize_policy_translation_authority_v3(...)` emits the native multi-control and
+  partial-coverage publication.
+- `validate_authority_bundle_v3(...)` and `validate_publication_receipt_v3(...)`
+  independently reconstruct the additive publication chain. The version-dispatched
+  public validators reject cross-version bundle/receipt pairs.
 
 Proposal, confirmation, and approval objects are immutable canonical values. Applying a
 binding, control confirmation, or coverage decision returns a new confirmation rather
@@ -153,6 +166,10 @@ wheel without dependency resolution as supplemental runtime evidence only. It is
 package compatibility. Ledger 0.8 publication is blocked until a separately reviewed
 Guard release widens and tests the range, Ledger restores an extra pinned to that
 release, and a clean `pip install "governance-ledger[guard]"` plus `pip check` passes.
+It also does not recognize native v3 publication artifacts: its loader, verifier,
+verification evidence, and cache-revalidation branch are explicitly v2-only. The exact
+additive implementation and regression requirements are tracked in
+[Waveframe-Guard#27](https://github.com/Waveframe-Labs/Waveframe-Guard/issues/27).
 
 ## Coverage and partial publication
 
@@ -194,10 +211,14 @@ silent change to v2.
 The same v2 limitation applies to a pending clause that mixes an enforced mapping with
 residual unsupported meaning: released `policy_mapping_decision.v1` classifies the whole
 statement with one disposition. Ledger can validate, render, and approve the explicit
-partial boundary, but finalization fails closed because v2 cannot truthfully preserve
-that mixed normative meaning. Publication requires a separately reviewed additive
-normative schema/path; Ledger does not silently label the entire clause enforced.
+partial boundary, but v2 finalization fails closed because v2 cannot truthfully preserve
+that mixed normative meaning. `policy_translation_commitment.v1`,
+`authority_bundle.v3`, and `publication_receipt.v3` provide the additive path. They
+publish each independently confirmed control plus every exact acknowledged residual;
+they never relabel the whole clause enforced.
 
 Released `authority_bundle.v2`, `publication_receipt.v2`,
 `compiled_authority_contract.v2`, all v1 schemas, and the v0.6 compatibility path are
 unchanged. No v3 runtime artifact is introduced merely to retain model output.
+Native v3 is selected only by the new finalizer; old artifacts are never silently
+upgraded. No provider evidence is embedded in v3.

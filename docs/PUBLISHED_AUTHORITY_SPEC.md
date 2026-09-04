@@ -223,6 +223,28 @@ The production domain-pack path is documented in `docs/DOMAIN_PACK_COMPILER.md`.
 
 No v1 bundle or receipt is nested inside v2. Version-aware authority validators preserve the exact v1 path and validate v2 by reconstructing statement decisions, semantic commitment, compilation, and publication bindings. Historical v1 artifacts remain readable, and Ledger does not infer new lineage for them.
 
+### Additive multi-control publication
+
+`authority_bundle.v3` is the native successor for one source clause that publishes zero
+or more individually confirmed controls while retaining explicitly acknowledged
+residual meaning. It embeds `policy_translation_commitment.v1`, exact source bytes and
+clause spans, resolved customer bindings, trusted capability identity, Constraint IR,
+runtime-fact and domain-pack identity, grammar/lowering/emitter identity, semantic
+commit, public approval, unchanged `compiled_authority_contract.v2`, authority identity,
+manifest, and complete canonical provenance bindings. `publication_receipt.v3` binds
+that exact bundle and the same public chain.
+
+The v3 commitment excludes translation runs, provider/model/prompt attribution, raw
+responses, retries, failures, explanations, and token usage. Those are private authoring
+evidence and may be deleted without affecting publication or execution. Customer text is
+rendered deterministically from validated controls and residual dispositions.
+
+This is additive, not an upgrade of existing artifacts. Released v2 schemas, hashes,
+fixtures, dispatch, and validation behavior remain unchanged. Consumers must opt into
+v3 explicitly. Guard requires separate additive v3 loader and verifier support before a
+native v3 bundle is runtime-loadable; the embedded compiled-contract semantics remain
+v2.
+
 ## 6. Publication transaction
 
 Publication MUST be treated as one deterministic transaction.

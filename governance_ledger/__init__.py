@@ -48,6 +48,14 @@ from governance_ledger.policy_translation import (
     validate_policy_translation_review,
     validate_policy_translation_run_evidence,
 )
+from governance_ledger.policy_translation_publication import (
+    build_policy_translation_commitment,
+    finalize_policy_translation_authority_v3,
+    inspect_policy_translation_customer_coverage,
+    validate_authority_bundle_v3,
+    validate_policy_translation_commitment,
+    validate_publication_receipt_v3,
+)
 from governance_ledger.publish import approve_review_file, publish_review_file
 from governance_ledger.registry import load_contract_registry, resolve_authority_ref, update_contract_registry
 from governance_ledger.report import review_constraints, validate_constraints
@@ -73,6 +81,7 @@ __all__ = [
     "build_authority_diff_impact",
     "build_authority_bundle",
     "build_publication_receipt",
+    "build_policy_translation_commitment",
     "build_governance_review_packet",
     "check_validation_directory",
     "create_snapshot",
@@ -100,8 +109,10 @@ __all__ = [
     "create_policy_translation_run",
     "create_policy_translation_run_evidence",
     "finalize_policy_translation_authority",
+    "finalize_policy_translation_authority_v3",
     "get_policy_translation_capability_catalog",
     "inspect_policy_translation_proposal",
+    "inspect_policy_translation_customer_coverage",
     "list_builtin_domain_packs",
     "list_contracts",
     "load_contract_registry",
@@ -120,10 +131,13 @@ __all__ = [
     "validate_constraints",
     "validate_domain_pack",
     "validate_authority_bundle",
+    "validate_authority_bundle_v3",
     "validate_publication_receipt",
+    "validate_publication_receipt_v3",
     "render_policy_translation_review",
     "resolve_policy_translation_capability_catalog",
     "validate_policy_translation_capability_catalog",
+    "validate_policy_translation_commitment",
     "validate_policy_translation_proposal",
     "validate_policy_translation_review",
     "validate_policy_translation_run_evidence",

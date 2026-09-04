@@ -137,6 +137,10 @@ def classify_authority_bundle_provenance(bundle: dict[str, Any]) -> str:
 
 def validate_authority_bundle(bundle: dict[str, Any]) -> dict[str, Any]:
     """Validate an authority bundle according to its exact schema version."""
+    if isinstance(bundle, dict) and bundle.get("schema_version") == "authority_bundle.v3":
+        from governance_ledger.policy_translation_publication import validate_authority_bundle_v3
+
+        return validate_authority_bundle_v3(bundle)
     if isinstance(bundle, dict) and bundle.get("schema_version") == "authority_bundle.v2":
         from governance_ledger.domain_policy import _validate_authority_bundle_v2
 
@@ -164,6 +168,12 @@ def validate_publication_receipt(
     """Verify every receipt binding against the canonical authority bundle."""
     bundle_version = authority_bundle.get("schema_version") if isinstance(authority_bundle, dict) else None
     receipt_version = publication_receipt.get("schema_version") if isinstance(publication_receipt, dict) else None
+    if bundle_version == "authority_bundle.v3" or receipt_version == "publication_receipt.v3":
+        if bundle_version != "authority_bundle.v3" or receipt_version != "publication_receipt.v3":
+            raise ValueError("authority bundle and publication receipt schema versions do not match")
+        from governance_ledger.policy_translation_publication import validate_publication_receipt_v3
+
+        return validate_publication_receipt_v3(authority_bundle, publication_receipt)
     if bundle_version == "authority_bundle.v2" or receipt_version == "publication_receipt.v2":
         if bundle_version != "authority_bundle.v2" or receipt_version != "publication_receipt.v2":
             raise ValueError("authority bundle and publication receipt schema versions do not match")
