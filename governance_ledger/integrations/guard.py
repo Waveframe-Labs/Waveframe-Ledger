@@ -6,9 +6,6 @@ from collections.abc import Callable
 from typing import Any
 
 
-GUARD_EXTRA = "guard"
-GUARD_INSTALL_COMMAND = 'pip install "governance-ledger[guard]"'
-
 AdmissibilityEvaluator = Callable[[dict[str, Any], dict[str, Any]], dict[str, Any]]
 
 
@@ -23,12 +20,14 @@ def load_guard_admissibility_evaluator() -> AdmissibilityEvaluator:
     except ImportError:
         raise GuardIntegrationUnavailableError(
             "Admissibility replay requires an injected evaluator or the optional "
-            f"Waveframe Guard integration. Install it with: {GUARD_INSTALL_COMMAND}"
+            "Waveframe Guard integration. Ledger 0.8 development does not advertise "
+            "a Guard extra until a released Guard widens and verifies its dependency range."
         ) from None
 
     if not callable(evaluate_admissibility):
         raise GuardIntegrationUnavailableError(
             "The installed Waveframe Guard package does not expose the supported "
-            f"admissibility evaluator. Reinstall it with: {GUARD_INSTALL_COMMAND}"
+            "admissibility evaluator. Use an injected evaluator or a released, "
+            "dependency-compatible Guard integration."
         )
     return evaluate_admissibility

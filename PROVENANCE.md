@@ -161,6 +161,34 @@ An older `authority_bundle.v1` that lacks the profile remains readable but is cl
 
 The deterministic domain-pack workflow preserves the released v1 artifacts above and emits native `authority_bundle.v2` plus `publication_receipt.v2` artifacts. The v2 bundle directly binds exact source bytes and ordered statement spans to either a direct pack parse or exact `policy_mapping_decision.v1`, canonical controlled-language previews, `constraint_ir.v1`, the selected `runtime_fact_schema.v1`, exact `domain_pack.v1` identity/version/hash, semantic commit, standalone `compiled_authority_contract.v2`, authority identity/version, approval, publication manifest, and complete provenance bindings. The v2 compiled contract has a distinct schema identity and current repository-only surface; it does not reuse the structurally different released v1 schema identity.
 
+The additive `policy_translation_proposal.v1` authoring boundary binds exact source bytes,
+complete ordered clauses, a finite capability catalog, and a non-empty hash-chained
+sequence of translation-run descriptors. Each descriptor binds source and catalog
+identity, provider/model attribution, template and request-configuration identities,
+exact request/response hashes, canonical timestamps, and ordering. It contains no raw
+provider bytes and is untrusted evidence, not runtime authority. Optional raw bytes use
+the separate private `policy_translation_run_evidence.v1` artifact and may be deleted
+without invalidating any normative artifact. Separate canonical
+human confirmation and approval bind every organizational answer, each candidate-control
+confirmation, clause coverage decision, residual acknowledgement, deterministic review,
+and exact clause/control coverage count. Finalization
+reconstructs these from the source bytes and lowers only the confirmed meaning through
+the unchanged v2 chain. Proposal and raw provider evidence are not embedded in, or
+required to validate, the bundle or receipt.
+
+Each clause preserves its original source visibly and carries an ordered zero-or-more
+candidate-control list. Each source literal in each control binds an exact contained byte
+span and hash. Partial or entirely unsupported meaning binds exact residual source spans.
+Ledger proves this byte provenance and the exact human-confirmed mappings. It does not
+claim to mathematically prove semantic completeness for arbitrary English; the human
+explicitly confirms clause coverage.
+
+The proposal schema is capability-structural. Exact catalog ID/version/hash resolves
+only through Ledger's internal immutable registry, and every advertised fact, operator,
+effect, binding type, and enforcement point must be reachable from a released control.
+Customers cannot inject or select a catalog. Ordered translation runs are non-overlapping
+and must complete before confirmation and approval.
+
 No v1 artifact is embedded in v2 and no released schema is reinterpreted. The public authority and receipt validators dispatch by schema version: v1 validation is unchanged, while v2 validation reconstructs and cross-checks the complete chain. A byte-only source change may preserve the released semantic-meaning hash while changing the semantic commit's full bundle hash, compiled lineage, v2 bundle, and receipt.
 
 Every unmatched nonempty statement stays pending until an explicit human disposition. Enforced decisions bind one pack control, its bounded selection, full typed meaning, required runtime facts, and generated constraint. Informational and unsupported decisions bind a bounded reason but no fake enforcement fields. All decisions bind mapper identity, canonical UTC time, source document hash, statement ID/span, exact pack reference, and decision hash. Finalization reconstructs and replays them; it neither infers arbitrary prose nor accepts caller-authored rule objects.

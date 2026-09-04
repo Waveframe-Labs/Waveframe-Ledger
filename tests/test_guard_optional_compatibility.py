@@ -13,7 +13,7 @@ waveframe_guard = pytest.importorskip("waveframe_guard")
 
 def test_released_guard_integration_preserves_allowed_and_blocked_replay() -> None:
     version = importlib.metadata.version("waveframe-guard")
-    assert version == "0.15.0"
+    assert version == "0.16.1"
     authority_contract = _authority_contract()
     blocked_state = _execution_state(approvals=[])
     allowed_state = _execution_state(

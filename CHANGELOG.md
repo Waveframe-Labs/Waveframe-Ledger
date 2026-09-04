@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.8.0.dev0 (development)
+
+- Adds the untrusted policy-translation proposal boundary under development. Ordered
+  translation-run descriptors retain hashes and attribution only; optional raw run
+  evidence is a separate, independently deletable private artifact.
+- Supports ordered zero-or-more candidate controls per clause, individual control
+  confirmations, explicit full/partial/unsupported/informational clause coverage, exact
+  residual spans, catalog-registry resolution, and enforced run chronology.
+- Removes provider-written prose from durable proposals and renders primary customer
+  explanations deterministically from validated controls.
+- Records Guard 0.8 dependency compatibility as a release blocker; Guard 0.16.1
+  `--no-deps` verification is supplemental runtime evidence only.
+- Preserves every released v0.6/v0.7 schema and compatibility hash. No v0.7.0
+  distribution artifact is modified or republished.
+
+## Unreleased
+
+- Added the strict, model-agnostic `policy_translation_proposal.v1` authoring boundary,
+  finite coding-agent capability catalog, canonical human confirmation/approval records,
+  deterministic review rendering, exact clause coverage, and unchanged v2 lowering.
+- Guard 0.16.1 continues to verify v2 publications as supplemental runtime evidence, but
+  its `<0.8.0` Ledger dependency bound prevents an honest 0.8 optional extra.
+
 ## 0.7.0 - 2026-08-31
 
 Waveframe Ledger v0.7.0 introduces the deterministic domain-pack compiler and its native v2 publication artifacts while preserving the released v0.6 compatibility path and all published v1 schema meanings.

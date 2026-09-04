@@ -116,18 +116,18 @@ Ledger relies on installed package contracts for integration behavior:
 
 - `cricore-contract-compiler>=0.4.0` (the first released compiler contract with exact/prefix target rules)
 
-The base install does not install Waveframe Guard. Install the tested optional
-admissibility integration explicitly when Ledger should delegate execution replay
-to Guard:
+The base install does not install Waveframe Guard. Ledger 0.8 development metadata does
+not advertise a `guard` extra because no released Guard has a satisfiable Ledger 0.8
+dependency range. The last resolvable released pairing is Ledger 0.7.0 with Guard
+0.16.1. Guard 0.16.1 declares `governance-ledger>=0.7.0,<0.8.0`.
 
-```powershell
-pip install "governance-ledger[guard]"
-```
-
-The `guard` extra selects `waveframe-guard==0.15.0`, matching the released Guard
-compatibility metadata that tests Guard 0.15.0 with Ledger 0.5.0; the Ledger v0.7.0
-release matrix revalidates that same Guard version. Applications such as Cloud can
-instead inject a compatible evaluator without installing Guard in Ledger's environment:
+This is a Ledger 0.8 release blocker. A separately reviewed Guard release must test the
+Ledger 0.8 line and widen its dependency range. Before Ledger 0.8 publication, this
+repository must restore `pip install "governance-ledger[guard]"` for that exact Guard
+release and require `pip check`. The current `--no-deps` Guard 0.16.1 runtime test is
+supplemental behavioral evidence only and is not package-compatibility evidence.
+Applications can inject a compatible evaluator without installing Guard in Ledger's
+environment:
 
 ```python
 from governance_ledger.replay import replay_admissibility
@@ -139,11 +139,12 @@ result = replay_admissibility(
 )
 ```
 
-Existing callers that omit `evaluator` retain Guard-backed replay after installing
-the `guard` extra. Without either an evaluator or that extra, Ledger raises an
-actionable `GuardIntegrationUnavailableError`. Ledger prepares, publishes, replays,
-and verifies authority evidence; Guard evaluates runtime admissibility. Enforcement
-logic remains outside Ledger.
+Existing callers that omit `evaluator` may use a separately installed compatible Guard.
+During 0.8 development there is intentionally no advertised Guard extra. Without either
+an evaluator or compatible Guard, Ledger raises an actionable
+`GuardIntegrationUnavailableError`. Ledger prepares, publishes, replays, and verifies
+authority evidence; Guard evaluates runtime admissibility. Enforcement logic remains
+outside Ledger.
 
 Local checkout path resolution is not part of production behavior.
 
@@ -156,6 +157,41 @@ Clauses inside the selected grammar compile directly. Every other nonempty claus
 The domain-pack publication path emits standalone `compiled_authority_contract.v2`, limited to the repository pack's current acting-role and exact/prefix path allow/deny lowering. Advanced conditions, evidence, exceptions, approvals, and other obligations remain representable in Constraint IR but fail closed until a trusted lowering supports them. Released v0.6 compatibility outputs remain unchanged.
 
 See [Deterministic Domain-Pack Policy Compiler](docs/DOMAIN_PACK_COMPILER.md) for the representation boundaries, guided-mapping workflow, exact public APIs, repository/finance compatibility boundary, and native `authority_bundle.v2` provenance chain.
+
+## Untrusted policy translation proposals
+
+Ledger provides a model-agnostic `policy_translation_proposal.v1` boundary for coding-agent
+engineering policy. A model proposes; a human confirms; Ledger validates, renders, and
+compiles; Guard enforces the existing v2 publication without a model. Exact source bytes
+remain bound through the semantic commitment, contract, bundle, receipt, and Guard
+evidence. Ordered proposal run descriptors retain exact request/response hashes and
+attribution, never raw bytes. Optional raw request/response bytes live in a separate,
+private, independently deletable retention artifact; optional provider prose lives only
+there. Provider output and explanations
+are evidence, never runtime authority or approval text.
+
+Each clause may contain an ordered list of candidate controls, and each control requires
+its own human confirmation. The human separately confirms whether the original visible
+clause is fully represented, partially represented with explicit unsupported residual
+meaning, entirely unsupported, or informational. Ledger proves exact source preservation
+and the confirmed mappings; it cannot mathematically prove that an untrusted translator
+extracted every meaning from arbitrary English. That semantic-completeness judgment is
+explicitly human-confirmed.
+
+The unchanged v2 publication path supports multiple controls only when the deterministic
+source grammar reconstructs all of them. It cannot encode multiple human-mapped controls,
+or both enforced and residual unsupported meaning, inside one otherwise pending source
+statement. Those cases validate for review but fail closed at finalization pending a
+separately reviewed additive normative publication design.
+
+The first catalog truthfully supports only autonomous-agent repository modification,
+repository roles, and exact/prefix path allow/deny controls already implemented by the
+released repository compiler and Guard 0.16.1 boundary. Branch, push, pull-request,
+reviewer, threshold, separation-of-duties, environment, and evidence semantics fail
+closed. The proposal schema uses portable capability identifiers, while the trusted
+catalog registry—not caller input—decides what is actually available. See [Untrusted
+Policy Translation Proposals](docs/UNTRUSTED_POLICY_TRANSLATION.md).
+for the APIs, provenance proof, coverage rules, and precise limitations.
 
 ## v0.6 Customer-Policy Compatibility Service
 
@@ -266,8 +302,10 @@ governance-ledger replay-execution `
   --execution-state execution_state.json
 ```
 
-The CLI form uses the optional Guard adapter and therefore requires the `guard`
-extra. Programmatic callers may use evaluator injection instead.
+The CLI form uses the optional Guard adapter and therefore requires a separately
+installed, dependency-compatible Guard. Ledger 0.8 development intentionally advertises
+no Guard extra until the release blocker above is resolved. Programmatic callers may use
+evaluator injection instead.
 
 Generate semantic governance artifacts:
 
@@ -420,6 +458,10 @@ Semantic artifacts also carry immutable input hashes. Authority bundles bind con
 
 Canonical schemas live in [schemas/](schemas/), including:
 
+- [policy_translation_capability_catalog.v1.json](schemas/policy_translation_capability_catalog.v1.json): immutable finite coding-agent capability boundary.
+- [policy_translation_proposal.v1.json](schemas/policy_translation_proposal.v1.json): strict exact-source-bound untrusted translation proposal.
+- [policy_translation_confirmation.v1.json](schemas/policy_translation_confirmation.v1.json): bounded human bindings, per-control confirmations, clause coverage decisions, acknowledgements, and coverage.
+- [policy_translation_approval.v1.json](schemas/policy_translation_approval.v1.json): approval binding proposal, confirmation, review, source, catalog, authority, and coverage.
 - [domain_pack.v1.json](schemas/domain_pack.v1.json): immutable, versioned deterministic domain-pack contracts.
 - [runtime_fact_schema.v1.json](schemas/runtime_fact_schema.v1.json): exact proposal/derived runtime fact contracts.
 - [constraint_ir.v1.json](schemas/constraint_ir.v1.json): Waveframe-owned typed enforcement Constraint IR.
@@ -437,6 +479,12 @@ Canonical schemas live in [schemas/](schemas/), including:
 - [governance_review_packet.v1.json](schemas/governance_review_packet.v1.json): governance review packets.
 - [authority_bundle.v1.json](schemas/authority_bundle.v1.json): authority bundles.
 - [publication_receipt.v1.json](schemas/publication_receipt.v1.json): publication receipts.
+- [policy_translation_capability_catalog.v1.json](schemas/policy_translation_capability_catalog.v1.json): finite coding-agent translation capabilities.
+- [policy_translation_proposal.v1.json](schemas/policy_translation_proposal.v1.json): exact-source, ordered-run untrusted proposals.
+- [policy_translation_run_evidence.v1.json](schemas/policy_translation_run_evidence.v1.json): optional private raw run evidence.
+- [policy_translation_confirmation.v1.json](schemas/policy_translation_confirmation.v1.json): bounded human confirmations.
+- [policy_translation_review.v1.json](schemas/policy_translation_review.v1.json): deterministic approval-bound reviews.
+- [policy_translation_approval.v1.json](schemas/policy_translation_approval.v1.json): proposal publication approvals.
 - [authority_lifecycle_event.v1.json](schemas/authority_lifecycle_event.v1.json): append-only authority lifecycle events.
 - [governance_semantic_extraction.v1.json](schemas/governance_semantic_extraction.v1.json): deterministic semantic extraction artifacts.
 - [governance_semantic_provenance.v1.json](schemas/governance_semantic_provenance.v1.json): semantic provenance and source-span bindings.
