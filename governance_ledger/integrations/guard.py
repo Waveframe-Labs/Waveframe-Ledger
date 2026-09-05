@@ -20,8 +20,8 @@ def load_guard_admissibility_evaluator() -> AdmissibilityEvaluator:
     except ImportError:
         raise GuardIntegrationUnavailableError(
             "Admissibility replay requires an injected evaluator or the optional "
-            "Waveframe Guard integration. Ledger 0.8 development does not advertise "
-            "a Guard extra until a released Guard widens and verifies its dependency range."
+            "Waveframe Guard integration. Install governance-ledger[guard] to use "
+            "the release-tested Guard integration."
         ) from None
 
     if not callable(evaluate_admissibility):

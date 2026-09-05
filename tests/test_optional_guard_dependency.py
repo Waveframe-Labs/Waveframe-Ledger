@@ -44,7 +44,7 @@ def built_ledger_wheel(tmp_path_factory: pytest.TempPathFactory) -> Path:
     return wheels[0]
 
 
-def test_built_wheel_does_not_advertise_an_unsatisfiable_guard_extra(
+def test_built_wheel_advertises_the_exact_release_tested_guard_extra(
     built_ledger_wheel: Path,
 ) -> None:
     with zipfile.ZipFile(built_ledger_wheel) as archive:
@@ -60,23 +60,39 @@ def test_built_wheel_does_not_advertise_an_unsatisfiable_guard_extra(
         if line.lower().startswith("requires-dist: waveframe-guard")
     ]
 
-    assert guard_requirements == []
+    assert guard_requirements == [
+        'Requires-Dist: waveframe-guard==0.17.0; extra == "guard"'
+    ]
 
 
-def test_guard_0161_dependency_range_is_an_explicit_ledger_08_release_blocker() -> None:
+def test_guard_0170_dependency_range_is_release_compatible() -> None:
     project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
-    assert "guard" not in project["project"]["optional-dependencies"]
-    blocker = project["tool"]["waveframe"]["guard-compatibility"]
-    assert blocker == {
-        "status": "release-blocked",
-        "last_resolvable_ledger": "0.7.0",
-        "last_resolvable_guard": "0.16.1",
-        "guard_ledger_requirement": ">=0.7.0,<0.8.0",
-        "required_before_ledger_0_8_release": (
-            "Release a Guard version tested with Ledger 0.8, restore the guard extra "
-            "to that exact version, and pass clean extra installation plus pip check."
-        ),
+    assert project["project"]["version"] == "0.8.0"
+    assert project["project"]["optional-dependencies"]["guard"] == [
+        "waveframe-guard==0.17.0"
+    ]
+    compatibility = project["tool"]["waveframe"]["guard-compatibility"]
+    assert compatibility == {
+        "status": "release-compatible",
+        "ledger": "0.8.0",
+        "guard": "0.17.0",
+        "guard_ledger_requirement": ">=0.7.0,<0.9.0",
+        "release_tested_extra": "waveframe-guard==0.17.0",
     }
+
+
+def test_release_version_is_consistent_across_release_metadata() -> None:
+    changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    release_notes = (ROOT / "RELEASE_NOTES.md").read_text(encoding="utf-8")
+    citation = (ROOT / "CITATION.cff").read_text(encoding="utf-8")
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+
+    assert "## 0.8.0 - 2026-09-04" in changelog
+    assert "# Waveframe Ledger v0.8.0 Release Notes" in release_notes
+    assert 'version: "0.8.0"' in citation
+    assert 'date-released: "2026-09-04"' in citation
+    assert 'governance-ledger[guard]==0.8.0' in readme
+    assert "0.8.0.dev0" not in f"{changelog}\n{release_notes}\n{citation}\n{readme}"
 
 
 def test_clean_environment_installs_and_runs_core_without_guard(
@@ -161,7 +177,7 @@ def test_missing_evaluator_and_guard_raises_actionable_ledger_error(monkeypatch)
 
     with pytest.raises(
         GuardIntegrationUnavailableError,
-        match=r"does not advertise a Guard extra",
+        match=r"Install governance-ledger\[guard\]",
     ) as caught:
         replay_admissibility(
             authority_contract=_authority_contract(),

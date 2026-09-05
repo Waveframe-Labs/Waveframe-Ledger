@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "governance-ledger"
-version = "0.8.0.dev0"
+version = "0.8.0"
 description = "Governance compiler and semantic derivation infrastructure for deterministic governance operationalization."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -19,17 +19,20 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+guard = [
+    "waveframe-guard==0.17.0"
+]
 dev = [
     "pytest>=7",
     "jsonschema>=4"
 ]
 
 [tool.waveframe.guard-compatibility]
-status = "release-blocked"
-last_resolvable_ledger = "0.7.0"
-last_resolvable_guard = "0.16.1"
-guard_ledger_requirement = ">=0.7.0,<0.8.0"
-required_before_ledger_0_8_release = "Release a Guard version tested with Ledger 0.8, restore the guard extra to that exact version, and pass clean extra installation plus pip check."
+status = "release-compatible"
+ledger = "0.8.0"
+guard = "0.17.0"
+guard_ledger_requirement = ">=0.7.0,<0.9.0"
+release_tested_extra = "waveframe-guard==0.17.0"
 
 [project.scripts]
 governance-ledger = "governance_ledger.cli:main"

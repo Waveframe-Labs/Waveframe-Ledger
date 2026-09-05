@@ -6,7 +6,7 @@ domain: "governance-publication"
 version: "1.0.0-draft"
 status: "Draft"
 created: "2026-07-13"
-updated: "2026-07-13"
+updated: "2026-09-04"
 author:
   name: "Waveframe Labs"
 license: "Apache-2.0"
@@ -57,16 +57,23 @@ The user-facing platform term is:
 Published Authority
 ```
 
-The canonical machine-readable publication object is:
+The canonical machine-readable publication objects are the versioned
+`authority_bundle` schema family:
 
 ```text
 authority_bundle.v1
+authority_bundle.v2
+authority_bundle.v3
 ```
 
-`authority_bundle.v1` is the transport and preservation representation of a Published Authority. The conceptual name and schema name serve different purposes:
+Each is a transport and preservation representation of a Published Authority. Version
+1 remains the compatibility representation, version 2 adds the native domain-pack
+publication chain, and version 3 additively binds multi-control and partial-coverage
+translation commitments. The conceptual name and schema names serve different purposes:
 
 - **Published Authority** is the product and domain concept.
-- **`authority_bundle.v1`** is the canonical serialized object currently used to represent it.
+- **`authority_bundle.v1`**, **`.v2`**, and **`.v3`** are compatible, explicitly
+  versioned serialized representations.
 
 A compiled contract by itself is not a Published Authority.
 
@@ -241,9 +248,9 @@ rendered deterministically from validated controls and residual dispositions.
 
 This is additive, not an upgrade of existing artifacts. Released v2 schemas, hashes,
 fixtures, dispatch, and validation behavior remain unchanged. Consumers must opt into
-v3 explicitly. Guard requires separate additive v3 loader and verifier support before a
-native v3 bundle is runtime-loadable; the embedded compiled-contract semantics remain
-v2.
+v3 explicitly. Guard 0.17.0 verifies and enforces native v3 publications; the embedded
+runtime payload remains `compiled_authority_contract.v2`. Hosted Cloud authoring and
+native v3 serving are not yet available.
 
 ## 6. Publication transaction
 

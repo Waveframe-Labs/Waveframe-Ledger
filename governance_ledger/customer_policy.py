@@ -24,7 +24,6 @@ from governance_ledger.publication_provenance import (
     MAX_STATEMENT_MAPPINGS,
     bytes_sha256,
     canonical_sha256,
-    hash_without_field,
     resolution_record_id,
     resolution_set_id,
     source_statement_id,

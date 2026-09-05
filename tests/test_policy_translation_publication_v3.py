@@ -22,8 +22,8 @@ from governance_ledger import (
     validate_policy_translation_proposal,
     validate_publication_receipt,
 )
-from governance_ledger.publication_provenance import canonical_sha256
 from governance_ledger.constraint_ir import artifact_hash
+from governance_ledger.publication_provenance import canonical_sha256
 from tests.test_policy_translation import (
     _approved,
     _base,
@@ -438,3 +438,90 @@ def test_v3_validation_and_customer_coverage_are_deterministic() -> None:
     assert first == second
     assert inspect_policy_translation_customer_coverage(proposal) == inspect_policy_translation_customer_coverage(copy.deepcopy(proposal))
     assert canonical_sha256(first["authority_bundle"]) == canonical_sha256(second["authority_bundle"])
+
+
+def test_guard_0170_loads_native_v3_after_private_evidence_deletion_and_enforces(
+    tmp_path: Path,
+) -> None:
+    pytest.importorskip("waveframe_guard")
+    from importlib.metadata import version
+
+    from guard.sdk import Guard, GuardExecutionBlocked
+    from waveframe_guard.authority.adapters import LocalRegistryResolver
+
+    assert version("waveframe-guard") == "0.17.0"
+    assert version("governance-ledger") == "0.8.0"
+
+    publication = _publish(
+        _proposal(b"Agents may modify README.md and CHANGELOG.md.")
+    )
+    private_evidence = tmp_path / "private-translation-evidence.json"
+    private_evidence.write_text(
+        '{"provider":"private","request":"private","response":"private"}',
+        encoding="utf-8",
+    )
+    private_evidence.unlink()
+    assert not private_evidence.exists()
+
+    public_root = tmp_path / "publication"
+    contracts = public_root / "contracts"
+    contracts.mkdir(parents=True)
+    bundle_ref = "contracts/repository-authority-1.0.0.authority-bundle.json"
+    receipt_ref = "contracts/repository-authority-1.0.0.publication-receipt.json"
+    bundle = publication["authority_bundle"]
+    receipt = publication["publication_receipt"]
+    (public_root / bundle_ref).write_text(json.dumps(bundle), encoding="utf-8")
+    (public_root / receipt_ref).write_text(json.dumps(receipt), encoding="utf-8")
+    registry = {
+        "schema_version": "contract_registry.v1",
+        "contracts": [
+            {
+                "authority_ref": "repository-authority@1.0.0",
+                "contract_id": "repository-authority",
+                "contract_version": "1.0.0",
+                "contract_hash": publication["compiled_authority_contract"][
+                    "contract_hash"
+                ],
+                "bundle_path": bundle_ref,
+                "bundle_hash": bundle["bundle_hash"],
+                "receipt_path": receipt_ref,
+                "receipt_hash": receipt["receipt_hash"],
+                "publication_id": receipt["publication_id"],
+                "published_at": receipt["published_at"],
+                "published_by": receipt["published_by"],
+                "lifecycle_state": "active",
+            }
+        ],
+    }
+    registry["registry_hash"] = canonical_sha256(registry)
+    registry_path = contracts / "index.json"
+    registry_path.write_text(json.dumps(registry), encoding="utf-8")
+
+    guard = Guard.local(
+        workspace=tmp_path / "guard-evidence",
+        authority="repository-authority@1.0.0",
+        authority_resolver=LocalRegistryResolver(
+            registry_path=registry_path,
+            workspace_root=public_root,
+        ),
+        actor_identity={"id": "release-agent", "type": "agent"},
+    )
+    mutations: list[str] = []
+
+    @guard.tool(action="modify", target="path", return_result=True)
+    def modify(path: str) -> str:
+        mutations.append(path)
+        return path
+
+    assert modify("README.md")["executed"] is True
+    assert modify("CHANGELOG.md")["executed"] is True
+    with pytest.raises(GuardExecutionBlocked):
+        modify("src/unpublished.py")
+
+    loaded = guard.boundary_for().loaded_authority
+    assert loaded.schema_version == "authority_bundle.v3"
+    assert loaded.contract["schema_version"] == "compiled_authority_contract.v2"
+    assert loaded.authority_evidence["publication_receipt"]["schema_version"] == (
+        "publication_receipt.v3"
+    )
+    assert mutations == ["README.md", "CHANGELOG.md"]

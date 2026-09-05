@@ -1099,7 +1099,7 @@ def test_proposal_cannot_masquerade_as_released_runtime_schema() -> None:
             _schema_validate(masquerading, filename)
 
 
-def test_guard_0161_cold_verification_binds_v2_publication_to_exact_source(
+def test_guard_0170_cold_verification_binds_v2_publication_to_exact_source(
     tmp_path: Path,
 ) -> None:
     pytest.importorskip("waveframe_guard")
@@ -1108,7 +1108,7 @@ def test_guard_0161_cold_verification_binds_v2_publication_to_exact_source(
     from waveframe_guard.authority import load_authority
     from waveframe_guard.authority.adapters import LocalRegistryResolver
 
-    assert version("waveframe-guard") == "0.16.1"
+    assert version("waveframe-guard") == "0.17.0"
     result = _final(_proposal())
     bundle = result["authority_bundle"]
     receipt = result["publication_receipt"]

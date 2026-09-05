@@ -1,36 +1,44 @@
 # Changelog
 
-## 0.8.0.dev0 (development)
+## 0.8.0 - 2026-09-04
 
-- Adds the untrusted policy-translation proposal boundary under development. Ordered
-  translation-run descriptors retain hashes and attribution only; optional raw run
-  evidence is a separate, independently deletable private artifact.
-- Supports ordered zero-or-more candidate controls per clause, individual control
-  confirmations, explicit full/partial/unsupported/informational clause coverage, exact
-  residual spans, catalog-registry resolution, and enforced run chronology.
-- Removes provider-written prose from durable proposals and renders primary customer
-  explanations deterministically from validated controls.
-- Records Guard 0.8 dependency compatibility as a release blocker; Guard 0.16.1
-  `--no-deps` verification is supplemental runtime evidence only.
-- Preserves every released v0.6/v0.7 schema and compatibility hash. No v0.7.0
-  distribution artifact is modified or republished.
-- Adds the provider-free `policy_translation_commitment.v1`, native
-  `authority_bundle.v3`, and `publication_receipt.v3` path for confirmed
-  clause-to-many-control meaning and explicitly acknowledged residual meaning. The
-  runtime payload remains the unchanged `compiled_authority_contract.v2`.
-- Adds deterministic six-state customer coverage and full, partial, waiting,
-  unenforced, and informational totals. Published artifacts contain no model,
-  provider, prompt, retry, token-usage, request, response, or private run evidence.
-- Records Waveframe-Guard#27 as the additive v3 verifier follow-on. Guard 0.16.1
-  remains valid v2 regression evidence but does not support native v3 bundles.
+Waveframe Ledger v0.8.0 introduces an untrusted policy-translation proposal boundary
+and additive native v3 publication while preserving every released v1/v2 schema and
+compatibility behavior.
 
-## Unreleased
+### Added
 
-- Added the strict, model-agnostic `policy_translation_proposal.v1` authoring boundary,
-  finite coding-agent capability catalog, canonical human confirmation/approval records,
-  deterministic review rendering, exact clause coverage, and unchanged v2 lowering.
-- Guard 0.16.1 continues to verify v2 publications as supplemental runtime evidence, but
-  its `<0.8.0` Ledger dependency bound prevents an honest 0.8 optional extra.
+- Strict, model-agnostic `policy_translation_proposal.v1` authoring, finite capability
+  catalogs, canonical human confirmation and approval, deterministic review rendering,
+  exact clause coverage, and enforced translation-run chronology.
+- Ordered zero-or-more candidate controls per clause, with independent human
+  confirmation for every control and explicit full, partial, unsupported, or
+  informational clause coverage.
+- Provider-free `policy_translation_commitment.v1`, `authority_bundle.v3`, and
+  `publication_receipt.v3` artifacts for clause-to-many-control meaning and explicitly
+  acknowledged residual meaning.
+- Six deterministic customer coverage states and exact full, partial, waiting,
+  unenforced, informational, confirmed-control, and acknowledged-residual totals.
+
+### Changed
+
+- Restored the optional `guard` extra with the exact release-tested dependency
+  `waveframe-guard==0.17.0`. Guard 0.17.0 verifies native v3 publications and enforces
+  their unchanged `compiled_authority_contract.v2` runtime payload.
+- Provider and model evidence remains private, independently deletable authoring
+  evidence. Ledger neither calls nor bundles an AI or model provider, and published
+  authority contains no provider, model, prompt, retry, token-usage, request, response,
+  or private run evidence.
+
+### Compatibility
+
+- Existing v1/v2 schemas, validators, fixtures, canonical hashes, and compatibility
+  behavior remain unchanged. Native v3 is additive and explicitly selected.
+- Partial coverage enforces only independently confirmed published controls; exact
+  acknowledged residual meaning remains public provenance and never becomes executable.
+- Ledger does not claim arbitrary English policy comprehension. It proves source
+  preservation and confirmed mappings; semantic completeness remains a human decision.
+- Hosted Cloud authoring and native v3 serving are not yet available.
 
 ## 0.7.0 - 2026-08-31
 

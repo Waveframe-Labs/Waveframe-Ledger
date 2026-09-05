@@ -209,6 +209,11 @@ manifest, and canonical provenance hashes. `publication_receipt.v3` repeats thos
 bindings and binds the v3 bundle hash. Version dispatch requires an exact v3/v3 pair;
 released v2 artifacts are neither upgraded nor reinterpreted.
 
+Waveframe Guard 0.17.0 independently validates the complete native v3 publication before
+enforcing its `compiled_authority_contract.v2` runtime payload. Existing v1/v2 validation
+and enforcement paths remain unchanged. Hosted Cloud authoring and native v3 serving are
+not yet available; local publication and verification do not depend on Cloud.
+
 The public approval and all later identities are derived without the proposal or private
 run evidence. Deleting provider/model/prompt data, raw requests or responses, retries,
 failures, explanations, or token usage therefore cannot invalidate the commitment,
