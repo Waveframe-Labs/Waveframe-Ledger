@@ -185,7 +185,6 @@ class Acceptance:
         self.suites(installed, support, "installed", installed=True)
         self.probe(installed, support, "package", "check_action_policy_package.py", native=True)
         self.run("installed-cli", installed.parent / ("governance-ledger.exe" if os.name == "nt" else "governance-ledger"), "--help", cwd=support)
-        self.run("installed-v3-example", installed, "-I", support / "examples/native_v3_multi_control.py", cwd=support)
         current_history = self.probe(installed, support, "candidate-history", "check_action_policy_history.py")
         negative = self.environment("resolver-negative")
         rejection = self.run("reject-compiler-040", negative, "-m", "pip", "install", "--dry-run",
@@ -196,6 +195,7 @@ class Acceptance:
         guard = self.environment("guard-extra", f"{wheel}[dev,guard]", *candidate)
         self.probe(guard, support, "guard-provenance", "check_compiler_provenance.py")
         self.suites(guard, support, "guard-extra", installed=True, guard=True)
+        self.run("installed-v3-example", guard, "-I", support / "examples/native_v3_multi_control.py", cwd=support)
         for version in ("0.7.0", "0.8.0"):
             name = "published-" + version
             published = self.environment(name, f"governance-ledger=={version}",
