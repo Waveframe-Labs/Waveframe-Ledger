@@ -1,5 +1,5 @@
 recursive-include schemas *.json
-recursive-include tests *.py *.json *.md *.txt
+recursive-include tests *.py *.json *.md *.txt *.base64
 recursive-include examples *.py
 recursive-include tools *.py
 recursive-include docs *.md *.json

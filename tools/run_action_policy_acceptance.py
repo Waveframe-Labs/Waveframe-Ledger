@@ -52,7 +52,7 @@ class Acceptance:
                                         "cwd": str(cwd), "exit_code": result.returncode})
         self.save()
         if (result.returncode != 0) != negative:
-            print(result.stdout, flush=True)
+            print(result.stdout[-12000:], flush=True)
             raise RuntimeError(f"{label}: unexpected exit {result.returncode}")
         return result.stdout
 
@@ -139,6 +139,14 @@ class Acceptance:
         support.mkdir()
         with tarfile.open(sdist) as archive:
             members = {Path(*Path(m.name).parts[1:]).as_posix(): m for m in archive.getmembers() if m.isfile()}
+            tracked = subprocess.check_output(["git", "ls-files", "tests", "schemas", "examples", "tools", "docs"], cwd=ROOT, text=True).splitlines()
+            resource_hashes = {}
+            for path in tracked:
+                assert path in members, f"missing packaged acceptance resource: {path}"
+                packaged = archive.extractfile(members[path]).read()
+                assert packaged == (ROOT / path).read_bytes(), f"changed packaged resource: {path}"
+                resource_hashes[path] = hashlib.sha256(packaged).hexdigest()
+            self.report["sdist_resource_sha256"] = resource_hashes
             for required in ("schemas/authority_bundle.v4.json", "schemas/publication_receipt.v4.json",
                              "tests/test_action_policy_v4.py", "examples/native_v4_development.py",
                              "tools/check_action_policy_package.py", "requirements-action-policy-dev.txt", "requirements-ci.txt"):
