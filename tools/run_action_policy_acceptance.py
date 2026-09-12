@@ -1,0 +1,234 @@
+"""Cross-platform issue #19 gate; all environments use ordinary pip resolution.
+
+Run from a clean checkout with requirements-ci.txt installed. Reports and command
+logs survive failures. No fixtures are regenerated and no packages are published.
+"""
+from __future__ import annotations
+
+import argparse
+from collections import Counter
+from email.parser import BytesParser
+import hashlib
+import json
+import os
+from pathlib import Path
+import re
+import subprocess
+import sys
+import tarfile
+import venv
+import xml.etree.ElementTree as ET
+import zipfile
+
+ROOT = Path(__file__).resolve().parents[1]
+DEV = "WAVEFRAME_LEDGER_ACTION_POLICY_DEV"
+
+
+class Acceptance:
+    def __init__(self, output: Path):
+        self.output = output.resolve()
+        self.output.mkdir(parents=True, exist_ok=False)
+        self.env = os.environ.copy()
+        self.env.pop(DEV, None)
+        self.env.pop("PYTHONPATH", None)
+        self.env["PYTHONUTF8"] = "1"
+        self.env["PIP_DISABLE_PIP_VERSION_CHECK"] = "1"
+        # Applies to nested PEP 517 build isolation too, without bypassing resolution.
+        self.env["PIP_CONSTRAINT"] = str(ROOT / "requirements-ci.txt")
+        self.report = {"python": sys.version, "commands": [], "suites": {}}
+
+    def save(self):
+        (self.output / "acceptance.json").write_text(
+            json.dumps(self.report, indent=2), encoding="utf-8")
+
+    def run(self, label, *args, cwd=ROOT, env=None, negative=False):
+        command = [str(arg) for arg in args]
+        print(f"[{label}] {' '.join(command)}", flush=True)
+        result = subprocess.run(command, cwd=cwd, env=env or self.env,
+                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                encoding="utf-8", errors="replace")
+        (self.output / f"{label}.log").write_text(result.stdout, encoding="utf-8")
+        self.report["commands"].append({"label": label, "command": command,
+                                        "cwd": str(cwd), "exit_code": result.returncode})
+        self.save()
+        if (result.returncode != 0) != negative:
+            print(result.stdout, flush=True)
+            raise RuntimeError(f"{label}: unexpected exit {result.returncode}")
+        return result.stdout
+
+    def environment(self, name, *requirements):
+        folder = self.output / name
+        venv.EnvBuilder(with_pip=True).create(folder)
+        python = folder / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+        self.run(f"{name}-pip", python, "-m", "pip", "install", "pip==25.3")
+        self.run(f"{name}-install", python, "-m", "pip", "install",
+                 "-r", ROOT / "requirements-ci.txt", *requirements,
+                 "--report", self.output / f"{name}-install.json")
+        self.run(f"{name}-check", python, "-m", "pip", "check")
+        self.run(f"{name}-freeze", python, "-m", "pip", "freeze", "--all")
+        return python
+
+    def suites(self, python, root, label, *, installed=False, guard=False):
+        for native in (False, True):
+            name = f"{label}-{'native' if native else 'default'}"
+            env = self.env.copy()
+            if native:
+                env[DEV] = "1"
+            env["LEDGER_EXPECT_IMPORT_ROOT"] = str(python.parent.parent if installed else ROOT)
+            env["LEDGER_IMPORT_REPORT"] = str(self.output / f"{name}-imports.json")
+            xml = self.output / f"{name}.xml"
+            self.run(name, python, "-I", root / "tools/acceptance_pytest.py", "-q", "-ra",
+                     "--junitxml", xml, "tests", cwd=root, env=env)
+            cases = list(ET.parse(xml).iter("testcase"))
+            skipped = [case for case in cases if case.find("skipped") is not None]
+            reasons = Counter(case.find("skipped").get("message") for case in skipped)
+            counts = {"passed": len(cases) - len(skipped), "skipped": len(skipped),
+                      "skip_reasons": dict(reasons),
+                      "native_passed": sum("test_action_policy_v4" in case.get("classname", "")
+                                           and case.find("skipped") is None for case in cases)}
+            self.report["suites"][name] = counts
+            self.save()
+            # The inherited suite has 44 opt-in cases and 3 optional Guard skips
+            # (one is a module-level collection skip). Any other skip is a failure.
+            dev_skips = sum("explicit action-policy development opt-in" in case.find("skipped").get("message", "") for case in skipped)
+            guard_skips = sum("waveframe_guard" in (case.find("skipped").get("message", "")
+                              + (case.find("skipped").text or "")) for case in skipped)
+            assert dev_skips == (0 if native else 44), counts
+            assert guard_skips == (0 if guard else 3), counts
+            assert len(skipped) == dev_skips + guard_skips, counts
+            assert counts["native_passed"] == (44 if native else 0), counts
+            print(f"[{name}] {counts}", flush=True)
+
+    def probe(self, python, root, name, tool, *, native=False, isolated=True):
+        env = self.env.copy()
+        if native:
+            env[DEV] = "1"
+        result = self.run(name, python, *(["-I"] if isolated else []),
+                          root / "tools" / tool, cwd=root, env=env)
+        value = json.loads(result)
+        (self.output / f"{name}.json").write_text(json.dumps(value, indent=2), encoding="utf-8")
+        return value
+
+    def build(self):
+        dist = self.output / "dist"
+        # build's default path builds the wheel from the freshly created sdist.
+        self.run("build", sys.executable, "-m", "build", "--outdir", dist)
+        files = sorted(dist.iterdir())
+        assert len(files) == 2
+        self.run("twine", sys.executable, "-m", "twine", "check", "--strict", *files)
+        wheel, = dist.glob("*.whl")
+        sdist, = dist.glob("*.tar.gz")
+        self.report["package_sha256"] = {
+            path.name: hashlib.sha256(path.read_bytes()).hexdigest() for path in files}
+        with zipfile.ZipFile(wheel) as archive:
+            names = archive.namelist()
+            for required in ("action_policy.py", "action_policy_publication.py", "cli.py", "domain_packs.py"):
+                assert f"governance_ledger/{required}" in names
+            assert not any(name.startswith(("compiler/", "tests/")) for name in names)
+            metadata = BytesParser().parsebytes(archive.read(next(n for n in names if n.endswith(".dist-info/METADATA"))))
+            from packaging.requirements import Requirement
+            requires = [Requirement(value) for value in metadata.get_all("Requires-Dist")]
+            compiler, = [req for req in requires if req.name == "cricore-contract-compiler"]
+            assert str(compiler.specifier) == "<0.6.0,>=0.5.0" and compiler.url is None
+            guard, = [req for req in requires if req.name == "waveframe-guard"]
+            assert str(guard.specifier) == "==0.17.0" and str(guard.marker) == 'extra == "guard"'
+            assert metadata["Version"] == "0.8.0" and metadata["Requires-Python"] == ">=3.10"
+            self.report["wheel_metadata"] = dict(metadata.items())
+        # Extract only support resources, never Ledger source, into installed test cwd.
+        support = self.output / "installed-support"
+        support.mkdir()
+        with tarfile.open(sdist) as archive:
+            members = {Path(*Path(m.name).parts[1:]).as_posix(): m for m in archive.getmembers() if m.isfile()}
+            for required in ("schemas/authority_bundle.v4.json", "schemas/publication_receipt.v4.json",
+                             "tests/test_action_policy_v4.py", "examples/native_v4_development.py",
+                             "tools/check_action_policy_package.py", "requirements-action-policy-dev.txt", "requirements-ci.txt"):
+                assert required in members, required
+            for path, member in members.items():
+                relative = Path(path)
+                assert not relative.is_absolute() and ".." not in relative.parts
+                if relative.parts[0] in {"tests", "schemas", "examples", "tools", "docs"} or len(relative.parts) == 1:
+                    target = support / relative
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    target.write_bytes(archive.extractfile(member).read())
+        assert not (support / "governance_ledger").exists()
+        (support / "runtime").mkdir()
+        self.env["WAVEFRAME_LEDGER_TEST_WHEEL"] = str(wheel)
+        self.save()
+        return wheel, support
+
+    def execute(self, expected_head):
+        assert re.fullmatch(r"[0-9a-f]{40}", expected_head), "explicit full commit required"
+        head = self.run("head", "git", "rev-parse", "HEAD").strip()
+        assert head == expected_head, (head, expected_head)
+        self.report.update(head=head, expected_head=expected_head)
+        self.run("clean-tracked-checkout", "git", "diff", "--exit-code", "HEAD")
+        self.run("preserved-evidence", "git", "diff", "--exit-code",
+                 "54379d9c8044544fc1b8f32109bdfce35c1c6a05", "--", "tests/fixtures", "docs/acceptance/issue17", "governance_ledger")
+        wheel, support = self.build()
+        candidate = ["-r", ROOT / "requirements-action-policy-dev.txt"]
+        source = self.environment("source", "-e", f"{ROOT}[dev]", *candidate)
+        self.probe(source, ROOT, "source-provenance", "check_compiler_provenance.py")
+        self.suites(source, ROOT, "source")
+        installed = self.environment("installed", f"{wheel}[dev]", *candidate)
+        self.probe(installed, support, "installed-provenance", "check_compiler_provenance.py")
+        self.suites(installed, support, "installed", installed=True)
+        self.probe(installed, support, "package", "check_action_policy_package.py", native=True)
+        self.run("installed-cli", installed.parent / ("governance-ledger.exe" if os.name == "nt" else "governance-ledger"), "--help", cwd=support)
+        self.run("installed-v3-example", installed, "-I", support / "examples/native_v3_multi_control.py", cwd=support)
+        current_history = self.probe(installed, support, "candidate-history", "check_action_policy_history.py")
+        negative = self.environment("resolver-negative")
+        rejection = self.run("reject-compiler-040", negative, "-m", "pip", "install", "--dry-run",
+                             wheel, "cricore-contract-compiler==0.4.0", negative=True)
+        assert "ResolutionImpossible" in rejection and "0.4.0" in rejection and "0.5.0" in rejection, rejection
+        self.report["compiler_040_resolver_rejected"] = True
+        # Ordinary complete extra installation; legacy replay only, no native Guard claim.
+        guard = self.environment("guard-extra", f"{wheel}[dev,guard]", *candidate)
+        self.probe(guard, support, "guard-provenance", "check_compiler_provenance.py")
+        self.suites(guard, support, "guard-extra", installed=True, guard=True)
+        for version in ("0.7.0", "0.8.0"):
+            name = "published-" + version
+            published = self.environment(name, f"governance-ledger=={version}",
+                                         "waveframe-guard==0.18.0", "cricore-contract-compiler==0.4.0")
+            self.probe(published, support, name + "-rejections", "check_action_policy_old_runtime.py")
+            if version == "0.8.0":
+                history = self.probe(published, support, "published-history", "check_action_policy_history.py")
+                assert current_history == history, "historical hashes changed; see history reports"
+                retained = json.loads((ROOT / "docs/acceptance/issue17/historical-hash-comparison.json").read_text())
+                assert history["artifact_hashes"] == retained["published"]["artifact_hashes"], "retained historical identities changed"
+                # #17 recorded raw Windows CRLF checkout hashes. Preserve those
+                # records; distinguish them from Git blob and current checkout bytes.
+                golden = {}
+                for path, recorded in retained["published"]["golden_file_sha256"].items():
+                    blob = subprocess.check_output(["git", "show", f"HEAD:{path}"], cwd=ROOT)
+                    windows_hash = hashlib.sha256(blob.replace(b"\r\n", b"\n").replace(b"\n", b"\r\n")).hexdigest()
+                    assert windows_hash == recorded, (path, windows_hash, recorded)
+                    golden[path] = {"git_blob_sha256": hashlib.sha256(blob).hexdigest(),
+                                    "checkout_sha256": history["golden_file_sha256"][path],
+                                    "retained_issue17_windows_crlf_sha256": recorded}
+                self.report["golden_file_bytes"] = golden
+                self.probe(published, support, "legacy-operations", "check_action_policy_legacy_operations.py")
+        # Record the locally built cached VCS wheel and its origin; not a supplied
+        # archive or reproducible-build claim. Native output equality is checked above.
+        cache = Path(self.run("pip-cache", source, "-m", "pip", "cache", "dir").strip())
+        from check_compiler_wheel_cache import record_cached_compiler
+        self.report["compiler_wheel"] = record_cached_compiler(cache, self.output)
+        self.report["status"] = "passed"
+        self.save()
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--expected-head", required=True)
+    parser.add_argument("--output", type=Path, required=True)
+    args = parser.parse_args()
+    acceptance = Acceptance(args.output)
+    try:
+        acceptance.execute(args.expected_head)
+    except BaseException as exc:
+        acceptance.report.update(status="failed", error=str(exc))
+        acceptance.save()
+        raise
+
+
+if __name__ == "__main__":
+    main()

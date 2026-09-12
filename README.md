@@ -114,8 +114,14 @@ pip install governance-ledger
 
 Ledger relies on installed package contracts for integration behavior:
 
-- `cricore-contract-compiler>=0.4.0` (the first released compiler contract with exact/prefix target rules)
+- `cricore-contract-compiler>=0.5.0,<0.6.0` for this unpublished development branch.
+  Development acceptance requires the exact Compiler PR #8 candidate; see
+  [installation and gates](docs/ACTION_POLICY_DEVELOPMENT.md). Ordinary PyPI
+  availability is not claimed. The branch keeps version 0.8.0 temporarily, but its
+  changed contents must never be published as another 0.8.0; proposed 0.9.0 awaits coordination.
 
+The following installation and compatibility evidence describes the **historical
+released 0.8.0**, not release compatibility of this candidate.
 The base install does not install Waveframe Guard. Install the release-tested runtime
 integration explicitly:
 

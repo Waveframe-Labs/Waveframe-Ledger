@@ -15,7 +15,7 @@ authors = [
 ]
 
 dependencies = [
-    "cricore-contract-compiler>=0.4.0",
+    "cricore-contract-compiler>=0.5.0,<0.6.0",
 ]
 
 [project.optional-dependencies]
@@ -24,11 +24,12 @@ guard = [
 ]
 dev = [
     "pytest>=7",
-    "jsonschema>=4"
+    "jsonschema>=4",
+    "tomli>=2; python_version < '3.11'"
 ]
 
 [tool.waveframe.guard-compatibility]
-status = "release-compatible"
+status = "historical-release-compatible; candidate-unpublished"
 ledger = "0.8.0"
 guard = "0.17.0"
 guard_ledger_requirement = ">=0.7.0,<0.9.0"
