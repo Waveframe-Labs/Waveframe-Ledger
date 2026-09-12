@@ -74,7 +74,7 @@ class Acceptance:
             env = self.env.copy()
             if native:
                 env[DEV] = "1"
-            env["LEDGER_EXPECT_IMPORT_ROOT"] = str(python.parent.parent if installed else ROOT)
+            env["LEDGER_EXPECT_IMPORT_ROOT"] = str(python.parent.parent if installed else ROOT / "governance_ledger")
             env["LEDGER_IMPORT_REPORT"] = str(self.output / f"{name}-imports.json")
             xml = self.output / f"{name}.xml"
             self.run(name, python, "-I", root / "tools/acceptance_pytest.py", "-q", "-ra",
@@ -139,6 +139,9 @@ class Acceptance:
         support.mkdir()
         with tarfile.open(sdist) as archive:
             members = {Path(*Path(m.name).parts[1:]).as_posix(): m for m in archive.getmembers() if m.isfile()}
+            sdist_metadata = BytesParser().parsebytes(archive.extractfile(members["PKG-INFO"]).read())
+            for field in ("Name", "Version", "Requires-Python", "Requires-Dist", "Provides-Extra"):
+                assert sdist_metadata.get_all(field) == metadata.get_all(field), field
             tracked = subprocess.check_output(["git", "ls-files", "tests", "schemas", "examples", "tools", "docs"], cwd=ROOT, text=True).splitlines()
             resource_hashes = {}
             for path in tracked:
@@ -220,6 +223,8 @@ class Acceptance:
         cache = Path(self.run("pip-cache", source, "-m", "pip", "cache", "dir").strip())
         from check_compiler_wheel_cache import record_cached_compiler
         self.report["compiler_wheel"] = record_cached_compiler(cache, self.output)
+        assert self.run("final-head", "git", "rev-parse", "HEAD").strip() == expected_head
+        self.run("final-clean-tracked-checkout", "git", "diff", "--exit-code", "HEAD")
         self.report["status"] = "passed"
         self.save()
 
