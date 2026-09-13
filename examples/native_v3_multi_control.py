@@ -288,7 +288,8 @@ def run_example(*, candidate: bool = False) -> None:
         assert loaded.schema_version == "authority_bundle.v3"
         assert loaded.contract["schema_version"] == "compiled_authority_contract.v2"
     finally:
-        guard.close()
+        if candidate:
+            guard.close()
     print(f"ledger={ledger_version} guard={guard_version}")
     print("bundle=authority_bundle.v3 receipt=publication_receipt.v3")
     print("allowed=README.md,CHANGELOG.md blocked=src/unpublished.py")
