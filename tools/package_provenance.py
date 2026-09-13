@@ -72,9 +72,14 @@ def installed_archive(name, version, modules, expected, install_report=None):
             assert not relative.is_absolute() and ".." not in relative.parts
             if member.endswith("/") or member.endswith(".dist-info/RECORD"):
                 continue
-            assert ".data/" not in member, "unexpected relocated wheel content"
             data = archive.read(member)
-            installed = Path(dist.locate_file(member)).resolve()
+            if relative.parts[0].endswith(".data"):
+                # Guard's real wheel includes documentation under .data/data.
+                # pip relocates this scheme to the environment prefix.
+                assert relative.parts[1] == "data", "unexpected wheel relocation scheme"
+                installed = Path(sys.prefix).joinpath(*relative.parts[2:]).resolve()
+            else:
+                installed = Path(dist.locate_file(member)).resolve()
             assert Path(sys.prefix).resolve() in installed.parents, installed
             assert installed.read_bytes() == data, f"installed bytes differ: {member}"
             files[member] = hashlib.sha256(data).hexdigest()

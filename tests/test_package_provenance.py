@@ -110,3 +110,20 @@ def test_exact_git_provenance_rejects_wrong_commit():
     with pytest.raises(AssertionError):
         provenance.verify_git({"url": provenance.COMPILER_URL, "vcs_info": {
             "vcs": "git", "commit_id": "0" * 40, "requested_revision": provenance.CANDIDATE}})
+
+
+def test_relocated_documentation_bytes_are_required(installation, tmp_path):
+    site, wheel, _, direct = installation
+    member = "candidate-0.5.0.data/data/share/doc/candidate/README.md"
+    installed = tmp_path / "share/doc/candidate/README.md"
+    installed.parent.mkdir(parents=True)
+    installed.write_bytes(b"retained documentation")
+    with zipfile.ZipFile(wheel, "a") as archive:
+        archive.writestr(member, installed.read_bytes())
+    digest = provenance.sha256(wheel)
+    direct["archive_info"]["hashes"]["sha256"] = digest
+    updated = site, wheel, digest, direct
+    assert member in check(updated)["installed_sha256"]
+    installed.write_bytes(b"tampered documentation")
+    with pytest.raises(AssertionError, match="installed bytes differ"):
+        check(updated)
