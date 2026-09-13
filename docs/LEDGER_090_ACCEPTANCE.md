@@ -1,137 +1,105 @@
 # Ledger 0.9.0 candidate acceptance
 
-Issue #23 is stacked on `feat/issue-21-release-catalog` at
-`40e0875ee9a973254bb3a4d0c228cad4fdce2bc0`. PRs #18/#20/#22 and their tested
-heads are preserved. Proposed tag: `v0.9.0` (not created). This preparation
-authorizes no merge, tag, release, upload, deployment or activation.
+Issue #25 is stacked on `feat/issue-23-ledger-090` at
+`3cc34e7b3cb6efca5102e0e22d559ec0c0fd583f`. PRs #18/#20/#22/#24 and their
+recorded heads and evidence are preserved. Version remains 0.9.0; proposed tag
+v0.9.0 is not created. Release readiness remains false pending coordination.
 
-The runtime wheel/sdist declare Python `>=3.10`, Compiler
-`cricore-contract-compiler>=0.5.0,<0.6.0` and optional `[guard]`
-`waveframe-guard>=0.19.0,<0.20.0`. Only acceptance uses the exact unchanged
-Compiler #8 commit `ae590dee058d3481e384dea850d5b7d980f533ff` from
-`https://github.com/Waveframe-Labs/cricore-contract-compiler.git`.
-The public `compile_action_policy` API is mandatory; no fallback is permitted.
+## Fixed inputs and provenance
 
-The intended Ledger 0.9.0 / Guard 0.19.0 pair has **pending installation and
-execution compatibility**. Guard #49 at
-`473422b1220fa621cb7895d54f1e18e72ffaba58` still declares 0.18.0 and Ledger
-`<0.9.0`; it cannot stand in for the separate 0.19.0 candidate. Its successor
-must declare `governance-ledger>=0.9.0,<0.10.0`.
+Guard #51: `0161ef8a52e052d1bc1366cdc93ce13a9bd535ed` (0.19.0).
+Compiler #8: `ae590dee058d3481e384dea850d5b7d980f533ff` (0.5.0).
+Guard durable evidence: `e6008345c9891ec6ffb5088f38177022e3cef4aa`.
 
-## Base acceptance: executable now
+`fetch_guard_candidate.py` pins the immutable handoff and SHA256SUMS bytes,
+then verifies each `artifacts/final-action-policy-*.zip`, exact source heads,
+retained build provenance, Guard wheel modules, and the accepted Guard and
+Compiler wheel hashes. Archive-map keys in the handoff are filenames; downloads
+come from `artifacts/`. Per-cell manifests alone cannot authenticate source.
+The retained original failed combined results remain historical failures.
 
-Run in a clean checkout at the full candidate head, on each of Windows/Linux
-with Python 3.10/3.14. Use a new output directory for every run:
+Source acceptance installs Compiler from the exact Git commit. Installed base
+and combined acceptance install the per-cell accepted Compiler wheel. The harness
+passes archive expectations explicitly. Shared provenance checks validate the
+Compiler build origin, expected commit, archive SHA-256, actual imported paths,
+and installed module/resource bytes. A truthful PEP 610 archive origin or pip
+install report is required; when both exist both must agree. Legacy `hash` and
+`hashes` formats are supported, and contradictory digests are rejected. No VCS
+metadata is manufactured for archive installs. No version-only acceptance exists.
+
+Runtime metadata remains Compiler `>=0.5.0,<0.6.0` and optional Guard
+`>=0.19.0,<0.20.0`, with mandatory `compile_action_policy` and no fallback.
+
+## Run every required cell
+
+Use Windows/Linux and Python 3.10/3.14, a clean exact-head checkout, and fresh
+output directories. Replace CELL with windows-3.10, windows-3.14, ubuntu-3.10
+or ubuntu-3.14 and FULL_LEDGER_COMMIT with the actual 40-character head:
 
 ```text
 python -m pip install -r requirements-ci.txt
-python tools/run_action_policy_acceptance.py --expected-head FULL_LEDGER_COMMIT --output runtime/issue23-base
+python tools/fetch_guard_candidate.py --cell CELL --output runtime/issue25-inputs
+python tools/run_action_policy_acceptance.py --expected-head FULL_LEDGER_COMMIT --verified-inputs runtime/issue25-inputs/verified-inputs.json --output runtime/issue25-base
+python tools/run_guard_extra_acceptance.py --expected-head FULL_LEDGER_COMMIT --base-evidence runtime/issue25-base --verified-inputs runtime/issue25-inputs/verified-inputs.json --output runtime/issue25-combined
 ```
 
-The automatic `action-policy-development.yml` includes PRs targeting the new
-stacked base and checks out the actual PR head, never GitHub's merge simulation.
-It collects source and clean-installed base default/development suites, import
-boundaries, strict fresh wheel/sdist and complete support-resource hashes,
-`pip check`, public APIs/CLI/release example, exact Compiler PEP 610 and cached
-wheel origin, complete fixture reproduction, compiler-independent verification,
-and ordinary resolver rejection of Compiler 0.4.0. All 70 catalog-3 cases must
-execute in every suite with development flags absent. The 44 opt-in development
-cases skip only in default mode; three optional Guard entries (one collection
-skip) skip when Guard is absent. Every unexpected skip fails the gate.
+The workflow checks out the PR head, not a merge simulation. Base acceptance
+builds a fresh sdist and wheel, checks strict metadata and all packaged support
+resources, and executes complete source and clean-installed default/development
+suites, public API/CLI/package checks, ordinary resolution and pip check. Combined
+acceptance reuses that exact head's wheel bytes and packaged support tree, with
+no Ledger source on the import path. It ordinarily resolves the real
+`governance-ledger[dev,guard]`, Compiler and Guard wheels, then runs both complete
+suites, optional integrations, native-v3 candidate example, release/development
+package checks and all 56 real catalog-3 execution probes. The Guard entry upgrade
+and old-Ledger resolver rejection are rerun against the new Ledger package set.
 
-Separate published environments retain Ledger 0.8.0 + Guard 0.17.0 historical
-extra/example coverage, and Ledger 0.7.0/0.8.0 + Guard 0.18.0 + Compiler 0.4.0
-old-runtime rejection checks for both development and release fixtures. These
-are historical evidence, never acceptance of the new extra.
+Every suite executes all 70 release cases. Default mode skips exactly 44 opt-in
+development cases; development mode executes all 44. Base suites additionally
+skip three optional Guard collection/test entries because Guard is absent.
+Combined environments execute every optional integration and have no Guard skips.
+New regression cases increase totals; totals are reported from JUnit, not frozen
+as old counts. Every unexpected skip or required failure fails acceptance.
+A supplemental pass cannot overwrite failure or replace the required producer.
 
-Successful base evidence says `status: base-passed-extra-pending`,
-`gates.base: passed`, `gates.combined_extra: pending`, `executed: false` for
-the extra, and `release_ready: false`. A successful status-recording CI job
-does not represent a combined compatibility pass. No branch protection is changed.
+## Replay and repository boundary
 
-## Combined extra: prepared, not executed
+Raw legacy contract/execution-state replay requires an explicit injected evaluator.
+Missing Guard raises `GuardIntegrationUnavailableError` / LEDGER_GUARD_UNAVAILABLE;
+installed Guard raises `GuardReplayUnsupportedError` /
+LEDGER_GUARD_REPLAY_UNSUPPORTED. CLI replay-execution exits 2 with an actionable
+message. Installing the extra does not restore Guard's retired evaluator. The
+explicit evaluator API preserves allowed/blocked shape, reasons, approval evidence,
+lineage diagnostics, determinism and input immutability.
 
-After the coordinator supplies the real Guard wheel, save a manifest beside
-the archive with these fields (replace every placeholder with actual evidence):
+Native public-v3 execution uses absolute repository/evidence paths, existing
+files, repository_tool and RepositoryTarget.write_bytes. The integration deletes
+private authoring evidence, loads unchanged public artifacts, verifies actual
+allowed/forbidden bytes and callback counts, then verifies saved logical replay
+through Guard's store without executing another callback. The example's default
+mode retains the historical Ledger 0.8 / Guard 0.17 behavior separately.
 
-```json
-{
-  "source_url": "https://github.com/Waveframe-Labs/Waveframe-Guard",
-  "source_commit": "FULL_40_CHARACTER_GUARD_COMMIT",
-  "provenance_kind": "coordinator-supplied-exact-candidate",
-  "wheel": "waveframe_guard-0.19.0-py3-none-any.whl",
-  "wheel_sha256": "ACTUAL_64_CHARACTER_ARCHIVE_SHA256"
-}
-```
+## Immutable history, evidence and downstream handoff
 
-The manifest records coordinator-supplied source provenance; an archive hash
-alone does not independently authenticate its source commit. The coordinator
-must retain the matching build record. No candidate is generated by this tool.
+Catalogs, approved fixtures, schemas, v2/v3 hashes and historical default/development
+semantics stay unchanged. Base acceptance compares old runtime outputs, preserves
+prior evidence, and distinguishes historical Windows CRLF hashes from Git blobs.
+Only the replay adapter and CLI runtime files change from #24.
 
-Use the same interpreter and this exact Ledger checkout for each of the four
-matrix cells, with the corresponding downloaded base evidence:
+CI retains commands/exit codes, JUnit, import paths, resolver reports, archive and
+source provenance, wheel/sdist bytes and SHA-256 hashes even on failure. Commit
+all four downloaded acceptance archives and their handoff on a separate evidence
+branch in this repository so retention does not change the tested candidate head.
+The draft PR links the exact final-head run and durable evidence commit. Combined
+pass/fail is separate from `release_ready=false` and `runtime_activation_ready=false`.
 
-```text
-python tools/run_guard_extra_acceptance.py --expected-head FULL_LEDGER_COMMIT --base-evidence runtime/issue23-base --guard-candidate PATH_TO_MANIFEST.json --output runtime/issue23-combined
-```
+After review, coordination must direct Guard to repin and revalidate this Ledger
+head/package set, including its red combined CI and stale README Ledger 0.7 minimum
+claim. Cloud then needs final package-set and Console acceptance; Cloud #151 used
+earlier packages. Guard's retained final-wheel same-device bind-mount pass remains
+valid for its exact wheel and does not require a new replay API.
 
-The entry point verifies base/head/resource and archive hashes, validates the
-real Guard 0.19.0 metadata/range, reconstructs support files from the sdist
-without Ledger source, and ordinarily resolves the local Compiler 0.5.0,
-Ledger 0.9.0 and Guard 0.19.0 wheels including `governance-ledger[dev,guard]`.
-It runs `pip check`, verifies installed Python files against each wheel and
-records actual versions, module paths, archive hashes and PEP 610. It executes
-both installed suites (zero optional-Guard skips), the legacy v3 example in
-explicit candidate mode, complete release/development fixture checks, and real
-catalog-3 create/modify SDK probes with temporary bytes, per-action roles,
-denied operations, collision preservation, stored attestations and replay.
-The runtime probes follow Guard #49's public SDK and must execute against the
-actual new candidate before their compatibility is claimed. They use no mocks.
-Failure or unavailable inputs never produce a compatibility pass. A success
-applies only to that cell; all four cells and final Cloud acceptance remain required.
-
-## Producer and immutable history audit
-
-The active distribution sources are `pyproject.toml`, built wheel/sdist metadata,
-and `CITATION.cff`. All now identify the unreleased 0.9.0 candidate; the citation
-has no fictitious release date. Installed provenance reads actual distribution
-metadata. The v3 example retains its explicit historical 0.8.0/0.17.0 mode and
-adds an explicit 0.9.0/0.19.0 mode with actual-version assertions/output.
-
-The public fixture chains do not embed the Ledger package version as producer
-metadata. Their version fields identify schemas, compiler interfaces, source
-revisions and authority/catalog/pack/runtime identities. None are relabeled
-as package 0.9.0. No newly emitted wrapper/provenance differences are expected:
-complete catalog-2/catalog-3 fixture reproduction and historical v2/v3 canonical
-hash comparison remain exact, with no normalization or hash exclusions. Catalog
-1/2/3 identities, old approved wording, fixture bytes, schemas, source code and
-development opt-ins are unchanged from the stack base. CRLF checkout hashes are
-recorded separately from Git blob bytes without rewriting retained Windows evidence.
-The harness replaces blanket `pyproject.toml` immutability with an exact allowed
-metadata transformation while keeping all historical integrity assertions.
-
-Catalog 3 must be selected explicitly and freshly approved; catalog 1 remains
-the default. Ledger publication describes readiness for a compatible runtime,
-with `runtime_activation_ready: false`. The legacy CLI's explicit deployment
-target/version fields describe caller-selected targets, not producer versions
-or proof that a runtime was installed/activated. This task changes no deployment
-defaults and does not add operations or redesign authority.
-
-## Retention and remaining release gates
-
-CI artifacts include JSON reports, install/provenance records, JUnit, logs,
-Ledger wheel/sdist and the exact locally built Compiler wheel. Archive identities
-are candidate hashes, not final authorized release selections or reproducible-build
-claims. Download and hash-verify all four cells before CI expiry; retain their
-archives and handoff manifest on a separate evidence branch in this repository,
-so preservation does not change the tested candidate head or existing PR stack.
-The draft PR links both CI artifacts and durable evidence commits.
-
-Remaining gates: separate real Guard 0.19 preparation; all four combined-extra
-cells; final Cloud acceptance; coordinated authorization and final artifact
-selection; index/tag availability recheck; publication in order **Compiler →
-base Ledger → Guard**; ordinary PyPI base/extra installs and `pip check` immediately
-after publication; and separate activation approval. The entire candidate wheel
-set must pass before any upload. Ledger's upcoming extra may not resolve in the
-temporary index interval before Guard upload, so do not advertise or activate it
-until Guard is published and verified. A stalled upload blocks rollout.
+Publication order remains Compiler 0.5.0 ? Ledger 0.9.0 ? Guard 0.19.0, followed by
+ordinary index acceptance and separately authorized Cloud rollout/activation.
+No sibling-repository changes, merges, tags, publication, deployment or activation
+are authorized. Deletion, rename and macOS remain subsequent scope.

@@ -77,7 +77,7 @@ The canonical semantic artifacts are:
 
 **Replayability**
 
-Replay tooling reproduces compilation evidence from source governance and can replay admissibility decisions against authority and execution state. Replay failures produce diagnostics rather than silent disagreement.
+Replay tooling reproduces compilation evidence from source governance and can replay admissibility decisions against authority and execution state using an explicitly injected evaluator. Replay failures produce diagnostics rather than silent disagreement.
 
 **Deterministic governance operationalization**
 
@@ -119,8 +119,8 @@ Ledger relies on installed package contracts for integration behavior:
   [installation and gates](docs/ACTION_POLICY_DEVELOPMENT.md). Ordinary PyPI
   availability is not claimed. This is the unpublished **0.9.0 candidate**.
 - Optional `[guard]` requires `waveframe-guard>=0.19.0,<0.20.0`. The intended
-  **Ledger 0.9.0 / Guard 0.19.0** pair has **pending install and execution
-  compatibility**, awaiting the separate Guard candidate. See the
+  **Ledger 0.9.0 / Guard 0.19.0** pair has **pending release
+  coordination**, with the exact Guard #51 candidate supplied to the required matrix. See the
   [base and combined acceptance entry points](docs/LEDGER_090_ACCEPTANCE.md).
 
 Catalog 3.0.0 supports explicit create/modify authoring and fresh approval/public
@@ -147,7 +147,7 @@ and `pip check` are part of release acceptance.
 
 | Ledger | Guard | Publication support | Notes |
 | --- | --- | --- | --- |
-| 0.9.0 | 0.19.0 | Intended v1/v2/v3 and catalog-3 v4 | Pending real combined-candidate installation and execution; upcoming extra. |
+| 0.9.0 | 0.19.0 | Intended v1/v2/v3 and catalog-3 v4 | Exact candidate acceptance: see issue #25 evidence; release coordination pending. |
 | 0.8.0 | 0.17.0 | v1, v2, native v3 | Historical release-tested extra for Ledger 0.8.0 only. |
 | 0.7.0 | 0.17.0 | v1, v2 | Dependency-compatible; native v3 requires Ledger 0.8 or later. |
 | 0.7.0 | 0.16.1 | v1, v2 | Prior release-tested compatibility pair; no native v3 support. |
@@ -165,11 +165,20 @@ result = replay_admissibility(
 )
 ```
 
-Existing callers that omit `evaluator` may use the optional Guard integration. Without
-either an evaluator or compatible Guard, Ledger raises an actionable
-`GuardIntegrationUnavailableError`. Ledger prepares, publishes, replays, and verifies
-authority evidence; Guard evaluates runtime admissibility. Enforcement logic remains
-outside Ledger.
+Callers that omit `evaluator` receive `GuardIntegrationUnavailableError` when Guard
+is absent, or its subclass `GuardReplayUnsupportedError` when Guard is installed.
+Guard 0.19 retires raw legacy contract + execution-state evaluation. Installing
+`governance-ledger[guard]` does not restore that API. The `replay-execution` CLI
+returns exit code 2 with `LEDGER_GUARD_UNAVAILABLE` or
+`LEDGER_GUARD_REPLAY_UNSUPPORTED`, respectively. No decision is fabricated.
+
+Native public authority execution uses Guard's supported SDK. Repository writes
+require an absolute `repository_root`, `repository_tool(action="modify", ...)`,
+and mediated `RepositoryTarget.write_bytes()`. Saved logical replay uses
+`guard.store.replay(run_id)` and does not invoke an execution callback. Run
+`examples/native_v3_multi_control.py --candidate` with the exact candidate wheel
+set to exercise private-evidence deletion, native publication, enforcement and
+saved replay. The default example mode retains the historical 0.8/0.17 run.
 
 Local checkout path resolution is not part of production behavior.
 

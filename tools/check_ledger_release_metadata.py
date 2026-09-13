@@ -14,7 +14,7 @@ before = tomllib.loads(subprocess.check_output(["git", "show", f"{BASE}:pyprojec
 before["project"]["version"] = "0.9.0"
 before["project"]["optional-dependencies"]["guard"] = ["waveframe-guard>=0.19.0,<0.20.0"]
 before["tool"]["waveframe"]["guard-compatibility"] = {
-    "status": "pending-separate-guard-candidate", "ledger": "0.9.0", "guard": "0.19.0",
+    "status": "pending-release-coordination", "ledger": "0.9.0", "guard": "0.19.0",
     "guard_ledger_requirement": ">=0.9.0,<0.10.0",
     "install_compatibility": "pending", "execution_compatibility": "pending",
 }

@@ -2,6 +2,14 @@
 
 ## 0.9.0 - Unreleased
 
+Raw legacy contract/execution-state replay requires an explicit injected evaluator.
+Guard 0.19's retired evaluator is reported through Ledger integration errors and
+CLI exit code 2; the `[guard]` extra does not restore it. Native publication and
+saved logical replay use Guard's supported SDK/store, with mediated repository
+writes. Issue #25 validates exact candidate archives and installed resource bytes
+and requires all four source/installed/combined acceptance cells. Release readiness
+remains false pending Guard repinning, Cloud final-set acceptance and coordination.
+
 - Prepare explicit release catalog 3 for independently authorized create/modify
   actions, fresh human approval and public compiler-independent verification.
   Catalog 1 remains the default; catalog 2 development identities, opt-ins,

@@ -1,5 +1,13 @@
 # Waveframe Ledger v0.9.0 Release Notes (unreleased candidate)
 
+Raw legacy contract/execution-state replay requires an explicit injected evaluator.
+Guard 0.19's retired evaluator is reported through Ledger integration errors and
+CLI exit code 2; the `[guard]` extra does not restore it. Native publication and
+saved logical replay use Guard's supported SDK/store, with mediated repository
+writes. Issue #25 validates exact candidate archives and installed resource bytes
+and requires all four source/installed/combined acceptance cells. Release readiness
+remains false pending Guard repinning, Cloud final-set acceptance and coordination.
+
 Ledger 0.9.0 prepares the coordinated Windows/Linux create+modify release.
 Explicit catalog 3 isolates action grants and roles and requires fresh approval;
 catalog 1 remains the default and catalog 2 keeps its development opt-in and
@@ -8,9 +16,9 @@ are required before execution availability can be claimed.
 
 Runtime dependencies use ordinary version ranges:
 `cricore-contract-compiler>=0.5.0,<0.6.0`, and optional `[guard]`
-`waveframe-guard>=0.19.0,<0.20.0`. The planned Guard 0.19.0 candidate must require
-`governance-ledger>=0.9.0,<0.10.0`. Combined installation and execution are
-**pending**, awaiting that separately prepared candidate. Guard 0.17/0.18 results
+`waveframe-guard>=0.19.0,<0.20.0`. The exact Guard #51 candidate requires
+`governance-ledger>=0.9.0,<0.10.0`. Combined installation and execution are required in all four issue #25 matrix cells.
+Release coordination remains pending. Guard 0.17/0.18 results
 are historical evidence only.
 
 See [0.9.0 acceptance and remaining gates](docs/LEDGER_090_ACCEPTANCE.md) for

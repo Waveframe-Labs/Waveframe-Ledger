@@ -43,20 +43,6 @@ jobs:
       - name: Run full suite without Guard
         run: python -m pytest -q
 
-  combined-extra-status:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Record downstream gate as pending, never a compatibility pass
-        shell: bash
-        run: |
-          mkdir -p evidence
-          echo '{"gate":"combined-extra","status":"pending","executed":false,"ledger":"0.9.0","guard":"0.19.0","reason":"Separate exact Guard candidate required","release_ready":false}' > evidence/combined-extra.json
-          echo 'Combined Guard-extra acceptance is PENDING; this job only records status.' >> "$GITHUB_STEP_SUMMARY"
-      - uses: actions/upload-artifact@v6
-        with:
-          name: combined-extra-pending
-          path: evidence/combined-extra.json
-
   release-artifacts:
     runs-on: ubuntu-latest
     env:

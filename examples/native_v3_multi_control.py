@@ -1,7 +1,8 @@
 """Publish and enforce a provider-independent native v3 authority locally.
 
-Run with ``governance-ledger[guard]==0.8.0`` installed. The example writes only
-temporary local publication/evidence files beneath the current directory.
+Default mode retains the historical Ledger 0.8 / Guard 0.17 demonstration.
+Use --candidate for Ledger 0.9 / Guard 0.19 mediated repository execution and
+saved logical replay. All files live in an automatically removed temporary directory.
 """
 
 from __future__ import annotations
@@ -9,6 +10,8 @@ from __future__ import annotations
 import hashlib
 import importlib.metadata
 import json
+import os
+import tempfile
 from pathlib import Path
 
 from guard.sdk import Guard, GuardExecutionBlocked
@@ -216,7 +219,7 @@ def write_publication(publication: dict) -> LocalRegistryResolver:
     return LocalRegistryResolver(registry_path=registry_path, workspace_root=root)
 
 
-def main(*, candidate: bool = False) -> None:
+def run_example(*, candidate: bool = False) -> None:
     ledger_version, guard_version = ("0.9.0", "0.19.0") if candidate else ("0.8.0", "0.17.0")
     assert importlib.metadata.version("governance-ledger") == ledger_version
     assert importlib.metadata.version("waveframe-guard") == guard_version
@@ -237,36 +240,69 @@ def main(*, candidate: bool = False) -> None:
         )
     )
 
+    repository = Path("repository").resolve()
+    (repository / "src").mkdir(parents=True)
+    for name in ("README.md", "CHANGELOG.md", "src/unpublished.py"):
+        (repository / name).write_bytes(b"original")
     guard = Guard.local(
-        workspace="guard-evidence",
+        **({"repository_root": repository} if candidate else {}),
+        workspace=Path("guard-evidence").resolve(),
         authority=AUTHORITY_REF,
         authority_resolver=write_publication(publication),
         actor_identity={"id": "release-agent", "type": "agent"},
     )
-    mutations: list[str] = []
-
-    @guard.tool(action="modify", target="path", return_result=True)
-    def modify(path: str) -> str:
-        mutations.append(path)
-        return path
-
-    assert modify("README.md")["executed"] is True
-    assert modify("CHANGELOG.md")["executed"] is True
+    mutations = []
     try:
-        modify("src/unpublished.py")
-    except GuardExecutionBlocked:
-        pass
-    else:
-        raise AssertionError("unpublished path was not blocked")
+        if candidate:
+            @guard.repository_tool(action="modify", target="path", return_result=True,
+                                   raise_on_block=False)
+            def modify(path):
+                mutations.append("modify")
+                return path.write_bytes(b"modified")
 
-    loaded = guard.boundary_for().loaded_authority
-    assert loaded.schema_version == "authority_bundle.v3"
-    assert loaded.contract["schema_version"] == "compiled_authority_contract.v2"
-    assert mutations == ["README.md", "CHANGELOG.md"]
+            for target, allowed in (("README.md", True), ("CHANGELOG.md", True),
+                                    ("src/unpublished.py", False)):
+                before = len(mutations)
+                result = modify(target)
+                assert result["executed"] is allowed
+                assert (repository / target).read_bytes() == (b"modified" if allowed else b"original")
+                assert guard.store.replay(result["evaluation"]["run_id"])["matches"]
+                assert len(mutations) == before + int(allowed)
+            assert mutations == ["modify", "modify"]
+        else:
+            @guard.tool(action="modify", target="path", return_result=True)
+            def modify(path: str) -> str:
+                mutations.append(path)
+                return path
+
+            assert modify("README.md")["executed"] is True
+            assert modify("CHANGELOG.md")["executed"] is True
+            try:
+                modify("src/unpublished.py")
+            except GuardExecutionBlocked:
+                pass
+            else:
+                raise AssertionError("unpublished path was not blocked")
+            assert mutations == ["README.md", "CHANGELOG.md"]
+        loaded = guard.boundary_for().loaded_authority
+        assert loaded.schema_version == "authority_bundle.v3"
+        assert loaded.contract["schema_version"] == "compiled_authority_contract.v2"
+    finally:
+        guard.close()
     print(f"ledger={ledger_version} guard={guard_version}")
     print("bundle=authority_bundle.v3 receipt=publication_receipt.v3")
     print("allowed=README.md,CHANGELOG.md blocked=src/unpublished.py")
     print("private_translation_evidence_required=False")
+
+
+def main(*, candidate: bool = False) -> None:
+    previous = Path.cwd()
+    with tempfile.TemporaryDirectory() as temp:
+        try:
+            os.chdir(temp)
+            run_example(candidate=candidate)
+        finally:
+            os.chdir(previous)
 
 
 if __name__ == "__main__":
