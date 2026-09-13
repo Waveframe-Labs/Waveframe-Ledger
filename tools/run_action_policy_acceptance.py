@@ -1,4 +1,4 @@
-"""Cross-platform issue #19 gate; all environments use ordinary pip resolution.
+"""Cross-platform issue #19/#21 gate; all environments use ordinary pip resolution.
 
 Run from a clean checkout with requirements-ci.txt installed. Reports and command
 logs survive failures. No fixtures are regenerated and no packages are published.
@@ -84,6 +84,8 @@ class Acceptance:
             reasons = Counter(case.find("skipped").get("message") for case in skipped)
             counts = {"passed": len(cases) - len(skipped), "skipped": len(skipped),
                       "skip_reasons": dict(reasons),
+                      "release_passed": sum("test_release_catalog_v4" in case.get("classname", "")
+                                           and case.find("skipped") is None for case in cases),
                       "native_passed": sum("test_action_policy_v4" in case.get("classname", "")
                                            and case.find("skipped") is None for case in cases)}
             self.report["suites"][name] = counts
@@ -97,14 +99,15 @@ class Acceptance:
             assert guard_skips == (0 if guard else 3), counts
             assert len(skipped) == dev_skips + guard_skips, counts
             assert counts["native_passed"] == (44 if native else 0), counts
+            assert counts["release_passed"] == 70, counts
             print(f"[{name}] {counts}", flush=True)
 
-    def probe(self, python, root, name, tool, *, native=False, isolated=True):
+    def probe(self, python, root, name, tool, *args, native=False, isolated=True):
         env = self.env.copy()
         if native:
             env[DEV] = "1"
         result = self.run(name, python, *(["-I"] if isolated else []),
-                          root / "tools" / tool, cwd=root, env=env)
+                          root / "tools" / tool, *args, cwd=root, env=env)
         value = json.loads(result)
         (self.output / f"{name}.json").write_text(json.dumps(value, indent=2), encoding="utf-8")
         return value
@@ -174,7 +177,10 @@ class Acceptance:
         self.report.update(head=head, expected_head=expected_head)
         self.run("clean-tracked-checkout", "git", "diff", "--exit-code", "HEAD")
         self.run("preserved-evidence", "git", "diff", "--exit-code",
-                 "54379d9c8044544fc1b8f32109bdfce35c1c6a05", "--", "tests/fixtures", "docs/acceptance/issue17", "governance_ledger")
+                 "4dbdfbaee92d43b888cae751ecaee5d9e4ec20b7", "--",
+                 "tests/fixtures/action_policy_v4", "tests/fixtures/golden_path", "tests/fixtures/provenance_complete",
+                 "docs/acceptance/issue17", "docs/acceptance/issue19", "examples/native_v4_development.py",
+                 "requirements-action-policy-dev.txt", "pyproject.toml")
         wheel, support = self.build()
         candidate = ["-r", ROOT / "requirements-action-policy-dev.txt"]
         source = self.environment("source", "-e", f"{ROOT}[dev]", *candidate)
@@ -184,6 +190,8 @@ class Acceptance:
         self.probe(installed, support, "installed-provenance", "check_compiler_provenance.py")
         self.suites(installed, support, "installed", installed=True)
         self.probe(installed, support, "package", "check_action_policy_package.py", native=True)
+        self.probe(installed, support, "release-package", "check_release_catalog_package.py")
+        self.run("installed-release-example", installed, "-I", support / "examples/native_v4_release.py", cwd=support)
         self.run("installed-cli", installed.parent / ("governance-ledger.exe" if os.name == "nt" else "governance-ledger"), "--help", cwd=support)
         current_history = self.probe(installed, support, "candidate-history", "check_action_policy_history.py")
         negative = self.environment("resolver-negative")
@@ -201,6 +209,8 @@ class Acceptance:
             published = self.environment(name, f"governance-ledger=={version}",
                                          "waveframe-guard==0.18.0", "cricore-contract-compiler==0.4.0")
             self.probe(published, support, name + "-rejections", "check_action_policy_old_runtime.py")
+            self.probe(published, support, name + "-release-rejections", "check_action_policy_old_runtime.py",
+                       "--fixtures", "action_policy_release_v4")
             if version == "0.8.0":
                 history = self.probe(published, support, "published-history", "check_action_policy_history.py")
                 assert current_history == history, "historical hashes changed; see history reports"

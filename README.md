@@ -120,6 +120,12 @@ Ledger relies on installed package contracts for integration behavior:
   availability is not claimed. The branch keeps version 0.8.0 temporarily, but its
   changed contents must never be published as another 0.8.0; proposed 0.9.0 awaits coordination.
 
+Catalog 3.0.0 supports explicit create/modify authoring and fresh approval/public
+verification without development flags. The default remains catalog 1.0.0;
+development catalog 2.0.0 remains opt-in. See the [release catalog API, fixtures and
+Guard/Cloud handoff](docs/RELEASE_CATALOG_3.md). Publication does not establish runtime
+activation or hosted availability.
+
 The following installation and compatibility evidence describes the **historical
 released 0.8.0**, not release compatibility of this candidate.
 The base install does not install Waveframe Guard. Install the release-tested runtime

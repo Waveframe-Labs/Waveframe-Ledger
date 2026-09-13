@@ -397,3 +397,55 @@ def _repository_actions_pack() -> dict[str, Any]:
 
 
 _BUILTIN_PACKS[("repository-changes", "2.0.0")] = _repository_actions_pack()
+
+
+def _repository_release_actions_pack() -> dict[str, Any]:
+    # Construct a new instance from the historical v1 building blocks. Never edit
+    # the serialized development pack or its normative descriptions in place.
+    pack = copy.deepcopy(_REPOSITORY_CHANGES_PACK)
+    pack.update(domain_pack_version="3.0.0", supported_actions=["create", "modify"],
+                description="Independent create and modify policy grammar for a compatible Guard runtime.")
+    runtime = pack["runtime_fact_schema"]
+    runtime["schema_version_number"] = "3.0.0"
+    for fact in runtime["facts"]:
+        if fact["fact_id"] == "proposal.action":
+            fact["enum_values"] = ["create", "modify"]
+    runtime["schema_hash"] = artifact_hash(runtime, "schema_hash")
+    pack["synonyms"] = {"create": ["create"], "modify": ["modify"]}
+    # Grammar, lowering and emitter contracts are unchanged from the action path.
+    pack["grammar_compiler"] = {"compiler_id": "waveframe.repository-changes.grammar.v2", "compiler_version": "2.0.0"}
+    pack["compiler_lowering"] = {"lowering_id": "waveframe.repository-changes.lowering.v2", "lowering_version": "2.0.0"}
+    pack["allowed_mapping_controls"] = [
+        {**copy.deepcopy(control), "control_id": action + "-" + control["control_id"],
+         "name": action.title() + " " + control["name"],
+         "description": "Independent " + action + " control for a compatible Guard runtime.",
+         "emitter_id": "waveframe.repository-changes.emitter." + action + "-" + control["control_id"] + ".v2"}
+        for action in pack["supported_actions"] for control in pack["allowed_mapping_controls"]
+    ]
+    pack["semantic_validation_rules"].extend(["independent-actions", "same-action-deny-precedence", "action-wide-roles-only"])
+    pack["test_vectors"] = {
+        "positive": [{"source": "Agents may create README.md and modify CHANGELOG.md.", "expected": "direct:independent-actions"}],
+        "negative": [{"source": "Agents may write README.md.", "expected": "requires-decision"}],
+        "invalid": [{"source": "Agents may create ../secret.", "expected": "reject:unsafe-path"}],
+    }
+    _TRUSTED_COMPILERS[("waveframe.repository-changes.grammar.v2", "2.0.0")]["domain_packs"].add(("repository-changes", "3.0.0"))
+    pack["canonical_hash"] = artifact_hash(pack, "canonical_hash")
+    validate_domain_pack(pack)
+    return pack
+
+
+_BUILTIN_PACKS[("repository-changes", "3.0.0")] = _repository_release_actions_pack()
+
+
+def resolve_action_pack_provenance(provenance: dict[str, Any]) -> dict[str, Any]:
+    """Resolve exact installed pack/runtime hashes, applying that generation's gate.
+
+    This is structural provenance validation, not evidence of approval. Public
+    bundle validation additionally reconstructs the complete approved chain.
+    """
+    for version in ("2.0.0", "3.0.0"):
+        pack = _BUILTIN_PACKS[("repository-changes", version)]
+        if (provenance.get("domain_pack_hash") == pack["canonical_hash"]
+                and provenance.get("runtime_fact_schema_hash") == pack["runtime_fact_schema"]["schema_hash"]):
+            return get_builtin_domain_pack("repository-changes", version)
+    raise ValueError("compiled provenance has no registered action pack/runtime binding")

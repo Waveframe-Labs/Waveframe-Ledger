@@ -1,5 +1,9 @@
 # Action policy development path (issue #17)
 
+The distinct release catalog 3.0.0 is documented in [the issue #21 Guard/Cloud
+handoff](RELEASE_CATALOG_3.md). It requires fresh approval and does not change this
+development catalog's identity, wording or opt-in requirements.
+
 This is an opt-in Ledger development implementation, not a released creation capability.
 The default catalog remains `1.0.0`, with only `modify`; ordinary authoring and v2/v3
 publication workflows retain their existing defaults. The unpublished branch retains

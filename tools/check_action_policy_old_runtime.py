@@ -4,6 +4,7 @@ Install Guard 0.18.0 with published Ledger 0.7.0 or 0.8.0 in its own venv.
 No candidate compiler or candidate Ledger is installed in this environment.
 """
 import copy
+import argparse
 import hashlib
 import importlib.metadata as metadata
 import json
@@ -15,6 +16,10 @@ from waveframe_guard.authority.types import Bundle, RegistryEntry
 from waveframe_guard.authority.verifier import AuthorityVerifier
 
 ROOT = Path(__file__).resolve().parents[1]
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument("--fixtures", choices=["action_policy_v4", "action_policy_release_v4"], default="action_policy_v4")
+fixture_name = parser.parse_args().fixtures
+FIXTURES = ROOT / "tests/fixtures" / fixture_name
 assert metadata.version("waveframe-guard") == "0.18.0"
 assert metadata.version("governance-ledger") in {"0.7.0", "0.8.0"}
 assert metadata.distribution("governance-ledger").read_text("direct_url.json") is None
@@ -29,7 +34,7 @@ def probe(payload, receipt):
     contract = payload["compiled_authority_contract"]
     entry = RegistryEntry(authority_ref=contract["authority_ref"], contract_id=contract["contract_id"],
         contract_version=contract["contract_version"], contract_hash=contract["contract_hash"],
-        bundle_path=ROOT / "tests/fixtures/action_policy_v4/modify-only/authority-bundle.json",
+        bundle_path=FIXTURES / "modify-only/authority-bundle.json",
         publication_id=receipt["publication_id"], bundle_hash=payload["bundle_hash"],
         receipt_hash=receipt["receipt_hash"], published_by=receipt["published_by"],
         published_at=receipt["published_at"], receipt_path=ROOT / "unused-receipt.json",
@@ -47,7 +52,7 @@ def probe(payload, receipt):
 
 results = []
 for name in ("create-only", "modify-only", "mixed"):
-    folder = ROOT / "tests/fixtures/action_policy_v4" / name
+    folder = FIXTURES / name
     original = json.loads((folder / "authority-bundle.json").read_text())
     receipt = json.loads((folder / "publication-receipt.json").read_text())
     for bundle_version, receipt_version in [
@@ -76,6 +81,7 @@ for name in ("create-only", "modify-only", "mixed"):
         assert result["rejected"], results[-1]
 
 report = {"python": sys.version.split()[0], "ledger": metadata.version("governance-ledger"),
+          "fixtures": fixture_name,
           "guard": metadata.version("waveframe-guard"), "compiler": metadata.version("cricore-contract-compiler"),
           "environment": "ordinary published packages; isolated Python imports", "results": results,
           "limits": "Native fixtures and discriminator downgrade/mixed pairs only. Not proof against arbitrary forged legacy envelopes or filesystem creation acceptance."}

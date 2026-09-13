@@ -127,9 +127,9 @@ _UTC = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z\Z")
 _IDENTITY = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,255}\Z")
 
 
-def get_policy_translation_capability_catalog() -> dict[str, Any]:
-    """Return the aggregate currently enforceable catalog without customer selection."""
-    return _build_repository_capability_catalog()
+def get_policy_translation_capability_catalog(*, catalog_version: str = "1.0.0") -> dict[str, Any]:
+    """Select an exact installed catalog; the rollout default remains historical 1.0.0."""
+    return _catalog_for_version(catalog_version)
 
 
 def resolve_policy_translation_capability_catalog(
@@ -143,11 +143,11 @@ def resolve_policy_translation_capability_catalog(
         "capability catalog reference",
     )
     key = (catalog_ref["catalog_id"], catalog_ref["catalog_version"])
-    if key == (_CATALOG_ID, "2.0.0"):
-        from governance_ledger.action_policy import get_development_capability_catalog
-        catalog = get_development_capability_catalog()
+    if key in {(_CATALOG_ID, "2.0.0"), (_CATALOG_ID, "3.0.0")}:
+        from governance_ledger.action_policy import get_action_capability_catalog
+        catalog = get_action_capability_catalog(catalog_ref["catalog_version"])
         if catalog_ref != {key: catalog[key] for key in ("catalog_id", "catalog_version", "catalog_hash")}:
-            raise ValueError("registered development capability catalog hash is unavailable")
+            raise ValueError("registered action capability catalog hash is unavailable")
         return catalog
     if _TRUSTED_CATALOG_REGISTRY.get(key) != "builtin_repository_change":
         raise ValueError("capability catalog is not registered by this Ledger installation")
@@ -237,9 +237,9 @@ def _build_repository_capability_catalog() -> dict[str, Any]:
 def validate_policy_translation_capability_catalog(catalog: dict[str, Any]) -> dict[str, Any]:
     """Validate that every advertised capability is reachable by a released control."""
     if isinstance(catalog, dict) and catalog.get("schema_version") == "policy_translation_capability_catalog.v2":
-        from governance_ledger.action_policy import get_development_capability_catalog
-        if catalog != get_development_capability_catalog():
-            raise ValueError("development catalog is not the installed immutable catalog")
+        from governance_ledger.action_policy import get_action_capability_catalog
+        if catalog != get_action_capability_catalog(catalog.get("catalog_version")):
+            raise ValueError("action catalog is not the installed immutable catalog")
         return copy.deepcopy(catalog)
     _object(catalog, "capability catalog")
     _exact(
@@ -643,7 +643,7 @@ def validate_policy_translation_proposal(proposal: dict[str, Any]) -> dict[str, 
             used_bindings=used_bindings,
             catalog=catalog,
         )
-        if catalog["catalog_version"] == "2.0.0" and statement["classification"] != "direct" and clause["candidate_controls"]:
+        if catalog["catalog_version"] in {"2.0.0", "3.0.0"} and statement["classification"] != "direct" and clause["candidate_controls"]:
             raise ValueError("unsupported source meaning cannot become action controls; path-dependent roles and ambiguous actions are unsupported")
         if statement["classification"] == "direct":
             actual = [
@@ -1772,7 +1772,7 @@ def _control_selections(control: dict[str, Any], resolutions: dict[str, str]) ->
     value = control["value"]
     selected = value["canonical_value"] if value["kind"] == "source_literal" else resolutions[value["binding_id"]]
     spec = copy.deepcopy(_CONTROL_SPECS[control["control_type"]])
-    if control["enforcement_point"] == "waveframe.guard.repository-change.v2-development":
+    if control["enforcement_point"] in {"waveframe.guard.repository-change.v2-development", "waveframe.guard.repository-change.v2"}:
         spec["mapping_control_id"] = control["action"] + "-" + spec["mapping_control_id"]
     if control["control_type"] == "acting_role":
         return spec["mapping_control_id"], {"role": selected}
@@ -1792,7 +1792,7 @@ def _direct_statement_semantics(draft: dict[str, Any], statement_id: str) -> lis
         item["constraint_id"]: item for item in draft["constraint_ir"]["constraints"]
     }
     return [
-        _direct_constraint_semantics(constraints[constraint_id], action_aware=draft["domain_pack"]["domain_pack_version"] == "2.0.0")
+        _direct_constraint_semantics(constraints[constraint_id], action_aware=draft["domain_pack"]["domain_pack_version"] in {"2.0.0", "3.0.0"})
         for constraint_id in mapping["constraint_ids"]
     ]
 
@@ -1833,8 +1833,8 @@ def _direct_clause_ids(proposal: dict[str, Any]) -> set[str]:
 
 
 def _render_control(control: dict[str, Any], resolutions: dict[str, str]) -> str:
-    if control["enforcement_point"] == "waveframe.guard.repository-change.v2-development":
-        from governance_ledger.action_policy import REVIEW_BOUNDARY
+    if control["enforcement_point"] in {"waveframe.guard.repository-change.v2-development", "waveframe.guard.repository-change.v2"}:
+        from governance_ledger.action_policy import REVIEW_BOUNDARY, RELEASE_REVIEW_BOUNDARY
         value = control["value"]
         selected = value.get("canonical_value") if value["kind"] == "source_literal" else resolutions.get(value["binding_id"])
         action = control["action"]
@@ -1845,7 +1845,8 @@ def _render_control(control: dict[str, Any], resolutions: dict[str, str]) -> str
             text = f"Automated agents {'may' if control['effect'] == 'allow' else 'must not'} {action} {selector} {selected!r}."
             if control["effect"] == "deny":
                 text += " This restriction grants no operation."
-        return text + REVIEW_BOUNDARY
+        boundary = REVIEW_BOUNDARY if control["enforcement_point"].endswith("-development") else RELEASE_REVIEW_BOUNDARY
+        return text + boundary
     value = control["value"]
     selected = value.get("canonical_value") if value["kind"] == "source_literal" else resolutions.get(value["binding_id"])
     if control["control_type"] == "acting_role":
@@ -1994,8 +1995,8 @@ def _utc_datetime(value: Any, label: str) -> datetime:
 
 def _catalog_for_version(version: str) -> dict[str, Any]:
     if version == "1.0.0":
-        return get_policy_translation_capability_catalog()
-    if version == "2.0.0":
-        from governance_ledger.action_policy import get_development_capability_catalog
-        return get_development_capability_catalog()
+        return _build_repository_capability_catalog()
+    if version in {"2.0.0", "3.0.0"}:
+        from governance_ledger.action_policy import get_action_capability_catalog
+        return get_action_capability_catalog(version)
     raise ValueError("unknown explicit catalog version")
