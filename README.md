@@ -117,8 +117,11 @@ Ledger relies on installed package contracts for integration behavior:
 - `cricore-contract-compiler>=0.5.0,<0.6.0` for this unpublished development branch.
   Development acceptance requires the exact Compiler PR #8 candidate; see
   [installation and gates](docs/ACTION_POLICY_DEVELOPMENT.md). Ordinary PyPI
-  availability is not claimed. The branch keeps version 0.8.0 temporarily, but its
-  changed contents must never be published as another 0.8.0; proposed 0.9.0 awaits coordination.
+  availability is not claimed. This is the unpublished **0.9.0 candidate**.
+- Optional `[guard]` requires `waveframe-guard>=0.19.0,<0.20.0`. The intended
+  **Ledger 0.9.0 / Guard 0.19.0** pair has **pending install and execution
+  compatibility**, awaiting the separate Guard candidate. See the
+  [base and combined acceptance entry points](docs/LEDGER_090_ACCEPTANCE.md).
 
 Catalog 3.0.0 supports explicit create/modify authoring and fresh approval/public
 verification without development flags. The default remains catalog 1.0.0;
@@ -144,7 +147,8 @@ and `pip check` are part of release acceptance.
 
 | Ledger | Guard | Publication support | Notes |
 | --- | --- | --- | --- |
-| 0.8.0 | 0.17.0 | v1, v2, native v3 | Release-tested pair; selected by the Ledger `guard` extra. |
+| 0.9.0 | 0.19.0 | Intended v1/v2/v3 and catalog-3 v4 | Pending real combined-candidate installation and execution; upcoming extra. |
+| 0.8.0 | 0.17.0 | v1, v2, native v3 | Historical release-tested extra for Ledger 0.8.0 only. |
 | 0.7.0 | 0.17.0 | v1, v2 | Dependency-compatible; native v3 requires Ledger 0.8 or later. |
 | 0.7.0 | 0.16.1 | v1, v2 | Prior release-tested compatibility pair; no native v3 support. |
 

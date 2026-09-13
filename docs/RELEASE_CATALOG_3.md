@@ -6,11 +6,11 @@ catalog, not a deployment or activation. Catalog 1.0.0 remains the no-argument
 default. Catalog 2.0.0 retains its exact development data, hashes, descriptions,
 review wording, fixtures and `WAVEFRAME_LEDGER_ACTION_POLICY_DEV=1` requirements.
 
-The temporary package version stays 0.8.0 and the legacy extra stays
-`waveframe-guard==0.17.0`. **Never publish these changed contents as another 0.8.0.**
-Proposed Ledger 0.9.0 and a matching Guard release need joint metadata and ordinary
-complete-wheel-set acceptance. Runtime metadata still requires Compiler
-`>=0.5.0,<0.6.0`; development/CI installs the unchanged Compiler #8 candidate
+Issue #23 prepares package **0.9.0** with `[guard]` requiring
+`waveframe-guard>=0.19.0,<0.20.0`. The intended 0.9.0/0.19.0 pair has **pending**
+installation and execution compatibility until the separate Guard candidate exists
+and passes the [combined gate](LEDGER_090_ACCEPTANCE.md). Runtime metadata requires
+Compiler `>=0.5.0,<0.6.0`; development/CI installs unchanged Compiler #8 at
 `ae590dee058d3481e384dea850d5b7d980f533ff`. There is no fallback or PyPI availability claim.
 
 ## Exact trusted identities

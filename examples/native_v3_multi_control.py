@@ -216,9 +216,10 @@ def write_publication(publication: dict) -> LocalRegistryResolver:
     return LocalRegistryResolver(registry_path=registry_path, workspace_root=root)
 
 
-def main() -> None:
-    assert importlib.metadata.version("governance-ledger") == "0.8.0"
-    assert importlib.metadata.version("waveframe-guard") == "0.17.0"
+def main(*, candidate: bool = False) -> None:
+    ledger_version, guard_version = ("0.9.0", "0.19.0") if candidate else ("0.8.0", "0.17.0")
+    assert importlib.metadata.version("governance-ledger") == ledger_version
+    assert importlib.metadata.version("waveframe-guard") == guard_version
     publication = build_publication()
     public_json = json.dumps(
         {
@@ -262,11 +263,14 @@ def main() -> None:
     assert loaded.schema_version == "authority_bundle.v3"
     assert loaded.contract["schema_version"] == "compiled_authority_contract.v2"
     assert mutations == ["README.md", "CHANGELOG.md"]
-    print("ledger=0.8.0 guard=0.17.0")
+    print(f"ledger={ledger_version} guard={guard_version}")
     print("bundle=authority_bundle.v3 receipt=publication_receipt.v3")
     print("allowed=README.md,CHANGELOG.md blocked=src/unpublished.py")
     print("private_translation_evidence_required=False")
 
 
 if __name__ == "__main__":
-    main()
+    import argparse
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--candidate", action="store_true", help="require the real 0.9.0/0.19.0 candidate pair")
+    main(candidate=parser.parse_args().candidate)

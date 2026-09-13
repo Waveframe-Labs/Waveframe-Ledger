@@ -43,47 +43,19 @@ jobs:
       - name: Run full suite without Guard
         run: python -m pytest -q
 
-  test-with-guard:
+  combined-extra-status:
     runs-on: ubuntu-latest
-    env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
-
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v6
-        with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
-          persist-credentials: false
-
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.11"
-
-      - name: Install candidate with historical Guard extra
+      - name: Record downstream gate as pending, never a compatibility pass
+        shell: bash
         run: |
-          python -m pip install -r requirements-ci.txt
-          python -m pip install -e ".[dev,guard]" -r requirements-action-policy-dev.txt
-          python -m pip check
-          python tools/check_compiler_provenance.py
-
-      - name: Confirm unchanged development version and legacy Guard pin
-        run: python -c "import importlib.metadata as m; assert m.version('governance-ledger') == '0.8.0'; assert m.version('waveframe-guard') == '0.17.0'"
-
-      - name: Run full suite with Guard
-        run: python -m pytest -q
-
-      - name: Generate draft governance artifacts
-        run: governance-ledger run policies --pr-summary governance-review-summary.md
-
-      - name: Check validation severity gate
-        run: governance-ledger check generated
-
-      - name: Upload governance review summary
-        uses: actions/upload-artifact@v6
+          mkdir -p evidence
+          echo '{"gate":"combined-extra","status":"pending","executed":false,"ledger":"0.9.0","guard":"0.19.0","reason":"Separate exact Guard candidate required","release_ready":false}' > evidence/combined-extra.json
+          echo 'Combined Guard-extra acceptance is PENDING; this job only records status.' >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v6
         with:
-          name: governance-review-summary
-          path: governance-review-summary.md
+          name: combined-extra-pending
+          path: evidence/combined-extra.json
 
   release-artifacts:
     runs-on: ubuntu-latest
@@ -109,16 +81,16 @@ jobs:
           python -m build
           python -m twine check --strict dist/*
 
-      - name: Clean-install wheel with Guard extra
+      - name: Clean-install base wheel
         run: |
           release_root="$(mktemp -d)"
           release_env="$release_root/venv"
           python -m venv "$release_env"
           release_python="$release_env/bin/python"
-          ledger_wheel="$(find dist -maxdepth 1 -name 'governance_ledger-0.8.0-*.whl' -print -quit)"
-          "$release_python" -m pip install "${ledger_wheel}[guard]" -r requirements-action-policy-dev.txt -r requirements-ci.txt
+          ledger_wheel="$(find dist -maxdepth 1 -name 'governance_ledger-0.9.0-*.whl' -print -quit)"
+          "$release_python" -m pip install "${ledger_wheel}" -r requirements-action-policy-dev.txt -r requirements-ci.txt
           "$release_python" -m pip check
           "$release_python" -I tools/check_compiler_provenance.py
-          "$release_python" -c "import importlib.metadata as m; import governance_ledger, waveframe_guard; assert m.version('governance-ledger') == '0.8.0'; assert m.version('waveframe-guard') == '0.17.0'"
+          "$release_python" -c "import importlib.metadata as m; import governance_ledger, importlib.util; assert m.version('governance-ledger') == '0.9.0'; assert importlib.util.find_spec('waveframe_guard') is None"
           example_root="$(mktemp -d)"
-          (cd "$example_root" && "$release_python" "$GITHUB_WORKSPACE/examples/native_v3_multi_control.py")
+          (cd "$example_root" && "$release_python" "$GITHUB_WORKSPACE/examples/native_v4_release.py")
