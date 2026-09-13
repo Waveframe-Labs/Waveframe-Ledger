@@ -1,0 +1,66 @@
+{
+  "source-default": {
+    "passed": 674,
+    "failed": 0,
+    "skipped": 47,
+    "skip_reasons": {
+      "collection skipped": 1,
+      "explicit action-policy development opt-in required; see docs/ACTION_POLICY_DEVELOPMENT.md": 44,
+      "could not import 'waveframe_guard': No module named 'waveframe_guard'": 2
+    },
+    "release_passed": 70,
+    "native_passed": 0
+  },
+  "source-native": {
+    "passed": 718,
+    "failed": 0,
+    "skipped": 3,
+    "skip_reasons": {
+      "collection skipped": 1,
+      "could not import 'waveframe_guard': No module named 'waveframe_guard'": 2
+    },
+    "release_passed": 70,
+    "native_passed": 44
+  },
+  "installed-default": {
+    "passed": 674,
+    "failed": 0,
+    "skipped": 47,
+    "skip_reasons": {
+      "collection skipped": 1,
+      "explicit action-policy development opt-in required; see docs/ACTION_POLICY_DEVELOPMENT.md": 44,
+      "could not import 'waveframe_guard': No module named 'waveframe_guard'": 2
+    },
+    "release_passed": 70,
+    "native_passed": 0
+  },
+  "installed-native": {
+    "passed": 718,
+    "failed": 0,
+    "skipped": 3,
+    "skip_reasons": {
+      "collection skipped": 1,
+      "could not import 'waveframe_guard': No module named 'waveframe_guard'": 2
+    },
+    "release_passed": 70,
+    "native_passed": 44
+  },
+  "combined-extra-default": {
+    "passed": 678,
+    "failed": 0,
+    "skipped": 44,
+    "skip_reasons": {
+      "explicit action-policy development opt-in required; see docs/ACTION_POLICY_DEVELOPMENT.md": 44
+    },
+    "release_passed": 70,
+    "native_passed": 0
+  },
+  "combined-extra-native": {
+    "passed": 722,
+    "failed": 0,
+    "skipped": 0,
+    "skip_reasons": {},
+    "release_passed": 70,
+    "native_passed": 44
+  }
+}

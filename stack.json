@@ -1,0 +1,37 @@
+[
+  {
+    "baseRefName": "feat/issue-23-ledger-090",
+    "headRefName": "fix/issue-25-guard-019-acceptance",
+    "headRefOid": "a34c11d81b85963794cf28b4adad091fac15e130",
+    "isDraft": true,
+    "number": 26
+  },
+  {
+    "baseRefName": "feat/issue-21-release-catalog",
+    "headRefName": "feat/issue-23-ledger-090",
+    "headRefOid": "3cc34e7b3cb6efca5102e0e22d559ec0c0fd583f",
+    "isDraft": true,
+    "number": 24
+  },
+  {
+    "baseRefName": "feat/issue-19-compiler-acceptance",
+    "headRefName": "feat/issue-21-release-catalog",
+    "headRefOid": "40e0875ee9a973254bb3a4d0c228cad4fdce2bc0",
+    "isDraft": true,
+    "number": 22
+  },
+  {
+    "baseRefName": "feat/issue-17-action-authority-dev",
+    "headRefName": "feat/issue-19-compiler-acceptance",
+    "headRefOid": "4dbdfbaee92d43b888cae751ecaee5d9e4ec20b7",
+    "isDraft": true,
+    "number": 20
+  },
+  {
+    "baseRefName": "main",
+    "headRefName": "feat/issue-17-action-authority-dev",
+    "headRefOid": "54379d9c8044544fc1b8f32109bdfce35c1c6a05",
+    "isDraft": true,
+    "number": 18
+  }
+]

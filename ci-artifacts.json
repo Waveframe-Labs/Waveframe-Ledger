@@ -1,0 +1,82 @@
+[
+  {
+    "id": 10327455117,
+    "node_id": "MDg6QXJ0aWZhY3QxMDMyNzQ1NTExNw==",
+    "name": "issue25-ubuntu-latest-py3.14-a34c11d81b85963794cf28b4adad091fac15e130",
+    "size_in_bytes": 8973895,
+    "url": "https://api.github.com/repos/Waveframe-Labs/Waveframe-Ledger/actions/artifacts/10327455117",
+    "archive_download_url": "https://api.github.com/repos/Waveframe-Labs/Waveframe-Ledger/actions/artifacts/10327455117/zip",
+    "expired": false,
+    "digest": "sha256:cf1cdd57f4a68ad1e10b0b7b9a48ab1046685009052d3e8fb4ea6c0c44f7b282",
+    "created_at": "2026-09-13T22:24:17Z",
+    "updated_at": "2026-09-13T22:24:17Z",
+    "expires_at": "2026-12-12T22:19:18Z",
+    "workflow_run": {
+      "id": 34786440114,
+      "repository_id": 1232464013,
+      "head_repository_id": 1232464013,
+      "head_branch": "fix/issue-25-guard-019-acceptance",
+      "head_sha": "a34c11d81b85963794cf28b4adad091fac15e130"
+    }
+  },
+  {
+    "id": 10327006414,
+    "node_id": "MDg6QXJ0aWZhY3QxMDMyNzAwNjQxNA==",
+    "name": "issue25-windows-latest-py3.10-a34c11d81b85963794cf28b4adad091fac15e130",
+    "size_in_bytes": 9135883,
+    "url": "https://api.github.com/repos/Waveframe-Labs/Waveframe-Ledger/actions/artifacts/10327006414",
+    "archive_download_url": "https://api.github.com/repos/Waveframe-Labs/Waveframe-Ledger/actions/artifacts/10327006414/zip",
+    "expired": false,
+    "digest": "sha256:fa5f3e92af57559cb361f29a6e428e6ba4ce1b70ce1ab4612dfe6517c8d80517",
+    "created_at": "2026-09-13T22:26:29Z",
+    "updated_at": "2026-09-13T22:26:29Z",
+    "expires_at": "2026-12-12T22:19:18Z",
+    "workflow_run": {
+      "id": 34786440114,
+      "repository_id": 1232464013,
+      "head_repository_id": 1232464013,
+      "head_branch": "fix/issue-25-guard-019-acceptance",
+      "head_sha": "a34c11d81b85963794cf28b4adad091fac15e130"
+    }
+  },
+  {
+    "id": 10326434486,
+    "node_id": "MDg6QXJ0aWZhY3QxMDMyNjQzNDQ4Ng==",
+    "name": "issue25-ubuntu-latest-py3.10-a34c11d81b85963794cf28b4adad091fac15e130",
+    "size_in_bytes": 9054950,
+    "url": "https://api.github.com/repos/Waveframe-Labs/Waveframe-Ledger/actions/artifacts/10326434486",
+    "archive_download_url": "https://api.github.com/repos/Waveframe-Labs/Waveframe-Ledger/actions/artifacts/10326434486/zip",
+    "expired": false,
+    "digest": "sha256:1d900834a5f0139873342aef5b60ccfc2524a39aad7ae5e69aaf444b525d160c",
+    "created_at": "2026-09-13T22:25:01Z",
+    "updated_at": "2026-09-13T22:25:01Z",
+    "expires_at": "2026-12-12T22:19:18Z",
+    "workflow_run": {
+      "id": 34786440114,
+      "repository_id": 1232464013,
+      "head_repository_id": 1232464013,
+      "head_branch": "fix/issue-25-guard-019-acceptance",
+      "head_sha": "a34c11d81b85963794cf28b4adad091fac15e130"
+    }
+  },
+  {
+    "id": 10326419612,
+    "node_id": "MDg6QXJ0aWZhY3QxMDMyNjQxOTYxMg==",
+    "name": "issue25-windows-latest-py3.14-a34c11d81b85963794cf28b4adad091fac15e130",
+    "size_in_bytes": 9075642,
+    "url": "https://api.github.com/repos/Waveframe-Labs/Waveframe-Ledger/actions/artifacts/10326419612",
+    "archive_download_url": "https://api.github.com/repos/Waveframe-Labs/Waveframe-Ledger/actions/artifacts/10326419612/zip",
+    "expired": false,
+    "digest": "sha256:3f0321ed7c52ff3542a885aae7f0c854521dd5110dc7809bdbc3059c3a794faa",
+    "created_at": "2026-09-13T22:26:04Z",
+    "updated_at": "2026-09-13T22:26:04Z",
+    "expires_at": "2026-12-12T22:19:18Z",
+    "workflow_run": {
+      "id": 34786440114,
+      "repository_id": 1232464013,
+      "head_repository_id": 1232464013,
+      "head_branch": "fix/issue-25-guard-019-acceptance",
+      "head_sha": "a34c11d81b85963794cf28b4adad091fac15e130"
+    }
+  }
+]
