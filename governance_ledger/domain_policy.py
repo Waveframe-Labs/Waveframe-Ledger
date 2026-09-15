@@ -59,7 +59,7 @@ def interpret_policy_with_domain_pack(
 ) -> dict[str, Any]:
     """Directly parse matching clauses and leave every unmatched clause pending."""
     pack = get_builtin_domain_pack(domain_pack_id, domain_pack_version)
-    if domain_pack_id != REPOSITORY_CHANGES_PACK_ID or domain_pack_version not in {"1.0.0", "2.0.0"}:
+    if domain_pack_id != REPOSITORY_CHANGES_PACK_ID or domain_pack_version not in {"1.0.0", "2.0.0", "3.0.0"}:
         raise ValueError("the selected pack has no installed deterministic grammar")
     from governance_ledger.customer_policy import _interpret_customer_policy_v0_6_compatibility
 
@@ -119,7 +119,7 @@ def interpret_policy_with_domain_pack(
                     ]
                 except ValueError:
                     direct_constraints = []
-        if domain_pack_version == "2.0.0":
+        if domain_pack_version in {"2.0.0", "3.0.0"}:
             from governance_ledger.action_policy import parse_action_statement
             direct_constraints = parse_action_statement(exact[source_statement["start_byte"]:source_statement["end_byte"]].decode("utf-8"), pack)
         statement = {
@@ -161,7 +161,7 @@ def interpret_policy_with_domain_pack(
         "source_to_constraint_mappings": mappings,
         "status": _draft_status(statements, constraints),
     }
-    if domain_pack_version == "2.0.0":
+    if domain_pack_version in {"2.0.0", "3.0.0"}:
         draft["status"]["ready_for_finalization"] = (
             draft["status"]["ready_for_finalization"]
             and any(item["effect"] == "allow" for item in constraints)
@@ -743,7 +743,7 @@ def _constraint_from_legacy_rule(rule: dict[str, Any], pack: dict[str, Any]) -> 
 
 def _constraint_from_control(control: dict[str, Any], selections: dict[str, Any], pack: dict[str, Any]) -> dict[str, Any]:
     emitter = control["emitter_id"]
-    if pack["domain_pack_version"] == "2.0.0":
+    if pack["domain_pack_version"] in {"2.0.0", "3.0.0"}:
         action, control_type = control["control_id"].split("-", 1)
         if control not in pack["allowed_mapping_controls"]:
             raise ValueError("untrusted action emitter")

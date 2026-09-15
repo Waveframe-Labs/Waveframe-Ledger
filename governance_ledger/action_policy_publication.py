@@ -1,4 +1,4 @@
-"""Native v4 development publication with provider-independent reconstruction."""
+"""Native v4 publication with exact catalog dispatch and public reconstruction."""
 
 from __future__ import annotations
 
@@ -8,11 +8,11 @@ import re
 from governance_ledger import policy_translation_publication as public
 from governance_ledger.action_policy import (
     CONTRACT_SCHEMA, compile_verified_action_policy, lower_action_constraints,
-    require_development_opt_in, verify_action_compiler_output,
+    require_action_catalog, verify_action_compiler_output,
 )
 from governance_ledger.authority_contract import compute_contract_hash
 from governance_ledger.constraint_ir import artifact_hash, validate_runtime_fact_compatibility
-from governance_ledger.domain_packs import get_builtin_domain_pack
+from governance_ledger.domain_packs import get_builtin_domain_pack, resolve_action_pack_provenance
 from governance_ledger.domain_policy import _build_ir, _pack_ref
 from governance_ledger.publication_provenance import canonical_sha256
 from governance_ledger.semantics.compiler import build_semantic_commit_bundle
@@ -29,9 +29,9 @@ def _reconstruct(source, authority, commitment, *, approved_by, approved_at,
     Verification consumes retained compiler output and independently compares it to
     approved semantics. It needs neither a provider nor a compiler installation.
     """
-    require_development_opt_in()
-    if commitment["capability_catalog"]["catalog_version"] != "2.0.0":
-        raise ValueError("v4 requires catalog 2.0.0; historical authorities cannot upgrade")
+    catalog = public.resolve_policy_translation_capability_catalog(commitment["capability_catalog"])
+    catalog_version = catalog["catalog_version"]
+    require_action_catalog(catalog_version)
     constraints = public._validate_policy_translation_commitment(
         source, authority, commitment, approval_time=approved_at)
     for resolution in commitment["customer_bindings"]:
@@ -45,7 +45,7 @@ def _reconstruct(source, authority, commitment, *, approved_by, approved_at,
             confirmation = record["human_confirmation"]
             public._nonempty(confirmation["confirmed_by"], "control confirmed_by")
             public._not_after(confirmation["confirmed_at"], decision["confirmed_at"], "control confirmation")
-    pack = get_builtin_domain_pack("repository-changes", "2.0.0")
+    pack = get_builtin_domain_pack("repository-changes", catalog_version)
     ir = _build_ir(constraints, pack)
     runtime = copy.deepcopy(pack["runtime_fact_schema"])
     if not validate_runtime_fact_compatibility(ir, runtime, domain_pack=pack)["compatible"]:
@@ -72,7 +72,7 @@ def _reconstruct(source, authority, commitment, *, approved_by, approved_at,
     }, committed_by=public._nonempty(committed_by, "committed_by"),
        committed_at=public._utc(committed_at, "committed_at"))
     if raw_output is None:
-        raw_output = compile_verified_action_policy(policy)
+        raw_output = compile_verified_action_policy(policy, catalog_version=catalog_version)
     verify_action_compiler_output(raw_output, policy)
     compiled = {
         "schema_version": CONTRACT_SCHEMA,
@@ -134,16 +134,16 @@ def _receipt(bundle):
 
 def finalize_policy_translation_authority_v4(proposal, confirmation, approval, *,
         committed_by, committed_at, publication_id, published_by, published_at):
-    require_development_opt_in()
     commitment = public.build_policy_translation_commitment(proposal, confirmation, approval)
     bundle, policy = _reconstruct(proposal["source_policy"], proposal["authority"], commitment,
         approved_by=approval["approved_by"], approved_at=approval["approved_at"],
         committed_by=committed_by, committed_at=committed_at, publication_id=publication_id,
         published_by=published_by, published_at=published_at)
     receipt = _receipt(bundle)
+    development = commitment["capability_catalog"]["catalog_version"] == "2.0.0"
     return {
-        "result_type": "development_action_policy_publication",
-        "status": {"development_publication_ready": True, "runtime_activation_ready": False},
+        "result_type": "development_action_policy_publication" if development else "action_policy_publication",
+        "status": {("development_publication_ready" if development else "publication_ready"): True, "runtime_activation_ready": False},
         "canonical_compiler_input": policy,
         "compiler_output": copy.deepcopy(bundle["compiled_authority_contract"]["compiler_output"]),
         "compiled_authority_contract": copy.deepcopy(bundle["compiled_authority_contract"]),
@@ -155,11 +155,15 @@ def finalize_policy_translation_authority_v4(proposal, confirmation, approval, *
 
 
 def validate_compiled_authority_contract_v3(contract):
-    require_development_opt_in()
+    """Check structure and trusted pack/runtime provenance, not approval or activation."""
     public._exact(contract, {"schema_version", "contract_id", "contract_version", "authority_ref",
         "action_requirements", "compiler_output", "provenance", "contract_hash"}, CONTRACT_SCHEMA)
     if contract["schema_version"] != CONTRACT_SCHEMA:
         raise ValueError("unknown or mixed compiled authority schema")
+    public._exact(contract["provenance"], {"source_snapshot_hash", "policy_translation_commitment_hash",
+        "constraint_ir_hash", "domain_pack_hash", "runtime_fact_schema_hash", "compiler_binding_hash",
+        "semantic_commit_hash"}, "compiled provenance")
+    pack = resolve_action_pack_provenance(contract["provenance"])
     public._identity(contract["contract_id"], "contract_id")
     if not isinstance(contract["contract_version"], str) or not re.fullmatch(r"(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)", contract["contract_version"]):
         raise ValueError("contract_version must be canonical semver")
@@ -184,7 +188,6 @@ def validate_compiled_authority_contract_v3(contract):
                 public._exact(rule, {"match", "value"}, "action selector")
                 constraints.append(_finalize_constraint(_constraint(action=action, effect=effect,
                     resource={"kind": "repository_path", **rule})))
-    pack = get_builtin_domain_pack("repository-changes", "2.0.0")
     _build_ir(constraints, pack)
     policy = lower_action_constraints({"authority_id": contract["contract_id"],
         "authority_version": contract["contract_version"]}, constraints)
@@ -206,7 +209,6 @@ def validate_compiled_authority_contract_v3(contract):
 
 
 def validate_authority_bundle_v4(bundle):
-    require_development_opt_in()
     if not isinstance(bundle, dict) or bundle.get("schema_version") != BUNDLE_SCHEMA:
         raise ValueError("expected native authority_bundle.v4")
     try:

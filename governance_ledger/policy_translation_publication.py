@@ -60,9 +60,13 @@ NEEDS_AN_ANSWER = "Needs an answer"
 NEEDS_A_CONNECTION = "Needs a connection"
 PARTIALLY_ENFORCEABLE = "Partially enforceable"
 NOT_CURRENTLY_ENFORCEABLE = "Not currently enforceable"
+PREPARED_FOR_GUARD = "Prepared for a compatible Guard runtime"
+PARTIALLY_PREPARED_FOR_GUARD = "Partially prepared for a compatible Guard runtime"
 INFORMATIONAL = "Informational"
 
 _CUSTOMER_STATES = {
+    PREPARED_FOR_GUARD,
+    PARTIALLY_PREPARED_FOR_GUARD,
     READY_TO_ENFORCE,
     NEEDS_AN_ANSWER,
     NEEDS_A_CONNECTION,
@@ -104,6 +108,9 @@ def inspect_policy_translation_customer_coverage(
         )
         if proposal["capability_catalog"]["catalog_version"] == "2.0.0" and customer_state in {READY_TO_ENFORCE, PARTIALLY_ENFORCEABLE}:
             customer_state = NOT_CURRENTLY_ENFORCEABLE
+        if proposal["capability_catalog"]["catalog_version"] == "3.0.0":
+            customer_state = {READY_TO_ENFORCE: PREPARED_FOR_GUARD,
+                              PARTIALLY_ENFORCEABLE: PARTIALLY_PREPARED_FOR_GUARD}.get(customer_state, customer_state)
         clauses.append(
             {
                 "clause_id": clause["clause_id"],
@@ -887,7 +894,7 @@ def _validate_policy_translation_commitment(
             _not_after(acknowledgment["acknowledged_at"], approval_time, "residual acknowledgment")
         _validate_residual_spans(raw_residuals, clause=candidate_clause, exact_source=exact)
         residual_count += len(residuals)
-        if catalog["catalog_version"] == "2.0.0" and statement["classification"] != "direct" and controls:
+        if catalog["catalog_version"] in {"2.0.0", "3.0.0"} and statement["classification"] != "direct" and controls:
             raise ValueError("unsupported source meaning cannot become published action controls")
         if statement["classification"] == "direct":
             actual = [
@@ -910,9 +917,11 @@ def _validate_policy_translation_commitment(
 
     if catalog["catalog_version"] == "1.0.0":
         _require_no_rule_conflicts([_lower_constraint(item) for item in constraints])
-    else:
+    elif catalog["catalog_version"] in {"2.0.0", "3.0.0"}:
         from governance_ledger.action_policy import lower_action_constraints
         lower_action_constraints(authority, constraints)
+    else:
+        raise ValueError("unknown action catalog in commitment")
     expected_coverage = _customer_coverage_totals(
         coverage_rows,
         control_count=sum(len(item["controls"]) for item in clauses),
@@ -939,7 +948,7 @@ def _publication_approval_record(
         "approved_semantic_commit_hash": semantic["semantic_commit_hash"],
     }
     record["approval_record_hash"] = artifact_hash(record, "approval_record_hash")
-    prefix = "publication-approval-v4-" if commitment["capability_catalog"]["catalog_version"] == "2.0.0" else "publication-approval-v3-"
+    prefix = "publication-approval-v4-" if commitment["capability_catalog"]["catalog_version"] in {"2.0.0", "3.0.0"} else "publication-approval-v3-"
     record["approval_id"] = prefix + record[
         "approval_record_hash"
     ].removeprefix("sha256:")
@@ -972,7 +981,7 @@ def _compiler_binding(pack: dict[str, Any], commitment: dict[str, Any]) -> dict[
         "grammar_compiler": copy.deepcopy(pack["grammar_compiler"]),
         "compiler_lowering": copy.deepcopy(pack["compiler_lowering"]),
         "control_emitters": unique_used,
-        "compiled_contract_schema_version": "compiled_authority_contract.v3" if pack["domain_pack_version"] == "2.0.0" else "compiled_authority_contract.v2",
+        "compiled_contract_schema_version": "compiled_authority_contract.v3" if pack["domain_pack_version"] in {"2.0.0", "3.0.0"} else "compiled_authority_contract.v2",
     }
     result["compiler_binding_hash"] = artifact_hash(result, "compiler_binding_hash")
     return result
@@ -1128,6 +1137,8 @@ def _proposal_customer_state(
 
 
 def _published_customer_state(status: str, *, catalog_version: str = "1.0.0") -> str:
+    if catalog_version == "3.0.0" and status in {"fully_represented", "partially_represented"}:
+        return PREPARED_FOR_GUARD if status == "fully_represented" else PARTIALLY_PREPARED_FOR_GUARD
     if catalog_version == "2.0.0" and status in {"fully_represented", "partially_represented"}:
         return NOT_CURRENTLY_ENFORCEABLE
     states = {
@@ -1174,8 +1185,8 @@ def _customer_coverage_totals(
         counts[state] += 1
     return {
         "total_clause_count": len(clauses),
-        "full_clause_count": counts[READY_TO_ENFORCE],
-        "partial_clause_count": counts[PARTIALLY_ENFORCEABLE],
+        "full_clause_count": counts[READY_TO_ENFORCE] + counts[PREPARED_FOR_GUARD],
+        "partial_clause_count": counts[PARTIALLY_ENFORCEABLE] + counts[PARTIALLY_PREPARED_FOR_GUARD],
         "waiting_clause_count": counts[NEEDS_AN_ANSWER] + counts[NEEDS_A_CONNECTION],
         "needs_answer_clause_count": counts[NEEDS_AN_ANSWER],
         "needs_connection_clause_count": counts[NEEDS_A_CONNECTION],

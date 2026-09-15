@@ -88,7 +88,7 @@
         "clause_id": {"type": "string", "minLength": 1}, "index": {"type": "integer", "minimum": 0},
         "start_byte": {"type": "integer", "minimum": 0}, "end_byte": {"type": "integer", "minimum": 1},
         "clause_bytes_base64": {"$ref": "#/$defs/base64"}, "clause_hash": {"$ref": "#/$defs/sha256"},
-        "customer_coverage_state": {"enum": ["Ready to enforce", "Needs an answer", "Needs a connection", "Partially enforceable", "Not currently enforceable", "Informational"]},
+        "customer_coverage_state": {"enum": ["Ready to enforce", "Needs an answer", "Needs a connection", "Partially enforceable", "Not currently enforceable", "Informational", "Prepared for a compatible Guard runtime", "Partially prepared for a compatible Guard runtime"]},
         "limitation_code": {"enum": [null, "unavailable_action", "unavailable_actor_kind", "unavailable_runtime_fact", "unavailable_enforcement_point", "unavailable_binding_type", "cross_repository_adapter_required", "pull_request_approval_not_supported", "other"]}, "customer_explanation": {"type": ["string", "null"], "minLength": 1},
         "controls": {"type": "array", "items": {"$ref": "#/$defs/publishedControl"}},
         "residuals": {"type": "array", "items": {"$ref": "#/$defs/residual"}},

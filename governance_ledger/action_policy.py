@@ -1,4 +1,4 @@
-"""Development-only action semantics; no runtime or filesystem implementation."""
+"""Registered action-policy generations; no runtime or filesystem implementation."""
 
 from __future__ import annotations
 
@@ -13,6 +13,9 @@ from governance_ledger.constraint_ir import artifact_hash, validate_format_value
 DEV_ENV = "WAVEFRAME_LEDGER_ACTION_POLICY_DEV"
 VERSION = "2.0.0"
 ENFORCEMENT_POINT = "waveframe.guard.repository-change.v2-development"
+RELEASE_VERSION = "3.0.0"
+RELEASE_ENFORCEMENT_POINT = "waveframe.guard.repository-change.v2"
+ACTION_CATALOGS = {VERSION: ENFORCEMENT_POINT, RELEASE_VERSION: RELEASE_ENFORCEMENT_POINT}
 CONTRACT_SCHEMA = "compiled_authority_contract.v3"
 REVIEW_BOUNDARY = (
     " Development validation only; compatible Guard and hosted Cloud activation are pending. "
@@ -21,6 +24,23 @@ REVIEW_BOUNDARY = (
     "Creation requires one new regular file under an existing parent in the selected workspace, "
     "without overwrite or parent creation. Guard must check filesystem state, not caller facts."
 )
+RELEASE_REVIEW_BOUNDARY = (
+    " This policy is prepared to enforce these controls through a compatible Guard runtime. "
+    "Create and modify have independent paths and action-wide roles. An absent action or "
+    "missing matching allow grants no permission. A matching deny wins within the same action; "
+    "rules never cross actions. Roles restrict an action and grant no paths. Creation requires "
+    "exclusive creation of one new regular file under an existing parent in the selected "
+    "workspace, without overwrite or parent creation. Guard must check filesystem state, "
+    "not caller facts. This review does not establish deployment, a connected runtime, "
+    "successful execution, or control over mutations outside Guard."
+)
+
+
+def require_action_catalog(catalog_version: str) -> None:
+    if catalog_version not in ACTION_CATALOGS:
+        raise ValueError("unknown registered action catalog version")
+    if catalog_version == VERSION:
+        require_development_opt_in()
 
 
 def require_development_opt_in() -> None:
@@ -30,14 +50,19 @@ def require_development_opt_in() -> None:
 
 def get_development_capability_catalog() -> dict[str, Any]:
     require_development_opt_in()
+    return get_action_capability_catalog(VERSION)
+
+
+def get_action_capability_catalog(catalog_version: str) -> dict[str, Any]:
+    require_action_catalog(catalog_version)
     from governance_ledger.domain_packs import get_builtin_domain_pack
     from governance_ledger.domain_policy import _pack_ref
     from governance_ledger.policy_translation import _build_repository_capability_catalog
 
     catalog = _build_repository_capability_catalog()
-    pack = get_builtin_domain_pack("repository-changes", VERSION)
+    pack = get_builtin_domain_pack("repository-changes", catalog_version)
     catalog.update(schema_version="policy_translation_capability_catalog.v2",
-                   catalog_version=VERSION, domain_pack=_pack_ref(pack),
+                   catalog_version=catalog_version, domain_pack=_pack_ref(pack),
                    actions=["create", "modify"])
     for fact in catalog["facts"]:
         if fact["fact_id"] == "proposal.action":
@@ -49,7 +74,7 @@ def get_development_capability_catalog() -> dict[str, Any]:
         for action in catalog["actions"] for control in controls
     ]
     catalog["enforcement_points"][0].update(
-        enforcement_point_id=ENFORCEMENT_POINT, actions=["create", "modify"])
+        enforcement_point_id=ACTION_CATALOGS[catalog_version], actions=["create", "modify"])
     catalog["catalog_hash"] = artifact_hash(catalog, "catalog_hash")
     return catalog
 
@@ -143,8 +168,8 @@ def verify_action_compiler_output(raw: dict, policy: dict) -> None:
             raise ValueError(f"action compiler output substitution: {field}")
 
 
-def compile_verified_action_policy(policy: dict) -> dict:
-    require_development_opt_in()
+def compile_verified_action_policy(policy: dict, *, catalog_version: str = VERSION) -> dict:
+    require_action_catalog(catalog_version)
     try:
         from compiler import compile_action_policy
     except ImportError as exc:
