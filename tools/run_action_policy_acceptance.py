@@ -13,6 +13,8 @@ import json
 import os
 from pathlib import Path
 import re
+import shutil
+import platform
 import subprocess
 import sys
 import tarfile
@@ -32,11 +34,12 @@ class Acceptance:
         self.env.pop(DEV, None)
         self.env.pop("WAVEFRAME_GUARD_ACTION_POLICY_DEV", None)
         self.env.pop("PYTHONPATH", None)
+        self.env.pop("LEDGER_ARCHIVE_EXPECTATIONS", None)
         self.env["PYTHONUTF8"] = "1"
         self.env["PIP_DISABLE_PIP_VERSION_CHECK"] = "1"
         # Applies to nested PEP 517 build isolation too, without bypassing resolution.
         self.env["PIP_CONSTRAINT"] = str(ROOT / "requirements-ci.txt")
-        self.report = {"python": sys.version, "commands": [], "suites": {},
+        self.report = {"python": sys.version, "platform": platform.system(), "commands": [], "suites": {},
                        "gates": {"base": "incomplete", "combined_extra": "pending"},
                        "combined_extra": {"status": "pending", "executed": False,
                            "reason": "Separate Guard 0.19.0 candidate required",
@@ -119,6 +122,20 @@ class Acceptance:
         (self.output / f"{name}.json").write_text(json.dumps(value, indent=2), encoding="utf-8")
         return value
 
+    def archive_expectations(self, name, compiler, build, wheels=None):
+        from package_provenance import CANDIDATE
+        distributions = {"cricore-contract-compiler": {
+            "wheel": str(compiler), "sha256": build["sha256"],
+            "source_commit": CANDIDATE, "build_origin": build["origin"]}}
+        for distribution, path in (wheels or {}).items():
+            distributions[distribution] = {"wheel": str(path),
+                "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
+        path = self.output / f"{name}-archive-expectations.json"
+        path.write_text(json.dumps({"distributions": distributions,
+            "install_report": str(self.output / f"{name}-install.json")}, indent=2), encoding="utf-8")
+        self.env["LEDGER_ARCHIVE_EXPECTATIONS"] = str(path)
+        return path
+
     def build(self):
         dist = self.output / "dist"
         # build's default path builds the wheel from the freshly created sdist.
@@ -181,12 +198,12 @@ class Acceptance:
         self.save()
         return wheel, support
 
-    def execute(self, expected_head):
+    def execute(self, expected_head, inputs=None):
         assert re.fullmatch(r"[0-9a-f]{40}", expected_head), "explicit full commit required"
         head = self.run("head", "git", "rev-parse", "HEAD").strip()
         assert head == expected_head, (head, expected_head)
         self.report.update(head=head, expected_head=expected_head,
-                           base="40e0875ee9a973254bb3a4d0c228cad4fdce2bc0")
+                           base="3cc34e7b3cb6efca5102e0e22d559ec0c0fd583f")
         self.run("stack-base", "git", "merge-base", "--is-ancestor", self.report["base"], head)
         self.run("clean-tracked-checkout", "git", "diff", "--exit-code", "HEAD")
         self.run("preserved-evidence", "git", "diff", "--exit-code",
@@ -195,21 +212,39 @@ class Acceptance:
                  "docs/acceptance/issue17", "docs/acceptance/issue19", "examples/native_v4_development.py",
                  "requirements-action-policy-dev.txt")
         self.run("preserved-catalog-release", "git", "diff", "--exit-code", self.report["base"], "--",
-                 "tests/fixtures", "schemas", "governance_ledger", "examples/native_v4_release.py")
+                 "tests/fixtures", "schemas", "examples/native_v4_release.py")
+        changed_runtime = self.run("runtime-diff", "git", "diff", "--name-only", self.report["base"], "--", "governance_ledger").splitlines()
+        assert set(changed_runtime) <= {"governance_ledger/integrations/guard.py", "governance_ledger/cli.py"}, changed_runtime
         self.probe(sys.executable, ROOT, "release-metadata", "check_ledger_release_metadata.py")
         wheel, support = self.build()
         candidate = ["-r", ROOT / "requirements-action-policy-dev.txt"]
         source = self.environment("source", "-e", f"{ROOT}[dev]", *candidate)
-        self.probe(source, ROOT, "source-provenance", "check_compiler_provenance.py")
+        source_provenance = self.probe(source, ROOT, "source-provenance", "check_compiler_provenance.py")
         self.suites(source, ROOT, "source")
-        installed = self.environment("installed", f"{wheel}[dev]", *candidate)
-        self.probe(installed, support, "installed-provenance", "check_compiler_provenance.py")
+        if inputs:
+            from fetch_guard_candidate import verify
+            supplied = json.loads(inputs.read_text(encoding="utf-8"))
+            verified = verify(inputs.parent, supplied["cell"])
+            self.report["verified_inputs"] = verified
+            compiler = Path(verified["compiler_wheel"])
+            shutil.copyfile(compiler, self.output / compiler.name)
+            self.report["compiler_wheel"] = verified["compiler_build"]
+            installed = self.environment("installed", f"{wheel}[dev]", compiler)
+            self.archive_expectations("installed", compiler, verified["compiler_build"])
+        else:
+            installed = self.environment("installed", f"{wheel}[dev]", *candidate)
+        installed_provenance = self.probe(installed, support, "installed-provenance", "check_compiler_provenance.py")
+        source_bytes = {p: h for p, h in source_provenance["installed_sha256"].items() if p.startswith("compiler/")}
+        archive_bytes = {p: h for p, h in installed_provenance["installed_sha256"].items() if p.startswith("compiler/")}
+        assert source_bytes == archive_bytes, "accepted Compiler wheel differs from exact Git installation"
+        self.report["compiler_source_archive_bytes_equal"] = True
         self.suites(installed, support, "installed", installed=True)
         self.probe(installed, support, "package", "check_action_policy_package.py", native=True)
         self.probe(installed, support, "release-package", "check_release_catalog_package.py")
         self.run("installed-release-example", installed, "-I", support / "examples/native_v4_release.py", cwd=support)
         self.run("installed-cli", installed.parent / ("governance-ledger.exe" if os.name == "nt" else "governance-ledger"), "--help", cwd=support)
         current_history = self.probe(installed, support, "candidate-history", "check_action_policy_history.py")
+        self.env.pop("LEDGER_ARCHIVE_EXPECTATIONS", None)
         negative = self.environment("resolver-negative")
         rejection = self.run("reject-compiler-040", negative, "-m", "pip", "install", "--dry-run",
                              wheel, "cricore-contract-compiler==0.4.0", negative=True)
@@ -246,9 +281,10 @@ class Acceptance:
                 self.probe(published, support, "legacy-operations", "check_action_policy_legacy_operations.py")
         # Record the locally built cached VCS wheel and its origin; not a supplied
         # archive or reproducible-build claim. Native output equality is checked above.
-        cache = Path(self.run("pip-cache", source, "-m", "pip", "cache", "dir").strip())
-        from check_compiler_wheel_cache import record_cached_compiler
-        self.report["compiler_wheel"] = record_cached_compiler(cache, self.output)
+        if not inputs:
+            cache = Path(self.run("pip-cache", source, "-m", "pip", "cache", "dir").strip())
+            from check_compiler_wheel_cache import record_cached_compiler
+            self.report["compiler_wheel"] = record_cached_compiler(cache, self.output)
         assert self.run("final-head", "git", "rev-parse", "HEAD").strip() == expected_head
         self.run("final-clean-tracked-checkout", "git", "diff", "--exit-code", "HEAD")
         self.report["gates"]["base"] = "passed"
@@ -260,10 +296,11 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--expected-head", required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--verified-inputs", type=Path)
     args = parser.parse_args()
     acceptance = Acceptance(args.output)
     try:
-        acceptance.execute(args.expected_head)
+        acceptance.execute(args.expected_head, args.verified_inputs.resolve() if args.verified_inputs else None)
     except BaseException as exc:
         acceptance.report.update(status="failed", error=str(exc))
         acceptance.save()

@@ -2,7 +2,7 @@ name: Action policy catalog acceptance
 
 on:
   pull_request:
-    branches: [main, feat/issue-17-action-authority-dev, feat/issue-19-compiler-acceptance, feat/issue-21-release-catalog]
+    branches: [main, feat/issue-17-action-authority-dev, feat/issue-19-compiler-acceptance, feat/issue-21-release-catalog, feat/issue-23-ledger-090]
   push:
     branches: [main]
   workflow_dispatch:
@@ -17,7 +17,7 @@ permissions:
 
 jobs:
   candidate-acceptance:
-    name: Native and package (${{ matrix.os }}, Python ${{ matrix.python }})
+    name: Source, installed and combined (${{ matrix.os }}, Python ${{ matrix.python }})
     strategy:
       fail-fast: false
       matrix:
@@ -38,18 +38,32 @@ jobs:
           python-version: ${{ matrix.python }}
       - name: Install pinned acceptance tools
         run: python -m pip install -r requirements-ci.txt
+      - name: Verify immutable candidate archives and build provenance
+        shell: bash
+        run: python tools/fetch_guard_candidate.py --cell "${{ runner.os == 'Windows' && 'windows' || 'ubuntu' }}-${{ matrix.python }}" --output runtime/issue25-inputs
       - name: Validate actual head, source, packages, resolver and historical runtimes
         shell: bash
-        run: python tools/run_action_policy_acceptance.py --expected-head "$EXPECTED_HEAD" --output runtime/issue23-ci
+        run: python tools/run_action_policy_acceptance.py --expected-head "$EXPECTED_HEAD" --output runtime/issue25-base --verified-inputs runtime/issue25-inputs/verified-inputs.json
+      - name: Required combined suites, repository execution and ordinary Guard upgrade
+        shell: bash
+        run: python tools/run_guard_extra_acceptance.py --expected-head "$EXPECTED_HEAD" --base-evidence runtime/issue25-base --verified-inputs runtime/issue25-inputs/verified-inputs.json --output runtime/issue25-combined
       - name: Retain evidence even on failure
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: issue23-${{ matrix.os }}-py${{ matrix.python }}-${{ env.EXPECTED_HEAD }}
+          name: issue25-${{ matrix.os }}-py${{ matrix.python }}-${{ env.EXPECTED_HEAD }}
           if-no-files-found: error
           path: |
-            runtime/issue23-ci/*.json
-            runtime/issue23-ci/*.log
-            runtime/issue23-ci/*.xml
-            runtime/issue23-ci/*.whl
-            runtime/issue23-ci/dist/*
+            runtime/issue25-base/*.json
+            runtime/issue25-base/*.log
+            runtime/issue25-base/*.xml
+            runtime/issue25-base/*.whl
+            runtime/issue25-base/dist/*
+            runtime/issue25-combined/*.json
+            runtime/issue25-combined/*.log
+            runtime/issue25-combined/*.xml
+            runtime/issue25-combined/wheelhouse/*
+            runtime/issue25-inputs/handoff.json
+            runtime/issue25-inputs/SHA256SUMS
+            runtime/issue25-inputs/verified-inputs.json
+            runtime/issue25-inputs/artifacts/*

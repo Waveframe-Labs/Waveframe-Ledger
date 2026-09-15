@@ -72,7 +72,7 @@ def test_built_wheel_advertises_the_planned_guard_extra(
     ]
 
 
-def test_guard_0190_planned_pair_is_explicitly_pending() -> None:
+def test_guard_0190_pair_keeps_release_coordination_pending() -> None:
     project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     assert project["project"]["version"] == "0.9.0"
     assert project["project"]["optional-dependencies"]["guard"] == [
@@ -80,7 +80,7 @@ def test_guard_0190_planned_pair_is_explicitly_pending() -> None:
     ]
     compatibility = project["tool"]["waveframe"]["guard-compatibility"]
     assert compatibility == {
-        "status": "pending-separate-guard-candidate",
+        "status": "pending-release-coordination",
         "ledger": "0.9.0",
         "guard": "0.19.0",
         "guard_ledger_requirement": ">=0.9.0,<0.10.0",
@@ -150,7 +150,8 @@ def test_importing_all_ledger_modules_does_not_import_guard() -> None:
     assert completed.stdout.strip() == "ledger-import-boundary: ok"
 
 
-def test_injected_evaluator_replay_is_deterministic_and_non_mutating(monkeypatch) -> None:
+@pytest.mark.parametrize("allowed", [False, True])
+def test_injected_evaluator_replay_is_deterministic_and_non_mutating(monkeypatch, allowed) -> None:
     monkeypatch.setitem(sys.modules, "waveframe_guard", None)
     authority_contract = _authority_contract()
     execution_state = _execution_state(approvals=[])
@@ -161,9 +162,9 @@ def test_injected_evaluator_replay_is_deterministic_and_non_mutating(monkeypatch
         contract["evaluator_mutation"] = True
         state["evaluator_mutation"] = True
         return {
-            "allowed": False,
-            "reason": "injected evaluator blocked execution",
-            "missing_approvals": [{"role": "manager"}],
+            "allowed": allowed,
+            "reason": "approval evidence satisfied" if allowed else "required approval missing: manager",
+            "missing_approvals": [] if allowed else [{"role": "manager"}],
             "trace": {"evaluator": "injected"},
         }
 
@@ -179,7 +180,9 @@ def test_injected_evaluator_replay_is_deterministic_and_non_mutating(monkeypatch
     )
 
     assert first == second
-    assert first["decision"] == "BLOCKED"
+    assert first["decision"] == ("ALLOWED" if allowed else "BLOCKED")
+    assert first["reason"] == ("approval evidence satisfied" if allowed else "required approval missing: manager")
+    assert first["missing_approvals"] == ([] if allowed else [{"role": "manager"}])
     assert first["decision_trace"] == {"evaluator": "injected"}
     assert authority_contract == original_contract
     assert execution_state == original_execution_state
@@ -191,7 +194,7 @@ def test_missing_evaluator_and_guard_raises_actionable_ledger_error(monkeypatch)
 
     with pytest.raises(
         GuardIntegrationUnavailableError,
-        match=r"Install governance-ledger\[guard\]",
+        match="Waveframe Guard is not installed",
     ) as caught:
         replay_admissibility(
             authority_contract=_authority_contract(),
@@ -200,6 +203,35 @@ def test_missing_evaluator_and_guard_raises_actionable_ledger_error(monkeypatch)
     assert caught.value.__cause__ is None
     assert caught.value.__suppress_context__ is True
 
+
+
+def test_missing_guard_cli_is_distinct_and_actionable(monkeypatch, tmp_path, capsys):
+    import json
+    from governance_ledger.cli import main
+    monkeypatch.setitem(sys.modules, "waveframe_guard", None)
+    contract = tmp_path / "contract.json"
+    state = tmp_path / "state.json"
+    contract.write_text(json.dumps(_authority_contract()))
+    state.write_text(json.dumps(_execution_state(approvals=[])))
+    assert main(["replay-execution", "--contract", str(contract),
+                 "--execution-state", str(state)]) == 2
+    output = capsys.readouterr()
+    assert "LEDGER_GUARD_UNAVAILABLE" in output.err
+    assert "not installed" in output.err
+    assert "does not restore" in output.err
+    assert not output.out
+
+
+def test_automatic_replay_never_calls_an_installed_legacy_callable(monkeypatch):
+    import types
+    from governance_ledger.integrations.guard import GuardReplayUnsupportedError
+    def forbidden(*args):
+        raise AssertionError("automatic replay must not call the retired evaluator")
+    monkeypatch.setitem(sys.modules, "waveframe_guard",
+                        types.SimpleNamespace(evaluate_admissibility=forbidden))
+    with pytest.raises(GuardReplayUnsupportedError):
+        replay_admissibility(authority_contract=_authority_contract(),
+                             execution_state=_execution_state(approvals=[]))
 
 def test_authority_replay_remains_guard_independent(monkeypatch) -> None:
     monkeypatch.setitem(sys.modules, "waveframe_guard", None)

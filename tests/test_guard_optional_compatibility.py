@@ -11,43 +11,39 @@ from governance_ledger.replay import replay_admissibility
 waveframe_guard = pytest.importorskip("waveframe_guard")
 
 
-def test_released_guard_integration_preserves_allowed_and_blocked_replay() -> None:
-    version = importlib.metadata.version("waveframe-guard")
-    assert version == "0.19.0"
-    authority_contract = _authority_contract()
-    blocked_state = _execution_state(approvals=[])
-    allowed_state = _execution_state(
-        approvals=[{"role": "manager", "approved_by": "manager-1"}]
-    )
-    inputs_before = copy.deepcopy(
-        [authority_contract, blocked_state, allowed_state]
-    )
+def test_guard_019_reports_unsupported_raw_replay_without_mutation() -> None:
+    from governance_ledger.integrations.guard import GuardReplayUnsupportedError
 
-    blocked = replay_admissibility(
-        authority_contract=authority_contract,
-        execution_state=blocked_state,
-    )
-    allowed = replay_admissibility(
-        authority_contract=authority_contract,
-        execution_state=allowed_state,
-    )
+    assert importlib.metadata.version("waveframe-guard") == "0.19.0"
+    authority = _authority_contract()
+    for approvals in ([], [{"role": "manager", "approved_by": "manager-1"}]):
+        state = _execution_state(approvals=approvals)
+        before = copy.deepcopy([authority, state])
+        with pytest.raises(GuardReplayUnsupportedError, match="evaluate_admissibility is retired") as caught:
+            replay_admissibility(authority_contract=authority, execution_state=state)
+        assert caught.value.code == "LEDGER_GUARD_REPLAY_UNSUPPORTED"
+        assert caught.value.__cause__ is None
+        assert [authority, state] == before
 
-    assert blocked["decision"] == "BLOCKED"
-    assert blocked["reason"] == "required approval missing: manager"
-    assert blocked["missing_approvals"] == [
-        {
-            "role": "manager",
-            "condition": {
-                "field": "amount",
-                "operator": ">",
-                "value": 1_000_000,
-            },
-        }
-    ]
-    assert allowed["decision"] == "ALLOWED"
-    assert allowed["reason"] == "approval evidence satisfied"
-    assert allowed["missing_approvals"] == []
-    assert [authority_contract, blocked_state, allowed_state] == inputs_before
+
+def test_guard_019_cli_reports_unsupported_without_traceback(tmp_path) -> None:
+    import json
+    import subprocess
+    import sys
+
+    contract = tmp_path / "contract.json"
+    state = tmp_path / "state.json"
+    contract.write_text(json.dumps(_authority_contract()), encoding="utf-8")
+    state.write_text(json.dumps(_execution_state(approvals=[])), encoding="utf-8")
+    result = subprocess.run([sys.executable, "-m", "governance_ledger.cli",
+                             "replay-execution", "--contract", str(contract),
+                             "--execution-state", str(state), "--json"],
+                            capture_output=True, text=True)
+    assert result.returncode == 2
+    assert "LEDGER_GUARD_REPLAY_UNSUPPORTED" in result.stderr
+    assert "store replay(run_id)" in result.stderr
+    assert "Traceback" not in result.stderr
+    assert not result.stdout
 
 
 def _authority_contract() -> dict:

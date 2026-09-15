@@ -1,7 +1,7 @@
 """Real installed Guard 0.19 catalog-3 execution; no dev flags or mocked runtime.
 
 Uses only temporary repository files and the immutable approved Ledger fixtures.
-Prepared against Guard #49's public SDK; execution remains pending its real 0.19 candidate.
+Required gate against the exact Guard #51 0.19 candidate.
 """
 import importlib.metadata as metadata
 import json

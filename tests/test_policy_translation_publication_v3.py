@@ -440,7 +440,7 @@ def test_v3_validation_and_customer_coverage_are_deterministic() -> None:
     assert canonical_sha256(first["authority_bundle"]) == canonical_sha256(second["authority_bundle"])
 
 
-def test_guard_0170_loads_native_v3_after_private_evidence_deletion_and_enforces(
+def test_guard_0190_loads_native_v3_after_private_evidence_deletion_and_enforces(
     tmp_path: Path,
 ) -> None:
     pytest.importorskip("waveframe_guard")
@@ -497,7 +497,13 @@ def test_guard_0170_loads_native_v3_after_private_evidence_deletion_and_enforces
     registry_path = contracts / "index.json"
     registry_path.write_text(json.dumps(registry), encoding="utf-8")
 
+    repository = (tmp_path / "repository").resolve()
+    (repository / "src").mkdir(parents=True)
+    for name in ("README.md", "CHANGELOG.md", "src/unpublished.py"):
+        (repository / name).write_bytes(b"original")
+    public_before = {str(p): p.read_bytes() for p in public_root.rglob("*.json")}
     guard = Guard.local(
+        repository_root=repository,
         workspace=tmp_path / "guard-evidence",
         authority="repository-authority@1.0.0",
         authority_resolver=LocalRegistryResolver(
@@ -506,22 +512,28 @@ def test_guard_0170_loads_native_v3_after_private_evidence_deletion_and_enforces
         ),
         actor_identity={"id": "release-agent", "type": "agent"},
     )
-    mutations: list[str] = []
+    calls = []
+    try:
+        @guard.repository_tool(action="modify", target="path", return_result=True,
+                               raise_on_block=False)
+        def modify(path):
+            calls.append("modify")
+            return path.write_bytes(b"modified")
 
-    @guard.tool(action="modify", target="path", return_result=True)
-    def modify(path: str) -> str:
-        mutations.append(path)
-        return path
-
-    assert modify("README.md")["executed"] is True
-    assert modify("CHANGELOG.md")["executed"] is True
-    with pytest.raises(GuardExecutionBlocked):
-        modify("src/unpublished.py")
-
-    loaded = guard.boundary_for().loaded_authority
-    assert loaded.schema_version == "authority_bundle.v3"
-    assert loaded.contract["schema_version"] == "compiled_authority_contract.v2"
-    assert loaded.authority_evidence["publication_receipt"]["schema_version"] == (
-        "publication_receipt.v3"
-    )
-    assert mutations == ["README.md", "CHANGELOG.md"]
+        for target, allowed in (("README.md", True), ("CHANGELOG.md", True),
+                                ("src/unpublished.py", False)):
+            before = len(calls)
+            result = modify(target)
+            assert result["executed"] is allowed
+            assert len(calls) == before + int(allowed)
+            assert (repository / target).read_bytes() == (b"modified" if allowed else b"original")
+            assert guard.store.replay(result["evaluation"]["run_id"])["matches"]
+            assert len(calls) == before + int(allowed), "saved replay must not execute callbacks"
+        loaded = guard.boundary_for().loaded_authority
+        assert loaded.schema_version == "authority_bundle.v3"
+        assert loaded.contract["schema_version"] == "compiled_authority_contract.v2"
+        assert loaded.authority_evidence["publication_receipt"]["schema_version"] == "publication_receipt.v3"
+        assert calls == ["modify", "modify"]
+        assert {str(p): p.read_bytes() for p in public_root.rglob("*.json")} == public_before
+    finally:
+        guard.close()

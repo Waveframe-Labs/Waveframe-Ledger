@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
 from typing import Sequence
+from governance_ledger.integrations.guard import GuardIntegrationUnavailableError
 
 from governance_ledger.publish import approve_review_file, publish_review_file
 from governance_ledger.registry import resolve_authority_ref
@@ -188,7 +190,9 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     replay_execution_parser = subparsers.add_parser(
         "replay-execution",
-        help="replay deterministic admissibility from authority contract and execution state",
+        help="legacy raw replay (unsupported with Guard 0.19; use SDK/store saved replay)",
+        description="Automatic raw contract/execution-state replay is unsupported with Guard 0.19. "
+        "The Python API accepts an explicit evaluator; native saved replay uses Guard's SDK/store.",
     )
     replay_execution_parser.add_argument("--contract", required=True)
     replay_execution_parser.add_argument("--execution-state", required=True)
@@ -260,10 +264,14 @@ def main(argv: Sequence[str] | None = None) -> int:
             expected_contract=_read_json_arg(args.contract),
         )
     elif args.command == "replay-execution":
-        result = replay_admissibility(
-            authority_contract=_read_json_arg(args.contract),
-            execution_state=_read_json_arg(args.execution_state),
-        )
+        try:
+            result = replay_admissibility(
+                authority_contract=_read_json_arg(args.contract),
+                execution_state=_read_json_arg(args.execution_state),
+            )
+        except GuardIntegrationUnavailableError as exc:
+            print(f"{exc.code}: {exc}", file=sys.stderr)
+            return 2
     elif args.command == "verify-lineage":
         result = verify_authority_lineage(
             authority_contract=_read_json_arg(args.contract),

@@ -48,14 +48,8 @@ def fixtures():
 
 
 def test_candidate_package_provenance():
-    dist = importlib.metadata.distribution("cricore-contract-compiler")
-    assert dist.version == "0.5.0"
-    provenance = json.loads(dist.read_text("direct_url.json"))
-    assert provenance["url"] == "https://github.com/Waveframe-Labs/cricore-contract-compiler.git"
-    assert provenance["vcs_info"]["commit_id"] == CANDIDATE
-    assert provenance["vcs_info"]["requested_revision"] == CANDIDATE
-    from compiler import compile_action_policy
-    assert callable(compile_action_policy)
+    from tools.package_provenance import compiler_provenance
+    compiler_provenance()
 
 
 @pytest.mark.parametrize("name", POLICIES)

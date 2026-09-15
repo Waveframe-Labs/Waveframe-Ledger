@@ -36,7 +36,6 @@ def test_replay_reproduces_source_report_and_contract_hashes():
 
 
 def test_replay_reproduces_admissibility_decision(monkeypatch):
-    _install_guard_contract(monkeypatch)
     source = "Transfers above $1000000 require manager approval."
     contract = _authority_contract(extract_constraints(source))
     execution_state = {
@@ -53,6 +52,7 @@ def test_replay_reproduces_admissibility_decision(monkeypatch):
     replay = replay_admissibility(
         authority_contract=contract,
         execution_state=execution_state,
+        evaluator=_evaluate_admissibility,
     )
 
     assert replay["schema_version"] == "governance_replay_admissibility.v1"
@@ -167,7 +167,6 @@ def test_replay_emits_report_hash_diagnostic_for_mismatched_report_lineage():
 
 
 def test_admissibility_replay_emits_missing_provenance_diagnostic(monkeypatch):
-    _install_guard_contract(monkeypatch)
     source = "Transfers above $1000000 require manager approval."
     contract = _authority_contract(extract_constraints(source))
     execution_state = {
@@ -184,6 +183,7 @@ def test_admissibility_replay_emits_missing_provenance_diagnostic(monkeypatch):
     replay = replay_admissibility(
         authority_contract=contract,
         execution_state=execution_state,
+        evaluator=_evaluate_admissibility,
     )
 
     assert replay["decision"] == "BLOCKED"
@@ -252,12 +252,6 @@ def _contract_hash(contract: dict) -> str:
     }
     canonical = json.dumps(canonical_contract, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
-
-
-def _install_guard_contract(monkeypatch) -> None:
-    guard_module = types.ModuleType("waveframe_guard")
-    guard_module.evaluate_admissibility = _evaluate_admissibility
-    monkeypatch.setitem(sys.modules, "waveframe_guard", guard_module)
 
 
 def _evaluate_admissibility(contract: dict, execution_state: dict) -> dict:
