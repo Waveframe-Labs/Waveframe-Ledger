@@ -51,10 +51,14 @@ def list_builtin_domain_packs() -> list[dict[str, Any]]:
             "canonical_hash": pack["canonical_hash"],
         }
         for _, pack in sorted(_BUILTIN_PACKS.items())
+        if pack["domain_pack_version"] == REPOSITORY_CHANGES_PACK_VERSION
     ]
 
 
 def get_builtin_domain_pack(domain_pack_id: str, domain_pack_version: str) -> dict[str, Any]:
+    if (domain_pack_id, domain_pack_version) == (REPOSITORY_CHANGES_PACK_ID, "2.0.0"):
+        from governance_ledger.action_policy import require_development_opt_in
+        require_development_opt_in()
     key = (domain_pack_id, domain_pack_version)
     if key not in _BUILTIN_PACKS:
         raise ValueError(f"unknown built-in domain pack version: {domain_pack_id}@{domain_pack_version}")
@@ -353,3 +357,43 @@ def _nonempty(value: Any, label: str) -> str:
 
 _REPOSITORY_CHANGES_PACK = _repository_changes_pack()
 _BUILTIN_PACKS = {(REPOSITORY_CHANGES_PACK_ID, REPOSITORY_CHANGES_PACK_VERSION): _REPOSITORY_CHANGES_PACK}
+
+
+def _repository_actions_pack() -> dict[str, Any]:
+    pack = copy.deepcopy(_REPOSITORY_CHANGES_PACK)
+    pack.update(domain_pack_version="2.0.0", supported_actions=["create", "modify"],
+                description="Development-only independent create and modify policy grammar.")
+    runtime = pack["runtime_fact_schema"]
+    runtime["schema_version_number"] = "2.0.0"
+    for fact in runtime["facts"]:
+        if fact["fact_id"] == "proposal.action":
+            fact["enum_values"] = ["create", "modify"]
+    runtime["schema_hash"] = artifact_hash(runtime, "schema_hash")
+    pack["synonyms"] = {"create": ["create"], "modify": ["modify"]}
+    pack["grammar_compiler"] = {"compiler_id": "waveframe.repository-changes.grammar.v2", "compiler_version": "2.0.0"}
+    pack["compiler_lowering"] = {"lowering_id": "waveframe.repository-changes.lowering.v2", "lowering_version": "2.0.0"}
+    pack["allowed_mapping_controls"] = [
+        {**copy.deepcopy(control), "control_id": action + "-" + control["control_id"],
+         "name": action.title() + " " + control["name"],
+         "description": "Development-only " + action + " control.",
+         "emitter_id": "waveframe.repository-changes.emitter." + action + "-" + control["control_id"] + ".v2"}
+        for action in pack["supported_actions"] for control in pack["allowed_mapping_controls"]
+    ]
+    pack["semantic_validation_rules"].extend(["independent-actions", "same-action-deny-precedence", "action-wide-roles-only"])
+    pack["test_vectors"] = {
+        "positive": [{"source": "Agents may create README.md and modify CHANGELOG.md.", "expected": "direct:independent-actions"}],
+        "negative": [{"source": "Agents may write README.md.", "expected": "requires-decision"}],
+        "invalid": [{"source": "Agents may create ../secret.", "expected": "reject:unsafe-path"}],
+    }
+    _TRUSTED_COMPILERS[("waveframe.repository-changes.grammar.v2", "2.0.0")] = {
+        "domain_packs": {("repository-changes", "2.0.0")},
+        "emitters": {item["emitter_id"] for item in pack["allowed_mapping_controls"]},
+        "formats": {REPOSITORY_PATH_FORMAT_ID},
+        "lowering": ("waveframe.repository-changes.lowering.v2", "2.0.0"),
+    }
+    pack["canonical_hash"] = artifact_hash(pack, "canonical_hash")
+    validate_domain_pack(pack)
+    return pack
+
+
+_BUILTIN_PACKS[("repository-changes", "2.0.0")] = _repository_actions_pack()

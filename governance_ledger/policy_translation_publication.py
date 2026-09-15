@@ -17,7 +17,6 @@ from governance_ledger.constraint_ir import (
 )
 from governance_ledger.domain_packs import (
     REPOSITORY_CHANGES_PACK_ID,
-    REPOSITORY_CHANGES_PACK_VERSION,
     get_builtin_domain_pack,
     mapping_control_index,
 )
@@ -103,6 +102,8 @@ def inspect_policy_translation_customer_coverage(
             confirmed_controls=confirmed,
             resolved_bindings=resolved,
         )
+        if proposal["capability_catalog"]["catalog_version"] == "2.0.0" and customer_state in {READY_TO_ENFORCE, PARTIALLY_ENFORCEABLE}:
+            customer_state = NOT_CURRENTLY_ENFORCEABLE
         clauses.append(
             {
                 "clause_id": clause["clause_id"],
@@ -136,7 +137,7 @@ def build_policy_translation_commitment(
     }
     decisions = {item["clause_id"]: item for item in state["clause_coverage_decisions"]}
     pack = get_builtin_domain_pack(
-        REPOSITORY_CHANGES_PACK_ID, REPOSITORY_CHANGES_PACK_VERSION
+        REPOSITORY_CHANGES_PACK_ID, proposal["capability_catalog"]["catalog_version"]
     )
     pack_controls = mapping_control_index(pack)
     clauses: list[dict[str, Any]] = []
@@ -183,7 +184,7 @@ def build_policy_translation_commitment(
                 "clause_bytes_base64": clause["clause_bytes_base64"],
                 "clause_hash": clause["clause_hash"],
                 "customer_coverage_state": _published_customer_state(
-                    decision["coverage_status"]
+                    decision["coverage_status"], catalog_version=proposal["capability_catalog"]["catalog_version"]
                 ),
                 "limitation_code": clause["limitation_code"],
                 "customer_explanation": _render_residual(clause),
@@ -257,11 +258,13 @@ def finalize_policy_translation_authority_v3(
     published_at: str,
 ) -> dict[str, Any]:
     """Publish confirmed multi-control and partial meaning as native v3 authority."""
+    if proposal["capability_catalog"]["catalog_version"] != "1.0.0":
+        raise ValueError("action policies require explicit native v4 development publication")
     commitment = build_policy_translation_commitment(proposal, confirmation, approval)
     source = copy.deepcopy(proposal["source_policy"])
     authority_core = copy.deepcopy(proposal["authority"])
     pack = get_builtin_domain_pack(
-        REPOSITORY_CHANGES_PACK_ID, REPOSITORY_CHANGES_PACK_VERSION
+        REPOSITORY_CHANGES_PACK_ID, proposal["capability_catalog"]["catalog_version"]
     )
     constraints = _validate_policy_translation_commitment(
         source,
@@ -468,6 +471,8 @@ def validate_authority_bundle_v3(bundle: dict[str, Any]) -> dict[str, Any]:
     if authority["authority_identity_hash"] != canonical_sha256(authority_core):
         raise ValueError("authority_bundle.v3 authority identity hash is invalid")
     commitment = bundle["policy_translation_commitment"]
+    if commitment["capability_catalog"]["catalog_version"] != "1.0.0":
+        raise ValueError("v3 bundle requires historical catalog")
     constraints = _validate_policy_translation_commitment(
         source,
         authority_core,
@@ -674,7 +679,7 @@ def _validate_policy_translation_commitment(
     draft = interpret_policy_with_domain_pack(
         exact,
         domain_pack_id=REPOSITORY_CHANGES_PACK_ID,
-        domain_pack_version=REPOSITORY_CHANGES_PACK_VERSION,
+        domain_pack_version=catalog["catalog_version"],
         source_policy_id=source["source_policy_id"],
         source_revision=source["source_revision"],
         authority_id=authority["authority_id"],
@@ -713,7 +718,7 @@ def _validate_policy_translation_commitment(
     coverage_rows = []
     residual_count = 0
     pack = get_builtin_domain_pack(
-        REPOSITORY_CHANGES_PACK_ID, REPOSITORY_CHANGES_PACK_VERSION
+        REPOSITORY_CHANGES_PACK_ID, catalog["catalog_version"]
     )
     pack_controls = mapping_control_index(pack)
     for index, (clause, statement) in enumerate(zip(clauses, statements)):
@@ -753,7 +758,7 @@ def _validate_policy_translation_commitment(
             raise ValueError("policy translation commitment clause decision is invalid")
         _not_after(decision["confirmed_at"], approval_time, "clause coverage decision")
         _validate_public_coverage_decision(decision)
-        expected_state = _published_customer_state(decision["coverage_status"])
+        expected_state = _published_customer_state(decision["coverage_status"], catalog_version=catalog["catalog_version"])
         if clause["customer_coverage_state"] != expected_state:
             raise ValueError("claimed customer coverage disagrees with the clause decision")
         expected_explanation = _render_residual(
@@ -847,7 +852,8 @@ def _validate_policy_translation_commitment(
             clause_constraints.append(constraint)
         from governance_ledger.customer_policy import _require_no_rule_conflicts
 
-        _require_no_rule_conflicts([_lower_constraint(item) for item in clause_constraints])
+        if catalog["catalog_version"] == "1.0.0":
+            _require_no_rule_conflicts([_lower_constraint(item) for item in clause_constraints])
         constraints.extend(clause_constraints)
         for residual in residuals:
             _exact(
@@ -881,6 +887,8 @@ def _validate_policy_translation_commitment(
             _not_after(acknowledgment["acknowledged_at"], approval_time, "residual acknowledgment")
         _validate_residual_spans(raw_residuals, clause=candidate_clause, exact_source=exact)
         residual_count += len(residuals)
+        if catalog["catalog_version"] == "2.0.0" and statement["classification"] != "direct" and controls:
+            raise ValueError("unsupported source meaning cannot become published action controls")
         if statement["classification"] == "direct":
             actual = [
                 _control_public_semantics(item["candidate_control"], commitment["customer_bindings"])
@@ -900,7 +908,11 @@ def _validate_policy_translation_commitment(
         raise ValueError("published customer bindings are missing, unused, or substituted")
     from governance_ledger.customer_policy import _require_no_rule_conflicts
 
-    _require_no_rule_conflicts([_lower_constraint(item) for item in constraints])
+    if catalog["catalog_version"] == "1.0.0":
+        _require_no_rule_conflicts([_lower_constraint(item) for item in constraints])
+    else:
+        from governance_ledger.action_policy import lower_action_constraints
+        lower_action_constraints(authority, constraints)
     expected_coverage = _customer_coverage_totals(
         coverage_rows,
         control_count=sum(len(item["controls"]) for item in clauses),
@@ -927,7 +939,8 @@ def _publication_approval_record(
         "approved_semantic_commit_hash": semantic["semantic_commit_hash"],
     }
     record["approval_record_hash"] = artifact_hash(record, "approval_record_hash")
-    record["approval_id"] = "publication-approval-v3-" + record[
+    prefix = "publication-approval-v4-" if commitment["capability_catalog"]["catalog_version"] == "2.0.0" else "publication-approval-v3-"
+    record["approval_id"] = prefix + record[
         "approval_record_hash"
     ].removeprefix("sha256:")
     return record
@@ -935,14 +948,14 @@ def _publication_approval_record(
 
 def _compiler_binding(pack: dict[str, Any], commitment: dict[str, Any]) -> dict[str, Any]:
     control_index = {
-        item["control_type"]: item for item in commitment_catalog_controls(commitment)
+        (item["control_type"], item["action"]): item for item in commitment_catalog_controls(commitment)
     }
     pack_index = mapping_control_index(pack)
     used = []
     for clause in commitment["clauses"]:
         for record in clause["controls"]:
             candidate = record["candidate_control"]
-            mapping_id = control_index[candidate["control_type"]]["mapping_control_id"]
+            mapping_id = control_index[(candidate["control_type"], candidate["action"])]["mapping_control_id"]
             used.append(
                 {
                     "mapping_control_id": mapping_id,
@@ -959,7 +972,7 @@ def _compiler_binding(pack: dict[str, Any], commitment: dict[str, Any]) -> dict[
         "grammar_compiler": copy.deepcopy(pack["grammar_compiler"]),
         "compiler_lowering": copy.deepcopy(pack["compiler_lowering"]),
         "control_emitters": unique_used,
-        "compiled_contract_schema_version": "compiled_authority_contract.v2",
+        "compiled_contract_schema_version": "compiled_authority_contract.v3" if pack["domain_pack_version"] == "2.0.0" else "compiled_authority_contract.v2",
     }
     result["compiler_binding_hash"] = artifact_hash(result, "compiler_binding_hash")
     return result
@@ -1114,7 +1127,9 @@ def _proposal_customer_state(
     return _published_customer_state(clause["coverage_status"])
 
 
-def _published_customer_state(status: str) -> str:
+def _published_customer_state(status: str, *, catalog_version: str = "1.0.0") -> str:
+    if catalog_version == "2.0.0" and status in {"fully_represented", "partially_represented"}:
+        return NOT_CURRENTLY_ENFORCEABLE
     states = {
         "fully_represented": READY_TO_ENFORCE,
         "partially_represented": PARTIALLY_ENFORCEABLE,

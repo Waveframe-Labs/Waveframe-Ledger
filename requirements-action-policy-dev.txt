@@ -1,0 +1,2 @@
+# Development/acceptance only. Published package dependencies remain unchanged.
+cricore-contract-compiler @ git+https://github.com/Waveframe-Labs/cricore-contract-compiler.git@3b91fcc03c804804b2ace7302f37340a787496d9

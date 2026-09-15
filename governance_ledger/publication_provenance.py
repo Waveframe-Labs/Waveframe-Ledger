@@ -135,8 +135,26 @@ def classify_authority_bundle_provenance(bundle: dict[str, Any]) -> str:
     return LEGACY_INCOMPLETE_PROFILE
 
 
+def _reject_action_contract_in_legacy_envelope(bundle: dict[str, Any]) -> None:
+    """Legacy incomplete provenance is not an escape hatch for a new contract."""
+    for key in ("compiled_authority_contract", "compiled_contract", "contract", "authority_contract"):
+        contract = bundle.get(key)
+        if isinstance(contract, dict):
+            if "action_requirements" in contract or ("schema_version" in contract and contract["schema_version"] not in {
+                "authority_contract.v1", "compiled_authority_contract.v1"
+            }):
+                raise ValueError("unknown or mixed legacy compiled contract version")
+
+
 def validate_authority_bundle(bundle: dict[str, Any]) -> dict[str, Any]:
     """Validate an authority bundle according to its exact schema version."""
+    if not isinstance(bundle, dict) or ("schema_version" in bundle and bundle["schema_version"] not in {
+        "authority_bundle.v1", "authority_bundle.v2", "authority_bundle.v3", "authority_bundle.v4"
+    }):
+        raise ValueError("unknown explicit authority bundle schema version")
+    if bundle.get("schema_version") == "authority_bundle.v4":
+        from governance_ledger.action_policy_publication import validate_authority_bundle_v4
+        return validate_authority_bundle_v4(bundle)
     if isinstance(bundle, dict) and bundle.get("schema_version") == "authority_bundle.v3":
         from governance_ledger.policy_translation_publication import validate_authority_bundle_v3
 
@@ -146,6 +164,9 @@ def validate_authority_bundle(bundle: dict[str, Any]) -> dict[str, Any]:
 
         return _validate_authority_bundle_v2(bundle)
     declared_profile = bundle.get("provenance_profile")
+    if any(key in bundle for key in ("policy_translation_commitment", "constraint_ir", "action_requirements")):
+        raise ValueError("mixed or downgraded authority envelope")
+    _reject_action_contract_in_legacy_envelope(bundle)
     customer_provenance = bundle.get("customer_policy_provenance")
     if declared_profile not in {None, LEGACY_INCOMPLETE_PROFILE, CUSTOMER_POLICY_PROFILE}:
         raise ValueError("authority bundle provenance_profile is unsupported")
@@ -168,6 +189,13 @@ def validate_publication_receipt(
     """Verify every receipt binding against the canonical authority bundle."""
     bundle_version = authority_bundle.get("schema_version") if isinstance(authority_bundle, dict) else None
     receipt_version = publication_receipt.get("schema_version") if isinstance(publication_receipt, dict) else None
+    if not isinstance(publication_receipt, dict) or ("schema_version" in publication_receipt and receipt_version not in {"publication_receipt.v1", "publication_receipt.v2", "publication_receipt.v3", "publication_receipt.v4"}):
+        raise ValueError("unknown explicit publication receipt schema version")
+    if bundle_version == "authority_bundle.v4" or receipt_version == "publication_receipt.v4":
+        if bundle_version != "authority_bundle.v4" or receipt_version != "publication_receipt.v4":
+            raise ValueError("authority bundle and publication receipt schema versions do not match")
+        from governance_ledger.action_policy_publication import validate_publication_receipt_v4
+        return validate_publication_receipt_v4(authority_bundle, publication_receipt)
     if bundle_version == "authority_bundle.v3" or receipt_version == "publication_receipt.v3":
         if bundle_version != "authority_bundle.v3" or receipt_version != "publication_receipt.v3":
             raise ValueError("authority bundle and publication receipt schema versions do not match")

@@ -59,10 +59,7 @@ def interpret_policy_with_domain_pack(
 ) -> dict[str, Any]:
     """Directly parse matching clauses and leave every unmatched clause pending."""
     pack = get_builtin_domain_pack(domain_pack_id, domain_pack_version)
-    if (domain_pack_id, domain_pack_version) != (
-        REPOSITORY_CHANGES_PACK_ID,
-        REPOSITORY_CHANGES_PACK_VERSION,
-    ):
+    if domain_pack_id != REPOSITORY_CHANGES_PACK_ID or domain_pack_version not in {"1.0.0", "2.0.0"}:
         raise ValueError("the selected pack has no installed deterministic grammar")
     from governance_ledger.customer_policy import _interpret_customer_policy_v0_6_compatibility
 
@@ -122,6 +119,9 @@ def interpret_policy_with_domain_pack(
                     ]
                 except ValueError:
                     direct_constraints = []
+        if domain_pack_version == "2.0.0":
+            from governance_ledger.action_policy import parse_action_statement
+            direct_constraints = parse_action_statement(exact[source_statement["start_byte"]:source_statement["end_byte"]].decode("utf-8"), pack)
         statement = {
             "statement_id": source_statement["statement_id"],
             "start_byte": source_statement["start_byte"],
@@ -161,6 +161,11 @@ def interpret_policy_with_domain_pack(
         "source_to_constraint_mappings": mappings,
         "status": _draft_status(statements, constraints),
     }
+    if domain_pack_version == "2.0.0":
+        draft["status"]["ready_for_finalization"] = (
+            draft["status"]["ready_for_finalization"]
+            and any(item["effect"] == "allow" for item in constraints)
+        )
     draft["interpretation_id"] = "domain-interpretation-" + canonical_sha256(draft).removeprefix("sha256:")
     draft["draft_hash"] = artifact_hash(draft, "draft_hash")
     return draft
@@ -293,6 +298,8 @@ def finalize_domain_policy_authority(
     runtime_fact_schema: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Lower a complete domain interpretation and emit authority_bundle.v2."""
+    if interpretation_draft["domain_pack"]["domain_pack_version"] != "1.0.0":
+        raise ValueError("action policies require individually confirmed native v4 publication")
     draft = _reconstruct_domain_draft(interpretation_draft)
     if not draft["status"]["ready_for_finalization"]:
         raise ValueError("every nonempty statement requires a direct parse or explicit human decision")
@@ -736,6 +743,14 @@ def _constraint_from_legacy_rule(rule: dict[str, Any], pack: dict[str, Any]) -> 
 
 def _constraint_from_control(control: dict[str, Any], selections: dict[str, Any], pack: dict[str, Any]) -> dict[str, Any]:
     emitter = control["emitter_id"]
+    if pack["domain_pack_version"] == "2.0.0":
+        action, control_type = control["control_id"].split("-", 1)
+        if control not in pack["allowed_mapping_controls"]:
+            raise ValueError("untrusted action emitter")
+        if control_type == "acting-role":
+            return _constraint(action=action, resource={"kind": "repository_change", "match": "any", "value": None}, effect="require", acting_role=selections["role"])
+        return _constraint(action=action, resource={"kind": "repository_path", "match": "exact" if control_type == "exact-path-access" else "prefix", "value": selections["path"]}, effect=selections["effect"])
+
     if emitter == ACTING_ROLE_EMITTER_ID:
         return _constraint(action="modify", resource={"kind": "repository_change", "match": "any", "value": None}, effect="require", acting_role=selections["role"])
     if emitter in {EXACT_PATH_EMITTER_ID, PREFIX_PATH_EMITTER_ID}:
@@ -900,6 +915,8 @@ def _reconstruct_domain_draft(draft: dict[str, Any]) -> dict[str, Any]:
 
 
 def _lower_constraint(constraint: dict[str, Any]) -> dict[str, Any]:
+    if constraint["action"] != "modify":
+        raise ValueError("historical lowering supports only modify")
     if constraint["exceptions"] or any(constraint["obligations"].values()) or constraint["condition"] is not None:
         raise ValueError("repository-changes lowering received an unsupported Constraint IR concept")
     if constraint["acting_role"] is not None:
