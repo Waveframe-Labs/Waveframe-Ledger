@@ -37,7 +37,7 @@ from test_policy_translation_publication_v3 import _schema_validate
 
 ROOT = Path(__file__).parents[1]
 FIXTURES = ROOT / "tests/fixtures/action_policy_v4"
-CANDIDATE = "3b91fcc03c804804b2ace7302f37340a787496d9"
+CANDIDATE = "ae590dee058d3481e384dea850d5b7d980f533ff"
 pytestmark = pytest.mark.skipif(os.environ.get(DEV_ENV) != "1",
     reason="explicit action-policy development opt-in required; see docs/ACTION_POLICY_DEVELOPMENT.md")
 
@@ -49,6 +49,7 @@ def fixtures():
 
 def test_candidate_package_provenance():
     dist = importlib.metadata.distribution("cricore-contract-compiler")
+    assert dist.version == "0.5.0"
     provenance = json.loads(dist.read_text("direct_url.json"))
     assert provenance["url"] == "https://github.com/Waveframe-Labs/cricore-contract-compiler.git"
     assert provenance["vcs_info"]["commit_id"] == CANDIDATE

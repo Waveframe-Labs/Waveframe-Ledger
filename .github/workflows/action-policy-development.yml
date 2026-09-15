@@ -1,25 +1,55 @@
 name: Action policy development acceptance
 
 on:
+  pull_request:
+    branches: [main, feat/issue-17-action-authority-dev]
+  push:
+    branches: [main]
   workflow_dispatch:
+    inputs:
+      commit:
+        description: Full 40-character Ledger commit to validate (required, no branch fallback)
+        required: true
+        type: string
+
+permissions:
+  contents: read
 
 jobs:
   candidate-acceptance:
+    name: Native and package (${{ matrix.os }}, Python ${{ matrix.python }})
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
-        python: ['3.11', '3.14']
+        python: ['3.10', '3.14']
     runs-on: ${{ matrix.os }}
     env:
-      WAVEFRAME_LEDGER_ACTION_POLICY_DEV: '1'
+      EXPECTED_HEAD: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.event_name == 'push' && github.sha || inputs.commit }}
+      PYTHONUTF8: '1'
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EXPECTED_HEAD }}
+          fetch-depth: 0
+          persist-credentials: false
       - uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python }}
-      - name: Install exact compiler development candidate
-        run: python -m pip install -e ".[dev]" -r requirements-action-policy-dev.txt build twine
-      - run: python -m pip check
-      - run: python -m pytest -q
-      - run: python -m build
-      - run: python -m twine check dist/*
+      - name: Install pinned acceptance tools
+        run: python -m pip install -r requirements-ci.txt
+      - name: Validate actual head, source, packages, resolver and historical runtimes
+        shell: bash
+        run: python tools/run_action_policy_acceptance.py --expected-head "$EXPECTED_HEAD" --output runtime/issue19-ci
+      - name: Retain evidence even on failure
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: issue19-${{ matrix.os }}-py${{ matrix.python }}-${{ env.EXPECTED_HEAD }}
+          if-no-files-found: error
+          path: |
+            runtime/issue19-ci/*.json
+            runtime/issue19-ci/*.log
+            runtime/issue19-ci/*.xml
+            runtime/issue19-ci/*.whl
+            runtime/issue19-ci/dist/*

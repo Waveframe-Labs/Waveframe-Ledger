@@ -6,6 +6,12 @@ on:
     branches:
       - main
 
+permissions:
+  contents: read
+
+env:
+  PIP_CONSTRAINT: ${{ github.workspace }}/requirements-ci.txt
+
 jobs:
   test-without-guard:
     runs-on: ubuntu-latest
@@ -15,6 +21,9 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -23,8 +32,10 @@ jobs:
 
       - name: Install base package and test dependencies
         run: |
-          python -m pip install --upgrade pip
-          python -m pip install -e ".[dev]"
+          python -m pip install -r requirements-ci.txt
+          python -m pip install -e ".[dev]" -r requirements-action-policy-dev.txt
+          python -m pip check
+          python tools/check_compiler_provenance.py
 
       - name: Confirm Guard is absent
         run: python -c "import importlib.util; assert importlib.util.find_spec('waveframe_guard') is None"
@@ -40,19 +51,23 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
 
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
           python-version: "3.11"
 
-      - name: Install package with release-tested Guard
+      - name: Install candidate with historical Guard extra
         run: |
-          python -m pip install --upgrade pip
-          python -m pip install -e ".[dev,guard]"
+          python -m pip install -r requirements-ci.txt
+          python -m pip install -e ".[dev,guard]" -r requirements-action-policy-dev.txt
           python -m pip check
+          python tools/check_compiler_provenance.py
 
-      - name: Confirm release versions
+      - name: Confirm unchanged development version and legacy Guard pin
         run: python -c "import importlib.metadata as m; assert m.version('governance-ledger') == '0.8.0'; assert m.version('waveframe-guard') == '0.17.0'"
 
       - name: Run full suite with Guard
@@ -78,6 +93,9 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -86,9 +104,10 @@ jobs:
 
       - name: Build and check wheel and sdist
         run: |
-          python -m pip install --upgrade pip build twine
+          python -m pip install -r requirements-ci.txt
+          export PIP_CONSTRAINT="$GITHUB_WORKSPACE/requirements-ci.txt"
           python -m build
-          python -m twine check dist/*
+          python -m twine check --strict dist/*
 
       - name: Clean-install wheel with Guard extra
         run: |
@@ -97,8 +116,9 @@ jobs:
           python -m venv "$release_env"
           release_python="$release_env/bin/python"
           ledger_wheel="$(find dist -maxdepth 1 -name 'governance_ledger-0.8.0-*.whl' -print -quit)"
-          "$release_python" -m pip install "${ledger_wheel}[guard]"
+          "$release_python" -m pip install "${ledger_wheel}[guard]" -r requirements-action-policy-dev.txt -r requirements-ci.txt
           "$release_python" -m pip check
+          "$release_python" -I tools/check_compiler_provenance.py
           "$release_python" -c "import importlib.metadata as m; import governance_ledger, waveframe_guard; assert m.version('governance-ledger') == '0.8.0'; assert m.version('waveframe-guard') == '0.17.0'"
           example_root="$(mktemp -d)"
           (cd "$example_root" && "$release_python" "$GITHUB_WORKSPACE/examples/native_v3_multi_control.py")

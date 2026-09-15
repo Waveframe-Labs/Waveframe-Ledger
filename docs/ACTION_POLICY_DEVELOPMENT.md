@@ -2,30 +2,36 @@
 
 This is an opt-in Ledger development implementation, not a released creation capability.
 The default catalog remains `1.0.0`, with only `modify`; ordinary authoring and v2/v3
-publication workflows retain their existing defaults. Package version and dependency
-ranges remain unchanged. No hosted Cloud feature is activated.
+publication workflows retain their existing defaults. The unpublished branch retains
+package version `0.8.0` for this bounded task, but these changed contents must never
+be published as another 0.8.0. Proposed next release: **0.9.0**, pending coordination.
+Runtime metadata now requires `cricore-contract-compiler>=0.5.0,<0.6.0`.
+No hosted Cloud feature is activated.
 
-The implementation follows [Ledger #17](https://github.com/Waveframe-Labs/Waveframe-Ledger/issues/17)
-and its compiler handoff. Install the **exact candidate package** in a separate environment:
+The implementation follows [Ledger #17](https://github.com/Waveframe-Labs/Waveframe-Ledger/issues/17),
+with dependency/acceptance preparation in [Ledger #19](https://github.com/Waveframe-Labs/Waveframe-Ledger/issues/19).
+Install the **exact candidate package** in a separate environment:
 
 ```powershell
-python -m venv .venv/issue17
-.venv/issue17/Scripts/python -m pip install -e '.[dev]' -r requirements-action-policy-dev.txt build twine
-.venv/issue17/Scripts/python -m pip check
+python -m venv .venv/issue19
+.venv/issue19/Scripts/python -m pip install -r requirements-ci.txt -e '.[dev]' -r requirements-action-policy-dev.txt
+.venv/issue19/Scripts/python -m pip check
 $env:WAVEFRAME_LEDGER_ACTION_POLICY_DEV = '1'
-.venv/issue17/Scripts/python -m pytest tests/test_action_policy_v4.py -q
-.venv/issue17/Scripts/python -m pytest -q
-.venv/issue17/Scripts/python examples/native_v4_development.py
+.venv/issue19/Scripts/python -m pytest tests/test_action_policy_v4.py -q
+.venv/issue19/Scripts/python -m pytest -q
 ```
 
 `requirements-action-policy-dev.txt` pins repository
 `Waveframe-Labs/cricore-contract-compiler` at commit
-`3b91fcc03c804804b2ace7302f37340a787496d9`. Its metadata still reports `0.4.0`;
-that number does **not** identify this candidate. Acceptance checks its installed
+`ae590dee058d3481e384dea850d5b7d980f533ff` from Compiler PR #8. Its distribution
+reports `0.5.0`; this remains an **unpublished candidate**, with no PyPI availability
+claim or fallback. Acceptance checks its installed
 PEP 610 `direct_url.json` commit and uses `from compiler import compile_action_policy`.
 Published PyPI 0.4.0 lacks that API. There is no legacy compiler fallback and no
 vendored compiler implementation. Candidate provenance is development evidence only,
-not a published package dependency. See [recorded acceptance evidence](acceptance/issue17/README.md).
+not a published Git package dependency. See [current acceptance procedure](acceptance/issue19/README.md).
+The original [issue #17 evidence](acceptance/issue17/README.md), including its earlier
+Compiler candidate and archive hash, is immutable historical evidence.
 
 ## Explicit authoring and publication
 
@@ -101,8 +107,8 @@ require the development opt-in. No historical authority is upgraded to create.
 
 Fixtures in `tests/fixtures/action_policy_v4/{create-only,modify-only,mixed}` retain
 exact source, interpretation, proposal, confirmations, review, approval, IR, input,
-raw output, enriched authority, bundle, and receipt. Run the generator to reproduce
-them with the real candidate; tests compare full content, not only selected hashes.
+raw output, enriched authority, bundle, and receipt. Acceptance reproduces these
+in memory with the real candidate and compares full content without rewriting fixtures.
 
 ## Validation and activation gates
 
@@ -123,8 +129,16 @@ Python validators and does not require source-tree schemas.
 
 Remaining gates are deliberate:
 
-* Compiler merge/release, minimum-interpreter and CI evidence, and a coordinated
-  published dependency range. Local Windows/Python 3.14 evidence is not that release gate.
+* Compiler merge/release and publication of 0.5.0; exact candidate CI acceptance
+  does not publish that dependency. Proposed Ledger 0.9.0 remains unapproved.
+* Joint Ledger/Guard metadata: Guard's current Ledger `>=0.7.0,<0.9.0`
+  constraint, compiler-0.4.0 test/dev pins, final versions, ordinary installation of
+  the complete wheel set including `Ledger[guard]`, and staged publication of the
+  optional dependency cycle. Keep `[guard]` pinned to 0.17.0 for legacy checks;
+  those checks do not establish native creation compatibility.
+* Production catalog and approval transition. Catalog 2.0.0 and the development
+  enforcement-point identity stay immutable; existing review wording and approval
+  are not approval of a production catalog.
 * Future Guard action-aware native v4 validation and runtime creation support,
   including actual bytes, existing parent, no overwrite/parent creation, workspace
   containment, collisions, races, unsupported operations, and truthful partial-write
@@ -136,7 +150,12 @@ Remaining gates are deliberate:
   before advertising the catalog as currently enforceable. No mandatory content
   capture or content hash is introduced; content stays trusted callback input.
 
-The manual `action-policy-development.yml` workflow adds candidate validation only;
-existing publication workflows are unchanged. This change does not merge, tag,
+The automatic `action-policy-development.yml` gates PRs targeting main or the stacked
+base, main pushes, and manual runs with an explicit full commit. It tests Windows/Linux
+on Python 3.10/3.14, verifies the actual checkout head, and retains source/installed
+default/native counts, exact compiler provenance, resolver and published-runtime
+results, import paths, strict wheel/sdist checks and hashes, and failure diagnostics.
+Existing default/Guard/package jobs also resolve the exact compiler candidate.
+This change does not merge, tag,
 release, publish a package, operate on another repository, or implement filesystem
 operations.

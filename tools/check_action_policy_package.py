@@ -15,8 +15,10 @@ assert Path(governance_ledger.__file__).resolve().parent != ROOT / "governance_l
 example = runpy.run_path(str(ROOT / "examples/native_v4_development.py"))
 for name in example["POLICIES"]:
     fixture = example["build_fixture"](name)
-    for key in ("compiler-input", "compiler-output", "compiled-authority", "authority-bundle", "publication-receipt"):
-        assert fixture[key] == json.loads((ROOT / "tests/fixtures/action_policy_v4" / name / (key + ".json")).read_text())
+    for key, value in fixture.items():
+        suffix = ".txt" if key == "source" else ".json"
+        retained = (ROOT / "tests/fixtures/action_policy_v4" / name / (key + suffix)).read_text(encoding="utf-8")
+        assert value == (retained if key == "source" else json.loads(retained))
     # Import denial proves validation relies on retained approved public semantics.
     compiler = sys.modules.pop("compiler", None)
     sys.modules["compiler"] = None
@@ -25,6 +27,7 @@ for name in example["POLICIES"]:
     finally:
         sys.modules["compiler"] = compiler
 print(json.dumps({"python": sys.version.split()[0], "ledger": metadata.version("governance-ledger"),
+    "ledger_import": governance_ledger.__file__,
     "compiler": metadata.version("cricore-contract-compiler"),
     "installed_wheel": True, "fixtures_reproduced": list(example["POLICIES"]),
     "private_provider_or_compiler_required_for_verification": False}, indent=2))

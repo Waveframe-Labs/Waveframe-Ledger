@@ -5,7 +5,10 @@ import os
 from pathlib import Path
 import subprocess
 import sys
-import tomllib
+try:
+    import tomllib
+except ModuleNotFoundError:  # Python 3.10, Ledger's declared floor.
+    import tomli as tomllib
 import venv
 import zipfile
 
@@ -22,6 +25,10 @@ ROOT = Path(__file__).resolve().parents[1]
 
 @pytest.fixture(scope="session")
 def built_ledger_wheel(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    if supplied := os.environ.get("WAVEFRAME_LEDGER_TEST_WHEEL"):
+        wheel = Path(supplied).resolve()
+        assert wheel.is_file()
+        return wheel
     wheel_dir = tmp_path_factory.mktemp("ledger-wheel")
     subprocess.run(
         [
@@ -65,7 +72,7 @@ def test_built_wheel_advertises_the_exact_release_tested_guard_extra(
     ]
 
 
-def test_guard_0170_dependency_range_is_release_compatible() -> None:
+def test_guard_0170_historical_range_and_unpublished_candidate_boundary() -> None:
     project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     assert project["project"]["version"] == "0.8.0"
     assert project["project"]["optional-dependencies"]["guard"] == [
@@ -73,7 +80,7 @@ def test_guard_0170_dependency_range_is_release_compatible() -> None:
     ]
     compatibility = project["tool"]["waveframe"]["guard-compatibility"]
     assert compatibility == {
-        "status": "release-compatible",
+        "status": "historical-release-compatible; candidate-unpublished",
         "ledger": "0.8.0",
         "guard": "0.17.0",
         "guard_ledger_requirement": ">=0.7.0,<0.9.0",
@@ -109,11 +116,15 @@ def test_clean_environment_installs_and_runs_core_without_guard(
             "pip",
             "install",
             str(built_ledger_wheel),
+            "-r",
+            str(ROOT / "requirements-action-policy-dev.txt"),
         ],
         check=True,
         capture_output=True,
         text=True,
     )
+    subprocess.run([str(python), "-m", "pip", "check"], check=True,
+                   capture_output=True, text=True)
     smoke = subprocess.run(
         [str(python), "-c", _CLEAN_ENVIRONMENT_SMOKE],
         check=True,
