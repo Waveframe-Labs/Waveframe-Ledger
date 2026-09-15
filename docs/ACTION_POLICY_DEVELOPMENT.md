@@ -6,9 +6,8 @@ development catalog's identity, wording or opt-in requirements.
 
 This is an opt-in Ledger development implementation, not a released creation capability.
 The default catalog remains `1.0.0`, with only `modify`; ordinary authoring and v2/v3
-publication workflows retain their existing defaults. The unpublished branch retains
-package version `0.8.0` for this bounded task, but these changed contents must never
-be published as another 0.8.0. Proposed next release: **0.9.0**, pending coordination.
+publication workflows retain their existing defaults. Issue #23 prepares the
+unpublished package **0.9.0**; see [base and combined acceptance](LEDGER_090_ACCEPTANCE.md).
 Runtime metadata now requires `cricore-contract-compiler>=0.5.0,<0.6.0`.
 No hosted Cloud feature is activated.
 
@@ -138,8 +137,9 @@ Remaining gates are deliberate:
 * Joint Ledger/Guard metadata: Guard's current Ledger `>=0.7.0,<0.9.0`
   constraint, compiler-0.4.0 test/dev pins, final versions, ordinary installation of
   the complete wheel set including `Ledger[guard]`, and staged publication of the
-  optional dependency cycle. Keep `[guard]` pinned to 0.17.0 for legacy checks;
-  those checks do not establish native creation compatibility.
+  optional dependency cycle. `[guard]` now requires `>=0.19.0,<0.20.0`; combined
+  acceptance is pending the separate Guard candidate. Published 0.17/0.18 checks
+  remain in independent historical environments.
 * Production catalog and approval transition. Catalog 2.0.0 and the development
   enforcement-point identity stay immutable; existing review wording and approval
   are not approval of a production catalog.
@@ -159,7 +159,8 @@ base, main pushes, and manual runs with an explicit full commit. It tests Window
 on Python 3.10/3.14, verifies the actual checkout head, and retains source/installed
 default/native counts, exact compiler provenance, resolver and published-runtime
 results, import paths, strict wheel/sdist checks and hashes, and failure diagnostics.
-Existing default/Guard/package jobs also resolve the exact compiler candidate.
+Base jobs resolve the exact compiler candidate; the separate combined gate records
+pending status until an exact Guard candidate is supplied.
 This change does not merge, tag,
 release, publish a package, operate on another repository, or implement filesystem
 operations.

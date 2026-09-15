@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.9.0 - Unreleased
+
+- Prepare explicit release catalog 3 for independently authorized create/modify
+  actions, fresh human approval and public compiler-independent verification.
+  Catalog 1 remains the default; catalog 2 development identities, opt-ins,
+  approved wording and historical fixture bytes remain immutable.
+- Require `cricore-contract-compiler>=0.5.0,<0.6.0` and its public action API,
+  without fallback. Acceptance uses unchanged Compiler #8 at
+  `ae590dee058d3481e384dea850d5b7d980f533ff`.
+- Declare `waveframe-guard>=0.19.0,<0.20.0` in `[guard]`. The intended
+  Ledger 0.9.0 / Guard 0.19.0 pair has **pending install and execution
+  compatibility** until the separate real Guard candidate passes combined acceptance.
+- Split Windows/Linux, Python 3.10/3.14 source and clean-installed base acceptance
+  from the downstream extra gate. Retain published historical runtime checks.
+  Compatible-runtime acceptance and separate activation remain required; this
+  candidate is not fully release-ready and authorizes no publication or deployment.
+
 ## 0.8.0 - 2026-09-04
 
 Waveframe Ledger v0.8.0 introduces an untrusted policy-translation proposal boundary

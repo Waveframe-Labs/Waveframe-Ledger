@@ -1108,7 +1108,7 @@ def test_guard_0170_cold_verification_binds_v2_publication_to_exact_source(
     from waveframe_guard.authority import load_authority
     from waveframe_guard.authority.adapters import LocalRegistryResolver
 
-    assert version("waveframe-guard") == "0.17.0"
+    assert version("waveframe-guard") == "0.19.0"
     result = _final(_proposal())
     bundle = result["authority_bundle"]
     receipt = result["publication_receipt"]

@@ -2,7 +2,7 @@ name: Action policy catalog acceptance
 
 on:
   pull_request:
-    branches: [main, feat/issue-17-action-authority-dev, feat/issue-19-compiler-acceptance]
+    branches: [main, feat/issue-17-action-authority-dev, feat/issue-19-compiler-acceptance, feat/issue-21-release-catalog]
   push:
     branches: [main]
   workflow_dispatch:
@@ -40,16 +40,16 @@ jobs:
         run: python -m pip install -r requirements-ci.txt
       - name: Validate actual head, source, packages, resolver and historical runtimes
         shell: bash
-        run: python tools/run_action_policy_acceptance.py --expected-head "$EXPECTED_HEAD" --output runtime/issue21-ci
+        run: python tools/run_action_policy_acceptance.py --expected-head "$EXPECTED_HEAD" --output runtime/issue23-ci
       - name: Retain evidence even on failure
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: issue21-${{ matrix.os }}-py${{ matrix.python }}-${{ env.EXPECTED_HEAD }}
+          name: issue23-${{ matrix.os }}-py${{ matrix.python }}-${{ env.EXPECTED_HEAD }}
           if-no-files-found: error
           path: |
-            runtime/issue21-ci/*.json
-            runtime/issue21-ci/*.log
-            runtime/issue21-ci/*.xml
-            runtime/issue21-ci/*.whl
-            runtime/issue21-ci/dist/*
+            runtime/issue23-ci/*.json
+            runtime/issue23-ci/*.log
+            runtime/issue23-ci/*.xml
+            runtime/issue23-ci/*.whl
+            runtime/issue23-ci/dist/*

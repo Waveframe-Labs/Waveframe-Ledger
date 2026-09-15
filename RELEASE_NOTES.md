@@ -1,3 +1,24 @@
+# Waveframe Ledger v0.9.0 Release Notes (unreleased candidate)
+
+Ledger 0.9.0 prepares the coordinated Windows/Linux create+modify release.
+Explicit catalog 3 isolates action grants and roles and requires fresh approval;
+catalog 1 remains the default and catalog 2 keeps its development opt-in and
+immutable approved meaning. A compatible Guard runtime and separate activation
+are required before execution availability can be claimed.
+
+Runtime dependencies use ordinary version ranges:
+`cricore-contract-compiler>=0.5.0,<0.6.0`, and optional `[guard]`
+`waveframe-guard>=0.19.0,<0.20.0`. The planned Guard 0.19.0 candidate must require
+`governance-ledger>=0.9.0,<0.10.0`. Combined installation and execution are
+**pending**, awaiting that separately prepared candidate. Guard 0.17/0.18 results
+are historical evidence only.
+
+See [0.9.0 acceptance and remaining gates](docs/LEDGER_090_ACCEPTANCE.md) for
+the exact Compiler pin, reproducible base/extra entry points, provenance audit,
+artifact retention and publication sequencing. No tag or publication is authorized.
+
+---
+
 # Waveframe Ledger v0.8.0 Release Notes
 
 ## Untrusted policy-translation boundary

@@ -51,7 +51,7 @@ def built_ledger_wheel(tmp_path_factory: pytest.TempPathFactory) -> Path:
     return wheels[0]
 
 
-def test_built_wheel_advertises_the_exact_release_tested_guard_extra(
+def test_built_wheel_advertises_the_planned_guard_extra(
     built_ledger_wheel: Path,
 ) -> None:
     with zipfile.ZipFile(built_ledger_wheel) as archive:
@@ -68,23 +68,24 @@ def test_built_wheel_advertises_the_exact_release_tested_guard_extra(
     ]
 
     assert guard_requirements == [
-        'Requires-Dist: waveframe-guard==0.17.0; extra == "guard"'
+        'Requires-Dist: waveframe-guard<0.20.0,>=0.19.0; extra == "guard"'
     ]
 
 
-def test_guard_0170_historical_range_and_unpublished_candidate_boundary() -> None:
+def test_guard_0190_planned_pair_is_explicitly_pending() -> None:
     project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
-    assert project["project"]["version"] == "0.8.0"
+    assert project["project"]["version"] == "0.9.0"
     assert project["project"]["optional-dependencies"]["guard"] == [
-        "waveframe-guard==0.17.0"
+        "waveframe-guard>=0.19.0,<0.20.0"
     ]
     compatibility = project["tool"]["waveframe"]["guard-compatibility"]
     assert compatibility == {
-        "status": "historical-release-compatible; candidate-unpublished",
-        "ledger": "0.8.0",
-        "guard": "0.17.0",
-        "guard_ledger_requirement": ">=0.7.0,<0.9.0",
-        "release_tested_extra": "waveframe-guard==0.17.0",
+        "status": "pending-separate-guard-candidate",
+        "ledger": "0.9.0",
+        "guard": "0.19.0",
+        "guard_ledger_requirement": ">=0.9.0,<0.10.0",
+        "install_compatibility": "pending",
+        "execution_compatibility": "pending",
     }
 
 
@@ -96,8 +97,10 @@ def test_release_version_is_consistent_across_release_metadata() -> None:
 
     assert "## 0.8.0 - 2026-09-04" in changelog
     assert "# Waveframe Ledger v0.8.0 Release Notes" in release_notes
-    assert 'version: "0.8.0"' in citation
-    assert 'date-released: "2026-09-04"' in citation
+    assert 'version: "0.9.0"' in citation
+    assert "date-released:" not in citation
+    assert "## 0.9.0 - Unreleased" in changelog
+    assert "# Waveframe Ledger v0.9.0 Release Notes" in release_notes
     assert 'governance-ledger[guard]==0.8.0' in readme
     assert "0.8.0.dev0" not in f"{changelog}\n{release_notes}\n{citation}\n{readme}"
 

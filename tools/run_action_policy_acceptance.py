@@ -1,4 +1,4 @@
-"""Cross-platform issue #19/#21 gate; all environments use ordinary pip resolution.
+"""Cross-platform issue #23 base gate; all environments use ordinary pip resolution.
 
 Run from a clean checkout with requirements-ci.txt installed. Reports and command
 logs survive failures. No fixtures are regenerated and no packages are published.
@@ -30,12 +30,19 @@ class Acceptance:
         self.output.mkdir(parents=True, exist_ok=False)
         self.env = os.environ.copy()
         self.env.pop(DEV, None)
+        self.env.pop("WAVEFRAME_GUARD_ACTION_POLICY_DEV", None)
         self.env.pop("PYTHONPATH", None)
         self.env["PYTHONUTF8"] = "1"
         self.env["PIP_DISABLE_PIP_VERSION_CHECK"] = "1"
         # Applies to nested PEP 517 build isolation too, without bypassing resolution.
         self.env["PIP_CONSTRAINT"] = str(ROOT / "requirements-ci.txt")
-        self.report = {"python": sys.version, "commands": [], "suites": {}}
+        self.report = {"python": sys.version, "commands": [], "suites": {},
+                       "gates": {"base": "incomplete", "combined_extra": "pending"},
+                       "combined_extra": {"status": "pending", "executed": False,
+                           "reason": "Separate Guard 0.19.0 candidate required",
+                           "ledger": "0.9.0", "guard": "0.19.0"},
+                       "release_ready": False, "runtime_activation_ready": False}
+        self.save()
 
     def save(self):
         (self.output / "acceptance.json").write_text(
@@ -134,8 +141,12 @@ class Acceptance:
             compiler, = [req for req in requires if req.name == "cricore-contract-compiler"]
             assert str(compiler.specifier) == "<0.6.0,>=0.5.0" and compiler.url is None
             guard, = [req for req in requires if req.name == "waveframe-guard"]
-            assert str(guard.specifier) == "==0.17.0" and str(guard.marker) == 'extra == "guard"'
-            assert metadata["Version"] == "0.8.0" and metadata["Requires-Python"] == ">=3.10"
+            assert str(guard.specifier) == "<0.20.0,>=0.19.0" and str(guard.marker) == 'extra == "guard"'
+            assert guard.url is None and all(req.url is None for req in requires)
+            assert metadata["Name"] == "governance-ledger"
+            assert metadata["Version"] == "0.9.0" and metadata["Requires-Python"] == ">=3.10"
+            assert wheel.name == "governance_ledger-0.9.0-py3-none-any.whl"
+            assert sdist.name == "governance_ledger-0.9.0.tar.gz"
             self.report["wheel_metadata"] = dict(metadata.items())
         # Extract only support resources, never Ledger source, into installed test cwd.
         support = self.output / "installed-support"
@@ -174,13 +185,18 @@ class Acceptance:
         assert re.fullmatch(r"[0-9a-f]{40}", expected_head), "explicit full commit required"
         head = self.run("head", "git", "rev-parse", "HEAD").strip()
         assert head == expected_head, (head, expected_head)
-        self.report.update(head=head, expected_head=expected_head)
+        self.report.update(head=head, expected_head=expected_head,
+                           base="40e0875ee9a973254bb3a4d0c228cad4fdce2bc0")
+        self.run("stack-base", "git", "merge-base", "--is-ancestor", self.report["base"], head)
         self.run("clean-tracked-checkout", "git", "diff", "--exit-code", "HEAD")
         self.run("preserved-evidence", "git", "diff", "--exit-code",
                  "4dbdfbaee92d43b888cae751ecaee5d9e4ec20b7", "--",
                  "tests/fixtures/action_policy_v4", "tests/fixtures/golden_path", "tests/fixtures/provenance_complete",
                  "docs/acceptance/issue17", "docs/acceptance/issue19", "examples/native_v4_development.py",
-                 "requirements-action-policy-dev.txt", "pyproject.toml")
+                 "requirements-action-policy-dev.txt")
+        self.run("preserved-catalog-release", "git", "diff", "--exit-code", self.report["base"], "--",
+                 "tests/fixtures", "schemas", "governance_ledger", "examples/native_v4_release.py")
+        self.probe(sys.executable, ROOT, "release-metadata", "check_ledger_release_metadata.py")
         wheel, support = self.build()
         candidate = ["-r", ROOT / "requirements-action-policy-dev.txt"]
         source = self.environment("source", "-e", f"{ROOT}[dev]", *candidate)
@@ -199,11 +215,11 @@ class Acceptance:
                              wheel, "cricore-contract-compiler==0.4.0", negative=True)
         assert "ResolutionImpossible" in rejection and "0.4.0" in rejection and "0.5.0" in rejection, rejection
         self.report["compiler_040_resolver_rejected"] = True
-        # Ordinary complete extra installation; legacy replay only, no native Guard claim.
-        guard = self.environment("guard-extra", f"{wheel}[dev,guard]", *candidate)
-        self.probe(guard, support, "guard-provenance", "check_compiler_provenance.py")
-        self.suites(guard, support, "guard-extra", installed=True, guard=True)
-        self.run("installed-v3-example", guard, "-I", support / "examples/native_v3_multi_control.py", cwd=support)
+        # The new extra is a separate, explicitly pending gate. Preserve the
+        # released 0.8/0.17 example in its own ordinarily resolved environment.
+        historical = self.environment("historical-extra", "governance-ledger[guard]==0.8.0",
+                                      "waveframe-guard==0.17.0", "cricore-contract-compiler==0.4.0")
+        self.run("historical-v3-example", historical, "-I", support / "examples/native_v3_multi_control.py", cwd=support)
         for version in ("0.7.0", "0.8.0"):
             name = "published-" + version
             published = self.environment(name, f"governance-ledger=={version}",
@@ -235,7 +251,8 @@ class Acceptance:
         self.report["compiler_wheel"] = record_cached_compiler(cache, self.output)
         assert self.run("final-head", "git", "rev-parse", "HEAD").strip() == expected_head
         self.run("final-clean-tracked-checkout", "git", "diff", "--exit-code", "HEAD")
-        self.report["status"] = "passed"
+        self.report["gates"]["base"] = "passed"
+        self.report["status"] = "base-passed-extra-pending"
         self.save()
 
 

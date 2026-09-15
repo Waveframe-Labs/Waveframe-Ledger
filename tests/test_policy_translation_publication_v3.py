@@ -449,8 +449,8 @@ def test_guard_0170_loads_native_v3_after_private_evidence_deletion_and_enforces
     from guard.sdk import Guard, GuardExecutionBlocked
     from waveframe_guard.authority.adapters import LocalRegistryResolver
 
-    assert version("waveframe-guard") == "0.17.0"
-    assert version("governance-ledger") == "0.8.0"
+    assert version("waveframe-guard") == "0.19.0"
+    assert version("governance-ledger") == "0.9.0"
 
     publication = _publish(
         _proposal(b"Agents may modify README.md and CHANGELOG.md.")
