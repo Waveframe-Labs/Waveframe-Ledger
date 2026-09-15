@@ -46,7 +46,42 @@ jobs:
         run: python tools/run_action_policy_acceptance.py --expected-head "$EXPECTED_HEAD" --output runtime/issue25-base --verified-inputs runtime/issue25-inputs/verified-inputs.json
       - name: Required combined suites, repository execution and ordinary Guard upgrade
         shell: bash
-        run: python tools/run_guard_extra_acceptance.py --expected-head "$EXPECTED_HEAD" --base-evidence runtime/issue25-base --verified-inputs runtime/issue25-inputs/verified-inputs.json --output runtime/issue25-combined
+        run: |
+          cat > "$RUNNER_TEMP/ledger-candidate-input.py" <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+          import sys
+          
+          sys.path.insert(0, str(Path.cwd() / "tools"))
+          import run_guard_extra_acceptance as producer
+          
+          
+          class CandidateInputAcceptance(producer.Acceptance):
+              """Keep the full existing producer; explicitly supply its verified input."""
+          
+              def run(self, label, *args, **kwargs):
+                  if label == "guard-entry-upgrade":
+                      assert "--upgrade" in args and "--find-links" in args
+                      compiler = self.output / "wheelhouse" / self.report["compiler_origin"]["filename"]
+                      expected = self.report["compiler_origin"]["sha256"]
+                      assert hashlib.sha256(compiler.read_bytes()).hexdigest() == expected
+                      self.report["release_candidate_input"] = {
+                          "scope": "guard-entry-upgrade only",
+                          "reason": "Public Compiler 0.5.0 now exists; this gate requires the retained candidate archive",
+                          "wheel": str(compiler), "sha256": expected,
+                          "public_installation": False,
+                      }
+                      # Ordinary pip resolution with the same authenticated wheel used by
+                      # the combined suites. No metadata, origins, tests or exit codes change.
+                      args = (*args, compiler)
+                  return super().run(label, *args, **kwargs)
+          
+          
+          producer.Acceptance = CandidateInputAcceptance
+          producer.main()
+          PY
+          python "$RUNNER_TEMP/ledger-candidate-input.py" --expected-head "$EXPECTED_HEAD" --base-evidence runtime/issue25-base --verified-inputs runtime/issue25-inputs/verified-inputs.json --output runtime/issue25-combined
       - name: Retain evidence even on failure
         if: always()
         uses: actions/upload-artifact@v6
