@@ -23,6 +23,7 @@ from governance_ledger.domain_packs import (
     get_builtin_domain_pack,
 )
 from governance_ledger.domain_policy import (
+    _require_new_repository_path_grant,
     apply_policy_mapping_decision,
     finalize_domain_policy_authority,
     interpret_policy_with_domain_pack,
@@ -718,7 +719,9 @@ def inspect_policy_translation_proposal(
         "unresolved_clauses": unresolved_clauses,
         "publication_ready": state["coverage"]["unresolved_clause_count"] == 0
         and state["coverage"]["unresolved_control_count"] == 0
-        and state["coverage"]["confirmed_control_count"] > 0,
+        and state["coverage"]["confirmed_control_count"] > 0
+        and (proposal["capability_catalog"]["catalog_version"] != "1.0.0"
+             or bool(_affirmative_path_controls(proposal))),
     }
 
 
@@ -980,6 +983,15 @@ def validate_policy_translation_review(
     return copy.deepcopy(review)
 
 
+def _affirmative_path_controls(proposal: dict[str, Any]) -> list[dict[str, Any]]:
+    return [
+        control
+        for clause in proposal["clauses"]
+        for control in clause["candidate_controls"]
+        if control["effect"] == "allow" and control["fact_id"] == "proposal.resource.path"
+    ]
+
+
 def approve_policy_translation_proposal(
     proposal: dict[str, Any],
     confirmation: dict[str, Any],
@@ -999,6 +1011,8 @@ def approve_policy_translation_proposal(
         raise ValueError("publication approval requires at least one confirmed control")
     if coverage["unrepresented_clause_count"] != len(coverage["acknowledged_unrepresented_clause_ids"]):
         raise ValueError("partial coverage requires acknowledgement of every unrepresented clause or residual")
+    if proposal["capability_catalog"]["catalog_version"] == "1.0.0":
+        _require_new_repository_path_grant(_affirmative_path_controls(proposal))
     approval_time = _utc_datetime(approved_at, "approved_at")
     if any(
         _utc_datetime(run["completed_at"], "translation run completed_at") > approval_time

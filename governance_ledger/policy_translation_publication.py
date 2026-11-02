@@ -27,6 +27,7 @@ from governance_ledger.domain_policy import (
     _finalize_constraint,
     _lower_constraint,
     _pack_ref,
+    _require_new_repository_path_grant,
     _validate_compiled_authority_contract_v2,
     interpret_policy_with_domain_pack,
 )
@@ -300,6 +301,7 @@ def finalize_policy_translation_authority_v3(
     rules = [_lower_constraint(item) for item in constraints]
     _require_no_rule_conflicts(rules)
     compiler_input = _compiler_input(authority_core, rules)
+    _require_new_repository_path_grant(compiler_input.get("targets", {}).get("allow", []))
     normalized = _normalized_semantic_meaning(authority_core, rules, compiler_input)
     normalized["policy_translation_commitment"] = {
         "commitment_id": commitment["commitment_id"],
