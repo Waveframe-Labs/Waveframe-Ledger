@@ -69,6 +69,19 @@ def test_import_finder_fails_before_outside_runtime_is_executed(tmp_path, monkey
     assert finder.violations  # stays fatal even if an importing caller catches the exception
 
 
+def test_repository_inspection_inputs_never_rebind_runtime_modules(tmp_path):
+    from types import SimpleNamespace
+    support, source = tmp_path / "support", tmp_path / "source"
+    for package in ("guard", "waveframe_guard"):
+        (source / package).mkdir(parents=True)
+    test = SimpleNamespace(__file__=str(support / "tests/test_dependency_boundaries.py"), REPO_ROOT=support, GUARD_ROOTS=[])
+    runtime = SimpleNamespace(__file__=str(support / "guard/runtime.py"), ROOT=support)
+    bindings = gate.bind_repository_inputs([("test_dependency_boundaries", test), ("guard.runtime", runtime)], support, source)
+    assert test.REPO_ROOT == source and test.GUARD_ROOTS == [source / "guard", source / "waveframe_guard"]
+    assert runtime.ROOT == support
+    assert bindings == [{"module": "test_dependency_boundaries", "input": "REPO_ROOT", "source": str(source)}]
+
+
 def test_scope_rejects_unreviewed_runtime_or_protected_fixture():
     for path in ["governance_ledger/customer_policy.py", "tests/fixtures/replacement.json"]:
         with pytest.raises(RuntimeError, match="scope drift"):

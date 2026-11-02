@@ -56,6 +56,7 @@ LEDGER_REQUIRED = {
         "test_wrong_archive_url_or_digest_cannot_be_hidden_by_install_report",
         "test_nested_clean_environment_tests_receive_actual_candidate_wheel",
         "test_import_finder_fails_before_outside_runtime_is_executed",
+        "test_repository_inspection_inputs_never_rebind_runtime_modules",
         "test_scope_rejects_unreviewed_runtime_or_protected_fixture",
         "test_required_failure_or_skip_blocks_result",
         "test_uncollected_and_unreported_required_cases_block_result",
@@ -219,6 +220,26 @@ def verify_origin(name, path, prefix):
             "import-origin violation: " + name + " -> " + str(path))
 
 
+def bind_repository_inputs(modules, support, source):
+    """Supply real pinned source-inspection data, never runtime import paths."""
+    bindings = []
+    for name, module in modules:
+        if not (name.split(".")[-1].startswith("test_") or name.startswith("tools.")):
+            continue
+        path = getattr(module, "__file__", None)
+        if not path or not Path(path).resolve().is_relative_to(support):
+            continue
+        for key in ("ROOT", "REPO_ROOT"):
+            if getattr(module, key, None) == support:
+                setattr(module, key, source)
+                bindings.append({"module": name, "input": key, "source": str(source)})
+        if name.split(".")[-1] == "test_dependency_boundaries":
+            roots = [source / "guard", source / "waveframe_guard"]
+            require(all(path.is_dir() for path in roots), "source-inspection runtime roots missing")
+            module.GUARD_ROOTS = roots
+    return bindings
+
+
 def validate_result(result, expected_ledger, expected_guard):
     require(result.get("scope") == "legacy-v2-deny-only-containment", "wrong acceptance scope")
     require(result.get("ledger_head") == expected_ledger and result.get("guard_head") == expected_guard,
@@ -323,7 +344,7 @@ def pytest_child(config_path):
     """Executed under -I from a support tree containing no runtime source."""
     import pytest
     config = json.loads(Path(config_path).read_text(encoding="utf-8"))
-    observed, outcomes, collected = {}, {}, []
+    observed, outcomes, collected, repository_inputs = {}, {}, [], []
     finder = OriginFinder(sys.prefix, observed)
     sys.meta_path.insert(0, finder)
     for package in PACKAGES:
@@ -343,6 +364,11 @@ def pytest_child(config_path):
 
     class Proof:
         def pytest_collection_finish(self, session):
+            if config.get("repository_source"):
+                source = Path(config["repository_source"]).resolve()
+                actual = subprocess.check_output(["git", "-C", source, "rev-parse", "HEAD"], text=True).strip()
+                require(actual == GUARD_HEAD, "wrong repository-inspection source head")
+                repository_inputs.extend(bind_repository_inputs(list(sys.modules.items()), Path.cwd().resolve(), source))
             collected.extend(item.nodeid for item in session.items)
 
         def pytest_runtest_logreport(self, report):
@@ -368,6 +394,9 @@ def pytest_child(config_path):
                 session.exitstatus = 1
             write(config["proof"], {"collected": collected, "outcomes": outcomes,
                   "imports": observed, "packages": provenance, "origin_error": error})
+            payload = json.loads(Path(config["proof"]).read_text(encoding="utf-8"))
+            payload["repository_inspection_inputs"] = repository_inputs
+            write(config["proof"], payload)
 
     return pytest.main(["-q", "-ra", "--junitxml", config["junit"], *config["nodes"]], plugins=[Proof()])
 
@@ -465,8 +494,10 @@ class Acceptance:
         # Guard's existing sdist omits tools and JSON fixtures. Keep its packaging
         # unchanged; supplement test-only support from this exact verified tree.
         if name == "guard":
-            paths = self.git(root, name + "-test-resources", "ls-files", "--", "tests", "tools", "schemas", "examples", "docs").splitlines()
+            paths = self.git(root, name + "-test-resources", "ls-files").splitlines()
             for rel in paths:
+                if Path(rel).parts[0] in PACKAGES:
+                    continue
                 source_file, target = root / rel, support / rel
                 require(source_file.is_file() and not source_file.is_symlink(), "unsupported test resource: " + rel)
                 resources[rel] = digest(source_file)
@@ -513,7 +544,8 @@ class Acceptance:
             env.update(WAVEFRAME_LEDGER_ACTION_POLICY_DEV="1", WAVEFRAME_GUARD_ACTION_POLICY_DEV="1")
         config = self.output / (lane + "-config.json")
         proof = self.output / (lane + "-proof.json")
-        write(config, {"nodes": nodes, "proof": str(proof), "junit": str(self.output / (lane + ".xml"))})
+        write(config, {"nodes": nodes, "proof": str(proof), "junit": str(self.output / (lane + ".xml")),
+                       "repository_source": self.report["builds"]["guard"]["source_root"] if lane == "guard-baseline" else None})
         self.run(lane, python, "-I", Path(__file__).resolve(), "--pytest", config, cwd=support, env=env)
         result = json.loads(proof.read_text(encoding="utf-8"))
         require(not result["origin_error"] and result["imports"], "missing/failed import-origin proof")

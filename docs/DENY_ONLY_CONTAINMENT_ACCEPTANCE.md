@@ -63,6 +63,16 @@ Guard's unchanged sdist omits its acceptance tools/JSON fixtures. Its support
 tree is therefore supplemented from tracked test-only resources at the exact
 verified Guard commit, with every path/hash recorded and overlap bytes checked.
 These resources are not misrepresented as sdist contents or runtime modules.
+For the full Guard baseline, repository-inspection tests also need Git history,
+runtime source text and release metadata. The runner supplies their `ROOT` /
+`REPO_ROOT` data inputs from the exact pinned, re-verified Guard checkout, and
+records each binding. Structural dependency checks receive nonempty real source
+roots rather than vacuously inspecting an empty support tree. Test bodies and
+assertions are unchanged; runtime module roots are never rebound and the source
+checkout is never added to the import path. All runtime imports still must come
+from the baseline venv. Remaining tracked non-runtime repository data (including
+contracts and CI metadata) is copied with hashes to the support tree for tests
+that read cwd-relative inputs. This is source inspection, not source importing.
 
 The third venv runs the full unmodified Guard suite with candidate Guard and the
 historical Ledger dependency `a34c11d81b85963794cf28b4adad091fac15e130` plus the
@@ -145,6 +155,7 @@ tests/test_deny_only_containment_acceptance.py::test_honest_legacy_archive_repor
 tests/test_deny_only_containment_acceptance.py::test_wrong_archive_url_or_digest_cannot_be_hidden_by_install_report
 tests/test_deny_only_containment_acceptance.py::test_nested_clean_environment_tests_receive_actual_candidate_wheel
 tests/test_deny_only_containment_acceptance.py::test_import_finder_fails_before_outside_runtime_is_executed
+tests/test_deny_only_containment_acceptance.py::test_repository_inspection_inputs_never_rebind_runtime_modules
 tests/test_deny_only_containment_acceptance.py::test_scope_rejects_unreviewed_runtime_or_protected_fixture
 tests/test_deny_only_containment_acceptance.py::test_required_failure_or_skip_blocks_result
 tests/test_deny_only_containment_acceptance.py::test_uncollected_and_unreported_required_cases_block_result
