@@ -106,7 +106,7 @@ python -m pip install -r requirements-ci.txt
 python tools/run_deny_only_containment_acceptance.py --expected-ledger FULL_LEDGER_SHA --guard-root ABSOLUTE_GUARD_CHECKOUT --output NEW_ABSOLUTE_OUTPUT_DIRECTORY
 ```
 
-Workflow `deny-only-containment.yml` runs independently on Ubuntu/Windows Ãƒâ€”
+Workflow deny-only-containment.yml runs independently on Ubuntu/Windows x
 Python 3.10/3.14. Each cell retains an incomplete/failed/passed
 `containment-acceptance.json`, commands and exit codes, immutable build outputs,
 hashes, install reports, constraints, import proofs, JUnit and skip reports.
