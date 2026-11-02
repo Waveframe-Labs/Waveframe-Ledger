@@ -33,6 +33,12 @@ for the other two environments in the same cell. Pip reports retain every
 resolved archive URL/digest or VCS source; freeze and pip-check results are kept.
 Different Python/platform cells may resolve different compatible transitive
 artifacts; each cell records its own exact inputs, never an invented common lock.
+Each venv first bootstraps the pinned pip version before installing candidates.
+Archive provenance accepts truthful legacy `hash` and modern `hashes` fields:
+metadata and install-report URLs must match the supplied wheel, every provided
+digest must match its bytes, contradictory digests fail, and at least one honest
+SHA256 is mandatory. Missing metadata digests are not manufactured; the retained
+install report can provide them. Empty `archive_info` is still an archive origin.
 
 ## Source, installed and baseline environments
 

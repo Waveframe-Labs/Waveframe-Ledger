@@ -52,6 +52,8 @@ LEDGER_REQUIRED = {
     "tests/test_deny_only_containment_acceptance.py": [
         "test_rejects_wrong_import_origin",
         "test_wrong_archive_digest_is_a_hard_failure",
+        "test_honest_legacy_archive_report_binds_empty_pep610_hashes",
+        "test_wrong_archive_url_or_digest_cannot_be_hidden_by_install_report",
         "test_nested_clean_environment_tests_receive_actual_candidate_wheel",
         "test_import_finder_fails_before_outside_runtime_is_executed",
         "test_scope_rejects_unreviewed_runtime_or_protected_fixture",
@@ -177,6 +179,27 @@ def digest(path):
 
 def verify_digest(path, expected):
     require(digest(path) == expected, "archive/module digest mismatch: " + str(path))
+
+
+def verify_archive_origins(origins, wheel, expected):
+    """Use truthful metadata/report origins, accepting hash or hashes encodings."""
+    verify_digest(wheel, expected)
+    sha256_seen = False
+    for origin in origins:
+        require(origin.get("url") == Path(wheel).resolve().as_uri() and "archive_info" in origin
+                and "vcs_info" not in origin, "wrong archive origin")
+        info = origin["archive_info"]
+        hashes = dict(info.get("hashes", {}))
+        if "hash" in info:
+            algorithm, value = info["hash"].split("=", 1)
+            require(algorithm not in hashes or hashes[algorithm] == value, "contradictory archive digests")
+            hashes[algorithm] = value
+        for algorithm, value in hashes.items():
+            require(hashlib.new(algorithm, Path(wheel).read_bytes()).hexdigest() == value, "archive origin digest mismatch")
+        if "sha256" in hashes:
+            require(hashes["sha256"] == expected, "wrong archive sha256")
+            sha256_seen = True
+    require(sha256_seen, "archive has no honest sha256 provenance")
 
 
 def write(path, value):
@@ -454,6 +477,7 @@ class Acceptance:
                     shutil.copyfile(source_file, target)
         require(not any((support / package).exists() for package in PACKAGES), "runtime leaked into support tree")
         self.report["builds"][name] = {"head": self.git(root, name + "-build-head", "rev-parse", "HEAD"),
+                "source_root": str(root),
                 "wheel": str(wheel), "wheel_sha256": digest(wheel), "sdist": str(sdist), "sdist_sha256": digest(sdist),
                 "modules": modules, "support": str(support)}
         self.report["builds"][name]["pinned_source_test_resources"] = resources
@@ -466,6 +490,7 @@ class Acceptance:
         python = folder / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
         report = self.output / (name + "-install.json")
         lock_args = ["-c", self.lock] if self.lock else []
+        self.run(name + "-bootstrap-pip", python, "-m", "pip", "install", "pip==25.3")
         self.run(name + "-install", python, "-m", "pip", "install", "-r", ROOT / "requirements-ci.txt",
                  *lock_args, *requirements, "--report", report)
         installed = json.loads(report.read_text(encoding="utf-8"))
@@ -508,12 +533,16 @@ class Acceptance:
                 continue
             direct = json.loads(result["packages"][package]["direct_url"] or "{}")
             require(direct, "candidate install lacks honest origin")
-            if direct.get("archive_info"):
+            if "archive_info" in direct:
                 expected = self.report["builds"][name]
-                verify_digest(expected["wheel"], expected["wheel_sha256"])
-                require(direct["archive_info"].get("hashes", {}).get("sha256") == expected["wheel_sha256"], "wrong candidate archive provenance")
+                environment = "guard-baseline" if not candidate else ("source-built" if lane.endswith("-source") else "wheel-installed")
+                matches = [item for item in self.report["installs"][environment]["resolved"]["install"]
+                           if item["metadata"]["name"].lower().replace("_", "-") == package]
+                require(len(matches) == 1, "missing/duplicate package install report")
+                verify_archive_origins([direct, matches[0]["download_info"]], expected["wheel"], expected["wheel_sha256"])
             else:
-                require(lane.endswith("-source") and direct.get("dir_info") == {}, "wrong source-built origin")
+                require(lane.endswith("-source") and direct.get("dir_info") == {}
+                        and direct.get("url") == Path(self.report["builds"][name]["source_root"]).as_uri(), "wrong source-built origin")
         counts = validate_cases(result["collected"], result["outcomes"], required, lane, platform.system())
         self.report["suites"][lane] = {**counts, "proof_sha256": digest(proof)}
         self.report["passed_lanes"].append(lane)

@@ -21,6 +21,31 @@ def test_wrong_archive_digest_is_a_hard_failure(tmp_path):
         gate.verify_digest(wheel, "0" * 64)
 
 
+def test_honest_legacy_archive_report_binds_empty_pep610_hashes(tmp_path):
+    wheel = tmp_path / "candidate.whl"
+    wheel.write_bytes(b"actual bytes")
+    expected = gate.digest(wheel)
+    direct = dict(url=wheel.as_uri(), archive_info={})
+    report = dict(url=wheel.as_uri(), archive_info={"hash": "sha256=" + expected})
+    gate.verify_archive_origins([direct, report], wheel, expected)
+    with pytest.raises(RuntimeError, match="no honest sha256"):
+        gate.verify_archive_origins([direct], wheel, expected)
+    report["archive_info"]["hashes"] = {"sha256": "0" * 64}
+    with pytest.raises(RuntimeError, match="contradictory"):
+        gate.verify_archive_origins([direct, report], wheel, expected)
+
+
+def test_wrong_archive_url_or_digest_cannot_be_hidden_by_install_report(tmp_path):
+    wheel = tmp_path / "candidate.whl"
+    wheel.write_bytes(b"actual bytes")
+    expected = gate.digest(wheel)
+    valid = dict(url=wheel.as_uri(), archive_info={"hashes": {"sha256": expected}})
+    with pytest.raises(RuntimeError, match="wrong archive origin"):
+        gate.verify_archive_origins([dict(url="file:///different.whl", archive_info={}), valid], wheel, expected)
+    with pytest.raises(RuntimeError, match="digest mismatch"):
+        gate.verify_archive_origins([dict(url=wheel.as_uri(), archive_info={"hash": "sha256=" + "0" * 64}), valid], wheel, expected)
+
+
 def test_nested_clean_environment_tests_receive_actual_candidate_wheel(tmp_path, monkeypatch):
     acceptance = gate.Acceptance(tmp_path / "evidence")
     wheel = tmp_path / "candidate.whl"
