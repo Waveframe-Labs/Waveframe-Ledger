@@ -52,6 +52,7 @@ LEDGER_REQUIRED = {
     "tests/test_deny_only_containment_acceptance.py": [
         "test_rejects_wrong_import_origin",
         "test_wrong_archive_digest_is_a_hard_failure",
+        "test_nested_clean_environment_tests_receive_actual_candidate_wheel",
         "test_import_finder_fails_before_outside_runtime_is_executed",
         "test_scope_rejects_unreviewed_runtime_or_protected_fixture",
         "test_required_failure_or_skip_blocks_result",
@@ -480,6 +481,9 @@ class Acceptance:
 
     def suite(self, python, support, lane, nodes, required, native, candidate=True):
         env = self.env.copy()
+        # Existing clean-environment tests must install the genuine package,
+        # never mistake the deliberately source-free support tree for a project.
+        env["WAVEFRAME_LEDGER_TEST_WHEEL"] = self.report["builds"]["ledger"]["wheel"]
         if native:
             env.update(WAVEFRAME_LEDGER_ACTION_POLICY_DEV="1", WAVEFRAME_GUARD_ACTION_POLICY_DEV="1")
         config = self.output / (lane + "-config.json")

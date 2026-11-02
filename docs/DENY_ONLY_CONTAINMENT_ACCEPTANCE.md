@@ -50,6 +50,9 @@ Ledger/Guard/Compiler; outside-venv origins fail before module execution. Startu
 and final checks are mandatory. Import paths and hashes, all installed runtime
 file hashes, distribution versions/origins, and install reports are retained.
 Candidate installed bytes must match the candidate wheel, regardless of lane.
+Nested no-Guard installation tests receive the genuine built Ledger wheel via
+their existing `WAVEFRAME_LEDGER_TEST_WHEEL` input, not the source-free support
+tree. Their package installation and import assertions remain unchanged.
 Guard's unchanged sdist omits its acceptance tools/JSON fixtures. Its support
 tree is therefore supplemented from tracked test-only resources at the exact
 verified Guard commit, with every path/hash recorded and overlap bytes checked.
@@ -97,7 +100,7 @@ python -m pip install -r requirements-ci.txt
 python tools/run_deny_only_containment_acceptance.py --expected-ledger FULL_LEDGER_SHA --guard-root ABSOLUTE_GUARD_CHECKOUT --output NEW_ABSOLUTE_OUTPUT_DIRECTORY
 ```
 
-Workflow `deny-only-containment.yml` runs independently on Ubuntu/Windows Ã—
+Workflow `deny-only-containment.yml` runs independently on Ubuntu/Windows Ãƒâ€”
 Python 3.10/3.14. Each cell retains an incomplete/failed/passed
 `containment-acceptance.json`, commands and exit codes, immutable build outputs,
 hashes, install reports, constraints, import proofs, JUnit and skip reports.
@@ -132,6 +135,7 @@ tests/test_pack1_authoring_containment.py::test_historical_deny_approval_cannot_
 tests/test_pack1_authoring_containment.py::test_replacement_grants_require_new_bound_human_acceptance
 tests/test_deny_only_containment_acceptance.py::test_rejects_wrong_import_origin
 tests/test_deny_only_containment_acceptance.py::test_wrong_archive_digest_is_a_hard_failure
+tests/test_deny_only_containment_acceptance.py::test_nested_clean_environment_tests_receive_actual_candidate_wheel
 tests/test_deny_only_containment_acceptance.py::test_import_finder_fails_before_outside_runtime_is_executed
 tests/test_deny_only_containment_acceptance.py::test_scope_rejects_unreviewed_runtime_or_protected_fixture
 tests/test_deny_only_containment_acceptance.py::test_required_failure_or_skip_blocks_result

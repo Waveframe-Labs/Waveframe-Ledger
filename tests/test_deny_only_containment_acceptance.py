@@ -21,6 +21,18 @@ def test_wrong_archive_digest_is_a_hard_failure(tmp_path):
         gate.verify_digest(wheel, "0" * 64)
 
 
+def test_nested_clean_environment_tests_receive_actual_candidate_wheel(tmp_path, monkeypatch):
+    acceptance = gate.Acceptance(tmp_path / "evidence")
+    wheel = tmp_path / "candidate.whl"
+    acceptance.report["builds"]["ledger"] = {"wheel": str(wheel)}
+    def run(label, *args, **kwargs):
+        assert kwargs["env"]["WAVEFRAME_LEDGER_TEST_WHEEL"] == str(wheel)
+        raise RuntimeError("captured clean-environment input")
+    monkeypatch.setattr(acceptance, "run", run)
+    with pytest.raises(RuntimeError, match="captured clean-environment input"):
+        acceptance.suite(tmp_path / "python", tmp_path, "ledger-default-source", [], [], False)
+
+
 def test_import_finder_fails_before_outside_runtime_is_executed(tmp_path, monkeypatch):
     class Outside:
         def find_spec(self, fullname, path, target):
