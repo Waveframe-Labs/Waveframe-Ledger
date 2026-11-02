@@ -17,6 +17,7 @@ import sys
 import tarfile
 import venv
 import zipfile
+import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).resolve().parents[1]
 LEDGER_BASE = "bd82c11dc0c4d4003063c7f2ce0f2e87f12f7bf1"
@@ -60,6 +61,7 @@ LEDGER_REQUIRED = {
         "test_scope_rejects_unreviewed_runtime_or_protected_fixture",
         "test_required_failure_or_skip_blocks_result",
         "test_uncollected_and_unreported_required_cases_block_result",
+        "test_junit_cannot_omit_or_contradict_runtime_proof",
         "test_matrix_requires_all_33_real_cases",
         "test_wrong_head_historical_or_incomplete_report_cannot_pass",
         "test_pr_head_movement_is_a_hard_failure",
@@ -315,6 +317,29 @@ def validate_cases(collected, outcomes, required, lane, system):
     return {"collected": len(collected), "passed": len(collected) - len(skips), "skips": skips}
 
 
+def junit_outcomes(path, collected, observed):
+    """Require JUnit and collection/runtime proof to describe identical cases."""
+    keys = {}
+    for node in collected:
+        file, *parts = node.split("::")
+        key = (file.removesuffix(".py").replace("/", ".") + "".join("." + item for item in parts[:-1]), parts[-1])
+        require(key not in keys, "ambiguous JUnit identity")
+        keys[key] = node
+    result = {}
+    for case in ET.parse(path).iter("testcase"):
+        key = (case.get("classname"), case.get("name"))
+        require(key in keys and keys[key] not in result, "unexpected/duplicate JUnit case: " + repr(key))
+        node = keys[key]
+        skipped = case.find("skipped")
+        status = "failed" if case.find("failure") is not None or case.find("error") is not None else ("skipped" if skipped is not None else "passed")
+        require(node in observed and observed[node]["status"] == status, "JUnit/runtime outcome mismatch: " + node)
+        result[node] = {"status": status}
+        if skipped is not None:
+            result[node]["reason"] = skipped.get("message", "").removeprefix("Skipped: ")
+    require(set(result) == set(collected), "JUnit cases missing")
+    return result
+
+
 class OriginFinder(importlib.abc.MetaPathFinder):
     def __init__(self, prefix, observed):
         self.prefix, self.observed = prefix, observed
@@ -417,6 +442,7 @@ class Acceptance:
                        "historical_certification": "not claimed", "historical_failed_run":
                        "https://github.com/Waveframe-Labs/Waveframe-Ledger/actions/runs/41397540156",
                        "system": platform.system(), "python": sys.version, "commands": [],
+                       "ci_run": os.environ.get("GITHUB_RUN_ID"), "ci_attempt": os.environ.get("GITHUB_RUN_ATTEMPT"),
                        "report_kind": "cell", "matrix_complete": False,
                        "required_lanes": [], "passed_lanes": [], "suites": {}, "builds": {}}
         self.lock = None
@@ -575,7 +601,8 @@ class Acceptance:
             else:
                 require(lane.endswith("-source") and direct.get("dir_info") == {}
                         and direct.get("url") == Path(self.report["builds"][name]["source_root"]).as_uri(), "wrong source-built origin")
-        counts = validate_cases(result["collected"], result["outcomes"], required, lane, platform.system())
+        outcomes = junit_outcomes(self.output / (lane + ".xml"), result["collected"], result["outcomes"])
+        counts = validate_cases(result["collected"], outcomes, required, lane, platform.system())
         self.report["suites"][lane] = {**counts, "proof_sha256": digest(proof)}
         self.report["passed_lanes"].append(lane)
         self.save()

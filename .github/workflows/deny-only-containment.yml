@@ -58,7 +58,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: containment-${{ env.LEDGER_HEAD }}-${{ env.GUARD_HEAD }}-${{ matrix.os }}-py${{ matrix.python }}
+          name: containment-${{ env.LEDGER_HEAD }}-${{ env.GUARD_HEAD }}-attempt${{ github.run_attempt }}-${{ matrix.os }}-py${{ matrix.python }}
           if-no-files-found: error
           path: |
             ${{ runner.temp }}/containment-evidence/*.json
@@ -83,7 +83,7 @@ jobs:
           python-version: '3.14'
       - uses: actions/download-artifact@v6
         with:
-          pattern: containment-${{ env.LEDGER_HEAD }}-${{ env.GUARD_HEAD }}-*
+          pattern: containment-${{ env.LEDGER_HEAD }}-${{ env.GUARD_HEAD }}-attempt${{ github.run_attempt }}-*
           path: cell-evidence
       - name: Require all four exact-head results
         if: always()
@@ -94,6 +94,6 @@ jobs:
       - uses: actions/upload-artifact@v6
         if: always()
         with:
-          name: containment-matrix-${{ env.LEDGER_HEAD }}-${{ env.GUARD_HEAD }}
+          name: containment-matrix-${{ env.LEDGER_HEAD }}-${{ env.GUARD_HEAD }}-attempt${{ github.run_attempt }}
           path: containment-acceptance.json
           if-no-files-found: error

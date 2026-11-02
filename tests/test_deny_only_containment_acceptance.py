@@ -103,6 +103,17 @@ def test_uncollected_and_unreported_required_cases_block_result():
         gate.validate_cases(["a", "b"], {"a": {"status": "passed"}}, [], "candidate", "Linux")
 
 
+@pytest.mark.parametrize("fault", ["missing", "outcome", "duplicate"])
+def test_junit_cannot_omit_or_contradict_runtime_proof(tmp_path, fault):
+    node = "tests/test_gate.py::test_gate[x]"
+    case = '<testcase classname="tests.test_gate" name="test_gate[x]"/>'
+    body = "" if fault == "missing" else (case + case if fault == "duplicate" else case)
+    path = tmp_path / "suite.xml"
+    path.write_text("<testsuite>" + body + "</testsuite>")
+    with pytest.raises(RuntimeError):
+        gate.junit_outcomes(path, [node], {node: {"status": "failed" if fault == "outcome" else "passed"}})
+
+
 def test_matrix_requires_all_33_real_cases():
     node = "tests/test_v2_affirmative_path_grant.py::test_33_evaluation_historical_producer_matrix[x]"
     with pytest.raises(RuntimeError, match="33-evaluation"):

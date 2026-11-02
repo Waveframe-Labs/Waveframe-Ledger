@@ -91,6 +91,8 @@ errors, missing results, xfails, missing functions and unexpected skips fail.
 The 33-case matrix must collect and pass exactly 33 cases in each pair lane.
 Full Ledger lanes additionally require all 70 release cases; development executes
 all 44 development cases and default skips exactly those 44 documented opt-ins.
+Counts and skip reasons are read from JUnit and cross-checked against the full
+collected/runtime proof; absent, duplicate or contradictory JUnit cases fail.
 
 Platform-only exceptions are reported, never counted as passed: Windows skips
 the native post-callback namespace replacement variants of the repository proof
@@ -124,10 +126,12 @@ Cell success has `matrix_complete=false` and claims only that cell. A separate
 aggregate check requires four distinct exact-head passing reports with all seven
 lanes; only then does its new matrix result set `matrix_complete=true`.
 
-Artifacts include both candidate SHAs, OS and interpreter in their names. They
+Artifacts include both candidate SHAs, OS, interpreter and run attempt in their names. They
 never overwrite historical release records. A green new check does not make the
 old required check green or authorize merge/release/activation. Changing any
 required-status routing remains a separate owner decision.
+Reruns retain prior-attempt failures; aggregation consumes only the current
+attempt's four independent reports, never a mixture of retries.
 
 ## Complete named required-test manifest
 
@@ -159,6 +163,7 @@ tests/test_deny_only_containment_acceptance.py::test_repository_inspection_input
 tests/test_deny_only_containment_acceptance.py::test_scope_rejects_unreviewed_runtime_or_protected_fixture
 tests/test_deny_only_containment_acceptance.py::test_required_failure_or_skip_blocks_result
 tests/test_deny_only_containment_acceptance.py::test_uncollected_and_unreported_required_cases_block_result
+tests/test_deny_only_containment_acceptance.py::test_junit_cannot_omit_or_contradict_runtime_proof
 tests/test_deny_only_containment_acceptance.py::test_matrix_requires_all_33_real_cases
 tests/test_deny_only_containment_acceptance.py::test_wrong_head_historical_or_incomplete_report_cannot_pass
 tests/test_deny_only_containment_acceptance.py::test_pr_head_movement_is_a_hard_failure
