@@ -12,7 +12,7 @@ from governance_ledger import (
 from tests.test_domain_policy import _draft, HUMAN
 from tests.test_policy_translation import _proposal, _confirmed, _approved
 
-FIXTURES = Path(__file__).parent / "fixtures" / "deny_only_v2"
+FIXTURES = Path(__file__).parent / "synthetic_evidence" / "deny_only_v2"
 PUBLICATION = dict(committed_by="synthetic-committer", committed_at="2026-09-03T12:04:00Z",
                    publication_id="synthetic-publication", published_by="synthetic-publisher", published_at="2026-09-03T12:05:00Z")
 
@@ -35,6 +35,52 @@ def test_new_translation_approval_requires_path_allow():
     assert inspect_policy_translation_proposal(proposal, state)["publication_ready"] is False
     with pytest.raises(ValueError, match="fresh human acceptance"):
         _approved(proposal, state)
+
+
+def test_candidate_allow_requires_individual_confirmation_and_enforced_disposition():
+    from governance_ledger import (
+        apply_policy_translation_control_confirmation, apply_policy_translation_disposition,
+        inspect_policy_translation_proposal,
+    )
+    proposal = _proposal(b"Agents must not modify files under deployment/. Agents may modify README.md.")
+    deny, allow = proposal["clauses"]
+    state = apply_policy_translation_control_confirmation(
+        proposal, None, clause_id=deny["clause_id"],
+        candidate_control_id=deny["candidate_controls"][0]["candidate_control_id"],
+        confirmed_by="synthetic-owner", confirmed_at="2026-09-03T12:01:00Z")
+    state = apply_policy_translation_disposition(
+        proposal, state, clause_id=deny["clause_id"], coverage_status="fully_represented",
+        reason_code="human-confirmed-complete", confirmed_by="synthetic-owner",
+        confirmed_at="2026-09-03T12:02:00Z")
+    assert inspect_policy_translation_proposal(proposal, state)["publication_ready"] is False
+    with pytest.raises(ValueError, match="coverage decision|individual confirmation"):
+        _approved(proposal, state)
+    state = apply_policy_translation_control_confirmation(
+        proposal, state, clause_id=allow["clause_id"],
+        candidate_control_id=allow["candidate_controls"][0]["candidate_control_id"],
+        confirmed_by="synthetic-owner", confirmed_at="2026-09-03T12:01:00Z")
+    assert inspect_policy_translation_proposal(proposal, state)["publication_ready"] is False
+    with pytest.raises(ValueError, match="coverage decision"):
+        _approved(proposal, state)
+    state = apply_policy_translation_disposition(
+        proposal, state, clause_id=allow["clause_id"], coverage_status="fully_represented",
+        reason_code="human-confirmed-complete", confirmed_by="synthetic-owner",
+        confirmed_at="2026-09-03T12:02:00Z")
+    assert inspect_policy_translation_proposal(proposal, state)["publication_ready"] is True
+    _approved(proposal, state)
+
+
+@pytest.mark.parametrize("status", ["informational", "entirely_unsupported"])
+def test_unenforceable_clause_cannot_supply_an_allow(status):
+    from governance_ledger import validate_policy_translation_proposal
+    from tests.test_policy_translation import _restamp_proposal
+    proposal = _proposal(b"Agents may modify README.md.")
+    proposal["clauses"][0]["coverage_status"] = status
+    _restamp_proposal(proposal)
+    with pytest.raises(ValueError, match="cannot be downgraded"):
+        validate_policy_translation_proposal(proposal)
+    with pytest.raises(ValueError, match="cannot be downgraded"):
+        _approved(proposal, _confirmed(_proposal(b"Agents may modify README.md.")))
 
 
 def test_historical_v2_and_v3_verify_without_reauthoring():

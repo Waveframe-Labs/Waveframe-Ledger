@@ -33,4 +33,8 @@ Tests: `python -m pytest -q tests/test_pack1_authoring_containment.py` checks
 domain refusal, translation approval refusal, historical v2/v3 verification,
 historical-approval finalization refusal and fresh approval of a new source and
 authority revision. The full suite covers explicit grants, existing catalog
-generations, legacy output hashes and validation/tampering behavior.
+generations, legacy output hashes and validation/tampering behavior. New synthetic
+evidence lives under `tests/synthetic_evidence/deny_only_v2`, outside the preserved
+historical `tests/fixtures` tree. Approval selects allows only from individually
+confirmed controls with fully or partially represented human coverage decisions;
+proposal and confirmation validation establish their catalog-supported semantics.

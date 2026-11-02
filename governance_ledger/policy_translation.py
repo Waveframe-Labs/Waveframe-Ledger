@@ -721,7 +721,7 @@ def inspect_policy_translation_proposal(
         and state["coverage"]["unresolved_control_count"] == 0
         and state["coverage"]["confirmed_control_count"] > 0
         and (proposal["capability_catalog"]["catalog_version"] != "1.0.0"
-             or bool(_affirmative_path_controls(proposal))),
+             or bool(_affirmative_path_controls(proposal, state))),
     }
 
 
@@ -983,12 +983,25 @@ def validate_policy_translation_review(
     return copy.deepcopy(review)
 
 
-def _affirmative_path_controls(proposal: dict[str, Any]) -> list[dict[str, Any]]:
+def _affirmative_path_controls(
+    proposal: dict[str, Any], state: dict[str, Any]
+) -> list[dict[str, Any]]:
+    """Select enforceable path allows from already validated human acceptance."""
+    confirmed = {
+        (item["clause_id"], item["candidate_control_id"])
+        for item in state["control_confirmations"]
+    }
+    enforced_clauses = {
+        item["clause_id"] for item in state["clause_coverage_decisions"]
+        if item["coverage_status"] in {"fully_represented", "partially_represented"}
+    }
     return [
         control
         for clause in proposal["clauses"]
         for control in clause["candidate_controls"]
-        if control["effect"] == "allow" and control["fact_id"] == "proposal.resource.path"
+        if clause["clause_id"] in enforced_clauses
+        and (clause["clause_id"], control["candidate_control_id"]) in confirmed
+        and control["effect"] == "allow" and control["fact_id"] == "proposal.resource.path"
     ]
 
 
@@ -1012,7 +1025,7 @@ def approve_policy_translation_proposal(
     if coverage["unrepresented_clause_count"] != len(coverage["acknowledged_unrepresented_clause_ids"]):
         raise ValueError("partial coverage requires acknowledgement of every unrepresented clause or residual")
     if proposal["capability_catalog"]["catalog_version"] == "1.0.0":
-        _require_new_repository_path_grant(_affirmative_path_controls(proposal))
+        _require_new_repository_path_grant(_affirmative_path_controls(proposal, state))
     approval_time = _utc_datetime(approved_at, "approved_at")
     if any(
         _utc_datetime(run["completed_at"], "translation run completed_at") > approval_time
