@@ -12,7 +12,7 @@ on:
       guard_head:
         description: Exact Guard release PR head (full SHA)
         required: true
-        default: 78c606526ecb338c48e1d025257d47481a0bc3c4
+        default: a0be0dcddbd9a2a5fdf20250bf5f380e547917b3
       guard_pr:
         description: Guard release PR number
         required: true
@@ -32,7 +32,7 @@ permissions:
 env:
   LEDGER_HEAD: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || inputs.ledger_head }}
   LEDGER_PR: ${{ github.event_name == 'pull_request' && github.event.pull_request.number || inputs.ledger_pr }}
-  GUARD_HEAD: ${{ github.event_name == 'workflow_dispatch' && inputs.guard_head || '78c606526ecb338c48e1d025257d47481a0bc3c4' }}
+  GUARD_HEAD: ${{ github.event_name == 'workflow_dispatch' && inputs.guard_head || 'a0be0dcddbd9a2a5fdf20250bf5f380e547917b3' }}
   GUARD_PR: ${{ github.event_name == 'workflow_dispatch' && inputs.guard_pr || '70' }}
   PYTHONUTF8: '1'
 
