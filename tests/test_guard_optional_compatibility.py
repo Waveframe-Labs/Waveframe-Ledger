@@ -14,7 +14,7 @@ waveframe_guard = pytest.importorskip("waveframe_guard")
 def test_guard_019_reports_unsupported_raw_replay_without_mutation() -> None:
     from governance_ledger.integrations.guard import GuardReplayUnsupportedError
 
-    assert importlib.metadata.version("waveframe-guard") == "0.19.0"
+    assert importlib.metadata.version("waveframe-guard") == "0.19.1"
     authority = _authority_contract()
     for approvals in ([], [{"role": "manager", "approved_by": "manager-1"}]):
         state = _execution_state(approvals=approvals)

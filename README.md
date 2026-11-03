@@ -114,14 +114,46 @@ pip install governance-ledger
 
 Ledger relies on installed package contracts for integration behavior:
 
-- `cricore-contract-compiler>=0.5.0,<0.6.0` for this unpublished development branch.
-  Development acceptance requires the exact Compiler PR #8 candidate; see
-  [installation and gates](docs/ACTION_POLICY_DEVELOPMENT.md). Ordinary PyPI
-  availability is not claimed. This is the unpublished **0.9.0 candidate**.
-- Optional `[guard]` requires `waveframe-guard>=0.19.0,<0.20.0`. The intended
-  **Ledger 0.9.0 / Guard 0.19.0** pair has **pending release
-  coordination**, with the exact Guard #51 candidate supplied to the required matrix. See the
-  [base and combined acceptance entry points](docs/LEDGER_090_ACCEPTANCE.md).
+- `cricore-contract-compiler>=0.5.0,<0.6.0`; Compiler 0.5.0 is published.
+- Optional `[guard]` requires `waveframe-guard>=0.19.0,<0.20.0`.
+- Published baseline: Ledger 0.9.0 / Guard 0.19.0. The unreleased security patch
+  pair is Ledger 0.9.1 / Guard 0.19.1; package acceptance is pending review.
+  See [security patch acceptance](docs/SECURITY_PATCH_RELEASE_ACCEPTANCE.md).
+
+The 0.9.1 Ledger / 0.19.1 Guard security patch candidates require an affirmative
+path grant. Guard refuses live `compiled_authority_contract.v2` authorization
+when `target_requirements.allow` is empty, including deny-only and role-only
+authority, with an actionable diagnostic. Deny precedence and explicit grants
+remain enforced. Ledger gates new pack-1 repository approval/finalization on
+confirmed, enforceable path allows; candidate controls alone do not count.
+
+Historical bundles, receipts, hashes and approvals remain unchanged and
+verifiable. Replay retains recorded evidence and exposes any current live
+refusal; it does not restore the old permission. Historical v1 and action-scoped
+v3 evaluation semantics are unchanged. Replace missing grants with a new source
+and authority revision and fresh human review/acceptance. Never reuse an old
+approval for changed grants.
+
+Previously published Ledger 0.9.0 and Guard 0.19.0 remain affected in the reproduced
+scope. Dependency ranges still admit older packages. After separate publication
+approval, explicitly upgrade both packages:
+
+```text
+python -m pip install --upgrade governance-ledger==0.9.1 waveframe-guard==0.19.1
+python -m pip check
+```
+
+A Ledger-only upgrade does not patch an older Guard; a Guard-only upgrade does
+not supply Ledger's new-authoring gate. An already satisfied optional extra does
+not establish that both patches are installed. No Cloud activation, production
+consumer upgrade, or automatic repair of existing approvals is claimed.
+
+These are unreleased candidates. Historical action-policy certification remains
+unchanged; separate distribution acceptance must validate these exact artifacts.
+Publishing requires separate owner approval and must use only the accepted
+files, with SHA256 equality checked on PyPI for Ledger before Guard upload.
+Final tags must bind the exact accepted commits (Ledger annotated, Guard
+lightweight). No tags or publication are part of this preparation.
 
 Catalog 3.0.0 supports explicit create/modify authoring and fresh approval/public
 verification without development flags. The default remains catalog 1.0.0;

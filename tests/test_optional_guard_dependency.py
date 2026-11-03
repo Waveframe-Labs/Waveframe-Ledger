@@ -72,17 +72,17 @@ def test_built_wheel_advertises_the_planned_guard_extra(
     ]
 
 
-def test_guard_0190_pair_keeps_release_coordination_pending() -> None:
+def test_guard_0191_pair_keeps_release_coordination_pending() -> None:
     project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
-    assert project["project"]["version"] == "0.9.0"
+    assert project["project"]["version"] == "0.9.1"
     assert project["project"]["optional-dependencies"]["guard"] == [
         "waveframe-guard>=0.19.0,<0.20.0"
     ]
     compatibility = project["tool"]["waveframe"]["guard-compatibility"]
     assert compatibility == {
         "status": "pending-release-coordination",
-        "ledger": "0.9.0",
-        "guard": "0.19.0",
+        "ledger": "0.9.1",
+        "guard": "0.19.1",
         "guard_ledger_requirement": ">=0.9.0,<0.10.0",
         "install_compatibility": "pending",
         "execution_compatibility": "pending",
@@ -97,7 +97,9 @@ def test_release_version_is_consistent_across_release_metadata() -> None:
 
     assert "## 0.8.0 - 2026-09-04" in changelog
     assert "# Waveframe Ledger v0.8.0 Release Notes" in release_notes
-    assert 'version: "0.9.0"' in citation
+    assert 'version: "0.9.1"' in citation
+    assert "## [0.9.1] - Unreleased security patch candidate" in changelog
+    assert "# Waveframe Ledger v0.9.1 Release Notes" in release_notes
     assert "date-released:" not in citation
     assert "## 0.9.0 - Unreleased" in changelog
     assert "# Waveframe Ledger v0.9.0 Release Notes" in release_notes
