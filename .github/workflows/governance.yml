@@ -73,7 +73,7 @@ jobs:
           release_env="$release_root/venv"
           python -m venv "$release_env"
           release_python="$release_env/bin/python"
-          ledger_wheel="$(python -c "import pathlib,tomllib; v=tomllib.loads(pathlib.Path('pyproject.toml').read_text())['project']['version']; wheels=list(pathlib.Path('dist').glob(f'governance_ledger-{v}-*.whl')); assert len(wheels)==1, wheels; print(wheels[0])")"
+          ledger_wheel="$(python -c "import pathlib,tomllib; v=tomllib.loads(pathlib.Path('pyproject.toml').read_text())['project']['version']; wheels=list(pathlib.Path('dist').glob('*.whl')); assert len(wheels)==1 and wheels[0].name.startswith(f'governance_ledger-{v}-'), wheels; print(wheels[0])")"
           "$release_python" -m pip install "${ledger_wheel}" -r requirements-action-policy-dev.txt -r requirements-ci.txt
           "$release_python" -m pip check
           "$release_python" -I tools/check_compiler_provenance.py

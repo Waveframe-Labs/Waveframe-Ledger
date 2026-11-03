@@ -18,6 +18,10 @@ import subprocess
 import sys
 import tarfile
 import zipfile
+try:
+    import tomllib
+except ModuleNotFoundError:
+    import tomli as tomllib
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import run_deny_only_containment_acceptance as containment
@@ -188,6 +192,12 @@ class Acceptance(containment.Acceptance):
             current_paths = self.git(root, name + "-candidate-runtime", "ls-files", "--", *RUNTIME[name]).splitlines()
             current = {p: (root / p).read_bytes() for p in current_paths}
             exact_runtime_bytes(old, current, {} if name == "ledger" else VERSION_EDITS)
+            metadata = tomllib.loads(subprocess.check_output(["git", "-C", str(root), "show", base + ":pyproject.toml"], text=True))
+            metadata["project"]["version"] = VERSIONS[name]
+            if name == "ledger":
+                metadata["tool"]["waveframe"]["guard-compatibility"].update(ledger="0.9.1", guard="0.19.1")
+            require(tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8")) == metadata,
+                    "undeclared package metadata/dependency change: " + name)
             self.git(root, name + "-immutable-history", "diff", "--exit-code", base, "HEAD", "--",
                      "tests/fixtures", "tests/synthetic_evidence", "schemas", "docs/acceptance",
                      "tools/run_action_policy_acceptance.py", "tools/run_guard_extra_acceptance.py",
@@ -203,9 +213,16 @@ class Acceptance(containment.Acceptance):
         item = self.report["builds"][name]
         with tarfile.open(item["sdist"]) as archive:
             require(all(not Path(m.name).is_absolute() and ".." not in Path(m.name).parts
-                        and not (m.issym() or m.islnk()) for m in archive.getmembers()), "unsafe sdist")
+                        and "\\" not in m.name and ":" not in m.name
+                        and (m.isfile() or m.isdir()) for m in archive.getmembers()), "unsafe sdist")
             unpack = self.output / (name + "-sdist-source")
-            archive.extractall(unpack, filter="data")
+            # Windows' supported Python 3.10.11 lacks tarfile extraction filters.
+            # Extract only checked regular files, with no links or special types.
+            for member in archive.getmembers():
+                if member.isfile():
+                    target = unpack / member.name
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    target.write_bytes(archive.extractfile(member).read())
         source, = list(unpack.iterdir())
         rebuilt = self.output / (name + "-sdist-wheel")
         self.run(name + "-rebuild-sdist", sys.executable, "-m", "build", "--wheel", "--outdir", rebuilt, source)

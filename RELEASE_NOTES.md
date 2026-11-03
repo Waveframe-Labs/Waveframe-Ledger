@@ -1,4 +1,19 @@
-# Waveframe Ledger v0.9.0 Release Notes (unreleased candidate)
+# Waveframe Ledger v0.9.1 Release Notes (unreleased security patch candidate)
+
+New pack-1 repository approval/finalization requires a confirmed, enforceable
+affirmative path allow. Candidate controls, deny-only policies and role-only
+policies cannot supply that grant. Changed grants require a new source/authority
+revision and fresh human acceptance; historical approvals are not reusable.
+Historical artifact validation, hashes and receipts remain intact. Upgrade both
+Ledger 0.9.1 and Guard 0.19.1 after separate publication approval; previously
+published 0.9.0/0.19.0 packages remain affected in the reproduced scope and the
+unchanged dependency ranges still admit them. Cloud consumers are untouched.
+
+See [patch acceptance and publication gates](docs/SECURITY_PATCH_RELEASE_ACCEPTANCE.md)
+and [authoring/upgrade guidance](docs/PACK1_AUTHORING_CONTAINMENT.md).
+No historical action-policy certification is claimed for these candidates.
+
+# Waveframe Ledger v0.9.0 Release Notes (retained historical candidate notes)
 
 Raw legacy contract/execution-state replay requires an explicit injected evaluator.
 Guard 0.19's retired evaluator is reported through Ledger integration errors and
