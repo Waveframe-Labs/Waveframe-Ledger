@@ -112,6 +112,18 @@ def mandatory_cases(collected, outcomes, required, guard=False):
                 "missing, skipped or failed mandatory case: " + name)
 
 
+def account_cases(collected, outcomes, required, lane, system):
+    guard = lane.startswith("guard")
+    mandatory_cases(collected, outcomes, required, guard=guard)
+    if lane == "ledger-security-published":
+        validation_lane = "security-subset"  # no assertion that unselected catalog tests ran
+    elif guard:
+        validation_lane = "guard-baseline" if "-full-" in lane else "guard-pair-installed"
+    else:
+        validation_lane = "ledger-development-installed" if "-development-" in lane else "ledger-default-installed"
+    return containment.validate_cases(collected, outcomes, required, validation_lane, system)
+
+
 def child(config_path):
     """Distribution-specific adapter; origin/JUnit/archive verification is reused."""
     require(not sys.flags.optimize, "assertions must remain enabled")
@@ -280,12 +292,10 @@ class Acceptance(containment.Acceptance):
             self.report["suites"][lane] = dict(proof_sha256=sha256(proof),
                 collected=len(result["collected"]), outcomes=result["outcomes"])
             self.save()
-            mandatory_cases(result["collected"], outcomes, required, guard=package == "guard")
             require(not result["origin_violations"] and result["imports"], "origin proof failed")
             # Full Guard accepts ONLY the existing explicit platform skip rules;
             # mandatory security cases below additionally reject every skip.
-            validation_lane = ("guard-baseline" if "-full-" in lane else "guard-pair-installed") if package == "guard" else ("ledger-development-installed" if native else "ledger-default-installed")
-            counts = containment.validate_cases(result["collected"], outcomes, required, validation_lane, platform.system())
+            counts = account_cases(result["collected"], outcomes, required, lane, platform.system())
             self.report["suites"][lane] = {**counts, "proof_sha256": sha256(proof)}
         require(error is None and proof.exists(), error or "missing runtime proof")
         self.report["passed_lanes"].append(lane)

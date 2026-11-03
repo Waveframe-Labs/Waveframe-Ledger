@@ -55,6 +55,14 @@ def test_guard_unexpected_skip_cannot_pass_mandatory_accounting():
                                 ["required"], guard=True)
 
 
+def test_security_subset_does_not_claim_full_catalog_coverage():
+    nodes = ["tests/security.py::test_required"]
+    outcomes = {nodes[0]: {"status": "passed"}}
+    assert release.account_cases(nodes, outcomes, nodes, "ledger-security-published", "Linux")["passed"] == 1
+    with pytest.raises(RuntimeError, match="release catalog coverage"):
+        release.account_cases(nodes, outcomes, nodes, "ledger-development-wheel", "Linux")
+
+
 def test_all_authoring_and_native_v3_security_functions_are_named_and_documented():
     for file in ["tests/test_pack1_authoring_containment.py", "tests/test_policy_translation_publication_v3.py"]:
         functions = {node.name for node in ast.parse((ROOT / file).read_text(encoding="utf-8")).body
