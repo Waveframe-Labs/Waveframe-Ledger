@@ -23,6 +23,16 @@ def test_runtime_scope_requires_exact_version_edits_and_no_behavior_changes():
         release.exact_runtime_bytes({"a": b"old"}, {"a": b"new"}, {})
 
 
+def test_ignored_runtime_additions_cannot_escape_byte_scope(tmp_path):
+    package = tmp_path / "guard"
+    package.mkdir()
+    (package / "__init__.py").write_bytes(b"original")
+    base = release.runtime_tree(tmp_path, ["guard"])
+    (package / "generated.py").write_bytes(b"unreviewed")
+    with pytest.raises(RuntimeError, match="runtime change set"):
+        release.exact_runtime_bytes(base, release.runtime_tree(tmp_path, ["guard"]), {})
+
+
 @pytest.mark.parametrize("status", ["skipped", "failed"])
 def test_every_mandatory_ledger_parameter_must_pass(status):
     nodes = ["tests/gate.py::test_gate[a]", "tests/gate.py::test_gate[b]"]

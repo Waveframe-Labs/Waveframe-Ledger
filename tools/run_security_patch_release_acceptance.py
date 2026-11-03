@@ -89,6 +89,16 @@ def exact_runtime_bytes(base, current, edits):
         require(current[path] == base[path].replace(before, after), "runtime behavior/bytes changed: " + path)
 
 
+def runtime_tree(root, directories):
+    files = {}
+    for directory in directories:
+        for path in (root / directory).rglob("*"):
+            require(not path.is_symlink(), "runtime symlink is not a declared version edit")
+            if path.is_file() and not (path.parent.name == "__pycache__" and path.suffix == ".pyc"):
+                files[path.relative_to(root).as_posix()] = path.read_bytes()
+    return files
+
+
 def mandatory_cases(collected, outcomes, required, guard=False):
     require(len(collected) == len(set(collected)), "duplicate collection identity")
     require(set(collected) == set(outcomes), "collection/outcome mismatch")
@@ -189,8 +199,9 @@ class Acceptance(containment.Acceptance):
             self.git(root, name + "-ancestor", "merge-base", "--is-ancestor", base, "HEAD")
             paths = self.git(root, name + "-runtime-files", "ls-tree", "-r", "--name-only", base, "--", *RUNTIME[name]).splitlines()
             old = {p: subprocess.check_output(["git", "-C", str(root), "show", base + ":" + p]) for p in paths}
-            current_paths = self.git(root, name + "-candidate-runtime", "ls-files", "--", *RUNTIME[name]).splitlines()
-            current = {p: (root / p).read_bytes() for p in current_paths}
+            # Include ignored/untracked runtime resources too: Git cleanliness
+            # alone must not let generated implementation enter a distribution.
+            current = runtime_tree(root, RUNTIME[name])
             exact_runtime_bytes(old, current, {} if name == "ledger" else VERSION_EDITS)
             metadata = tomllib.loads(subprocess.check_output(["git", "-C", str(root), "show", base + ":pyproject.toml"], text=True))
             metadata["project"]["version"] = VERSIONS[name]
