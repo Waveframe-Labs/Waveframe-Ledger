@@ -83,9 +83,17 @@ is never changed to satisfy them. The aggregate cannot pass with failed lanes.
 
 Ledger default: exactly 44 tests/test_action_policy_v4.py development opt-in
 skips; development mode: none. Mandatory authoring/v3 tests: no skips.
-Guard security on Windows: exactly the existing Linux post-callback substitution
-case and two post_callback_native execution-state parameters, using the unchanged
-containment.skip_allowed node/reason matching; all 33 matrix cases must pass.
+Guard security on Windows: exactly the existing post_callback_native execution-state
+parameters for v1, v2 and v3, using the unchanged containment.skip_allowed node/reason
+matching; all 33 matrix cases must pass. The exact skipped node IDs are:
+
+- `tests/test_repository_execution_evidence.py::test_repository_execution_states_persist_and_reload[v1-post_callback_native]`
+- `tests/test_repository_execution_evidence.py::test_repository_execution_states_persist_and_reload[v2-post_callback_native]`
+- `tests/test_repository_execution_evidence.py::test_repository_execution_states_persist_and_reload[v3-post_callback_native]`
+
+Each has reason `Windows namespace locks prevent this replacement; fault injection runs on both OSes`.
+The separate Linux post-callback substitution case is skipped on Windows only in
+the full Guard suite; it is not in the mandatory security selection.
 Full Guard additionally uses the unchanged baseline_skip_allowed platform
 rules (Linux mount namespace/case-sensitivity/Windows-only features and Windows
 symlink privileges/namespace limitations). Every actual node and reason is
