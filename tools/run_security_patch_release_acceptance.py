@@ -11,13 +11,14 @@ import email
 import importlib
 import json
 import os
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 import platform
 import re
 import subprocess
 import sys
 import tarfile
 import zipfile
+import xml.etree.ElementTree as ET
 try:
     import tomllib
 except ModuleNotFoundError:
@@ -71,6 +72,19 @@ LEDGER_SECURITY = {
 GUARD_SECURITY = containment.GUARD_REQUIRED
 GUARD_NODES = containment.named_nodes(GUARD_SECURITY) + containment.ACTION_REQUIRED
 LEDGER_NODES = containment.named_nodes(LEDGER_SECURITY)
+HARNESS_NODE = "harness::current_pair_installed_archive_provenance"
+HARNESS_NODES = [HARNESS_NODE]
+HISTORICAL_NODES = ["tests/test_action_policy_creation.py::test_exact_dependencies_and_installed_public_api_acceptance[" + mode + "]"
+                    for mode in ("development", "release")]
+HISTORICAL_HELPER = "tools/acceptance/action_policy_creation.py"
+HISTORICAL_HELPER_SHA256 = "5e6a7ef052388a7c412487ec94f3ad70279cef28ca21ba5cdadb5cff8578789d"
+HISTORICAL_TEST_SHA256 = "99b02b797ed85a4e59a48df13f1098fcfb1b1410ba5e057f0a04234458bb0771"
+HISTORICAL_PROPERTY = "historical_failure_signature"
+HISTORICAL_SIGNATURE = dict(when="call", exception_type="builtins.KeyError", args=["'vcs_info'"],
+    helper_module="tools.acceptance.action_policy_creation", distribution="governance-ledger", origin_kind="archive", frames=[
+        dict(path="tests/test_action_policy_creation.py", function="test_exact_dependencies_and_installed_public_api_acceptance",
+             line=65, sha256=HISTORICAL_TEST_SHA256),
+        dict(path=HISTORICAL_HELPER, function="provenance", line=51, sha256=HISTORICAL_HELPER_SHA256)])
 LANES = [f"{package}-{mode}-{artifact}" for artifact in ("wheel", "sdist-wheel")
          for package, mode in (("ledger", "default"), ("ledger", "development"), ("guard", "full"), ("guard", "security"))]
 LANES += ["ledger-security-published", "guard-security-published"]
@@ -99,7 +113,7 @@ def runtime_tree(root, directories):
     return files
 
 
-def mandatory_cases(collected, outcomes, required, guard=False):
+def mandatory_cases(collected, outcomes, required, guard=False, system=None):
     require(len(collected) == len(set(collected)), "duplicate collection identity")
     require(set(collected) == set(outcomes), "collection/outcome mismatch")
     for name in required:
@@ -107,21 +121,127 @@ def mandatory_cases(collected, outcomes, required, guard=False):
         require(matches and any(outcomes[node]["status"] == "passed" for node in matches)
                 and all(outcomes[node]["status"] == "passed" or (guard
                     and outcomes[node]["status"] == "skipped"
-                    and containment.skip_allowed(node, outcomes[node].get("reason", ""), "guard-pair-installed", platform.system()))
+                    and containment.skip_allowed(node, outcomes[node].get("reason", ""), "guard-pair-installed", system or platform.system()))
                     for node in matches),
                 "missing, skipped or failed mandatory case: " + name)
 
 
-def account_cases(collected, outcomes, required, lane, system):
+def historical_failures(collected, outcomes, junit, lane):
+    """Reconcile exactly two executed failures; never turn their outcomes green."""
+    if lane not in {"guard-full-wheel", "guard-full-sdist-wheel"}:
+        return {}
+    require(junit is not None, "historical failure requires retained JUnit")
+    cases = list(ET.parse(junit).iter("testcase"))
+    result = {}
+    for node in HISTORICAL_NODES:
+        require(collected.count(node) == 1 and outcomes.get(node, {}).get("status") == "failed",
+                "historical case missing, skipped, passing or unreported: " + node)
+        matches = [case for case in cases if case.get("classname") == "tests.test_action_policy_creation"
+                   and case.get("name") == node.split("::")[1]]
+        require(len(matches) == 1, "missing/duplicate historical JUnit case: " + node)
+        case = matches[0]
+        failures = case.findall("failure")
+        require(len(failures) == 1 and case.find("error") is None and case.find("skipped") is None,
+                "historical JUnit must contain one failure: " + node)
+        failure = failures[0]
+        signature = outcomes[node].get("failure_signature")
+        properties = [p.get("value") for p in case.findall("properties/property") if p.get("name") == HISTORICAL_PROPERTY]
+        try:
+            retained_signature = json.loads(properties[0]) if len(properties) == 1 else None
+        except (TypeError, ValueError):
+            retained_signature = None
+        require(signature == HISTORICAL_SIGNATURE and len(properties) == 1
+                and retained_signature == HISTORICAL_SIGNATURE, "wrong historical traceback signature: " + node)
+        text = (failure.text or "").replace("\\", "/").replace("\r\n", "\n").strip()
+        reason = outcomes[node].get("reason", "").replace("\\", "/").replace("\r\n", "\n").strip()
+        require(failure.get("message") == "KeyError: 'vcs_info'" and text == reason
+                and text.endswith(HISTORICAL_HELPER + ":51: KeyError")
+                and "    def provenance():" in text
+                and '>           assert direct["vcs_info"]["commit_id"] == sha, (name, direct)' in text
+                and "tests/test_action_policy_creation.py:65:" in text
+                and "E           KeyError: 'vcs_info'" in text,
+                "wrong historical JUnit exception/origin: " + node)
+        result[node] = dict(status="FAILED", classification="historical-baseline-only",
+            ledger_git_commit=containment.BASELINE_LEDGER, compiler_git_commit=containment.COMPILER_HEAD,
+            signature=signature, junit_sha256=sha256(junit))
+    return result
+
+
+def checked_outcomes(junit, proof):
+    result = containment.junit_outcomes(junit, proof["collected"], proof["outcomes"])
+    for node, value in result.items():
+        if value["status"] == "failed":
+            value.update(proof["outcomes"][node])
+    return result
+
+
+def validate_exit_code(code, historical):
+    require(code == (1 if historical else 0), "unexpected pytest process exit")
+
+
+def account_cases(collected, outcomes, required, lane, system, junit=None):
     guard = lane.startswith("guard")
-    mandatory_cases(collected, outcomes, required, guard=guard)
+    mandatory_cases(collected, outcomes, required, guard=guard, system=system)
+    historical = historical_failures(collected, outcomes, junit, lane)
     if lane == "ledger-security-published":
         validation_lane = "security-subset"  # no assertion that unselected catalog tests ran
     elif guard:
         validation_lane = "guard-baseline" if "-full-" in lane else "guard-pair-installed"
     else:
         validation_lane = "ledger-development-installed" if "-development-" in lane else "ledger-default-installed"
-    return containment.validate_cases(collected, outcomes, required, validation_lane, system)
+    current = [node for node in collected if node not in historical]
+    counts = containment.validate_cases(current, {node: outcomes[node] for node in current}, required, validation_lane, system)
+    return {**counts, "collected": len(collected), "failed": len(historical), "historical_baseline_only": historical}
+
+
+def current_pair_installed_archive_provenance(config):
+    return {name: installed_archive(name, version, modules, config["archives"][name], config["install_report"])
+            for name, version, modules in [("governance-ledger", "0.9.1", ["governance_ledger"]),
+                                          ("waveframe-guard", "0.19.1", ["guard", "waveframe_guard"])]}
+
+
+def validate_pair_proof(proof, archives, payloads):
+    """Account the existing helper's serialized proof, not a new origin scheme."""
+    require(proof.get("outcomes", {}).get(HARNESS_NODE, {}).get("status") == "passed"
+            and proof.get("collected", []).count(HARNESS_NODE) == 1, "missing mandatory installed-archive check")
+    for name, version, modules in [("governance-ledger", "0.9.1", ["governance_ledger"]),
+                                   ("waveframe-guard", "0.19.1", ["guard", "waveframe_guard"])]:
+        item = proof.get("provenance", {}).get(name, {})
+        expected = archives[name]
+        require(item.get("version") == version and item.get("wheel_sha256") == expected["sha256"], "wrong current-pair version/hash: " + name)
+        require(item.get("installed_sha256") == payloads[name] and payloads[name], "missing/different installed file bytes: " + name)
+        require(set(item.get("module_paths", {})) == set(modules) and all(item["module_paths"].values()), "missing installed module origins: " + name)
+        origins = item.get("origins", [])
+        require(origins and all(origin.get("url") == expected["uri"] and "archive_info" in origin
+                and "vcs_info" not in origin for origin in origins), "missing/different archive origins: " + name)
+        for origin in origins:
+            info = origin["archive_info"]
+            hashes = dict(info.get("hashes", {}))
+            if "hash" in info:
+                algorithm, value = info["hash"].split("=", 1)
+                require(algorithm not in hashes or hashes[algorithm] == value, "contradictory origin hashes")
+                hashes[algorithm] = value
+            require(hashes.get("sha256") == expected["sha256"], "missing/different origin SHA256: " + name)
+        path_type = PureWindowsPath if proof.get("system") == "Windows" else PurePosixPath
+        require(proof.get("prefix") and all(path_type(path).is_relative_to(path_type(proof["prefix"]))
+                for path in item["module_paths"].values()), "installed module outside prefix: " + name)
+
+
+def capture_historical_signature(call, support):
+    exc = call.excinfo
+    frames = []
+    if exc:
+        for entry in list(exc.traceback)[-2:]:
+            path = Path(entry.path).resolve()
+            frames.append(dict(path=path.relative_to(support).as_posix() if path.is_relative_to(support) else str(path),
+                               function=entry.name, line=entry.lineno + 1, sha256=sha256(path)))
+    local = list(exc.traceback)[-1].frame.f_locals if exc else {}
+    direct = local.get("direct")
+    return dict(when=call.when, exception_type=(type(exc.value).__module__ + "." + type(exc.value).__qualname__) if exc else None,
+                args=[repr(arg) for arg in exc.value.args] if exc else [], frames=frames,
+                helper_module=list(exc.traceback)[-1].frame.f_globals.get("__name__") if exc else None,
+                distribution=local.get("name"), origin_kind="archive" if isinstance(direct, dict)
+                and "archive_info" in direct and "vcs_info" not in direct else "other")
 
 
 def child(config_path):
@@ -132,10 +252,7 @@ def child(config_path):
     imports, collected, outcomes, bindings = {}, [], {}, []
     finder = containment.OriginFinder(sys.prefix, imports)
     sys.meta_path.insert(0, finder)
-    provenance = {}
-    for name, version, modules in [("governance-ledger", "0.9.1", ["governance_ledger"]),
-                                   ("waveframe-guard", "0.19.1", ["guard", "waveframe_guard"])]:
-        provenance[name] = installed_archive(name, version, modules, config["archives"][name], config["install_report"])
+    provenance = current_pair_installed_archive_provenance(config)
     if config["published_compiler"]:
         provenance["cricore-contract-compiler"] = installed_archive("cricore-contract-compiler", "0.5.0",
             ["compiler"], config["archives"]["cricore-contract-compiler"], config["install_report"])
@@ -147,7 +264,24 @@ def child(config_path):
     sys.path.insert(0, str(support))  # tests/tools only; no runtime sources
     os.environ.update(LEDGER_EXPECT_IMPORT_ROOT=sys.prefix, LEDGER_IMPORT_REPORT=config["ledger_imports"])
 
+    class ArchiveCheck(pytest.Item):
+        def runtest(self):
+            provenance.update(current_pair_installed_archive_provenance(config))
+
     class Accounting:
+        def pytest_collection_modifyitems(self, session, config, items):
+            items.append(ArchiveCheck.from_parent(session, name=HARNESS_NODE.split("::")[1], nodeid=HARNESS_NODE))
+
+        @pytest.hookimpl(hookwrapper=True)
+        def pytest_runtest_makereport(self, item, call):
+            outcome = yield
+            report = outcome.get_result()
+            if item.nodeid in HISTORICAL_NODES and call.when == "call":
+                signature = capture_historical_signature(call, support)
+                item.user_properties.append((HISTORICAL_PROPERTY, json.dumps(signature, sort_keys=True)))
+                report.user_properties.append((HISTORICAL_PROPERTY, json.dumps(signature, sort_keys=True)))
+                report.historical_failure_signature = signature
+
         def pytest_collection_finish(self, session):
             actual = subprocess.check_output(["git", "-C", source, "rev-parse", "HEAD"], text=True).strip()
             require(actual == config["head"], "repository inspection source moved")
@@ -157,6 +291,8 @@ def child(config_path):
         def pytest_runtest_logreport(self, report):
             if report.failed:
                 outcomes[report.nodeid] = {"status": "failed", "reason": str(report.longrepr)}
+                if hasattr(report, "historical_failure_signature"):
+                    outcomes[report.nodeid]["failure_signature"] = report.historical_failure_signature
             elif report.skipped:
                 reason = str(report.longrepr[2]) if isinstance(report.longrepr, tuple) else str(report.longrepr)
                 outcomes[report.nodeid] = {"status": "skipped", "reason": reason.removeprefix("Skipped: ")}
@@ -177,7 +313,8 @@ def child(config_path):
             if violations:
                 session.exitstatus = 1
             containment.write(config["proof"], dict(collected=collected, outcomes=outcomes,
-                imports=imports, provenance=provenance, origin_violations=violations, repository_inputs=bindings))
+                imports=imports, provenance=provenance, origin_violations=violations, repository_inputs=bindings,
+                prefix=sys.prefix, system=platform.system()))
 
     return pytest.main(["-q", "-ra", "--junitxml", config["junit"], *config["nodes"]],
                        plugins=[ImportBoundary(), Accounting()])
@@ -192,7 +329,7 @@ class Acceptance(containment.Acceptance):
         self.pair = pair
         self.env.pop("PYTHONOPTIMIZE", None)
         self.report.update(scope="security-patch-distributions", pair=pair,
-            mandatory_tests={"ledger": LEDGER_NODES, "guard": GUARD_NODES}, required_lanes=LANES,
+            mandatory_tests={"ledger": LEDGER_NODES, "guard": GUARD_NODES, "harness": HARNESS_NODES}, required_lanes=LANES,
             historical_certification="not claimed", distribution_acceptance=False)
         self.save()
 
@@ -228,6 +365,9 @@ class Acceptance(containment.Acceptance):
                      "tools/package_provenance.py", "tools/acceptance_pytest.py", "tools/check_compiler_provenance.py",
                      ".github/workflows/action-policy-development.yml", ".github/workflows/deny-only-containment.yml",
                      "docs/LEDGER_090_ACCEPTANCE.md", "docs/RELEASE_019_ACCEPTANCE.md")
+            if name == "guard":
+                self.git(root, "historical-provenance-contract", "diff", "--exit-code", base, "HEAD", "--",
+                         HISTORICAL_HELPER, "tests/test_action_policy_creation.py", "tests/conftest.py")
         self.report["runtime_scope"] = {"ledger": [], "guard": list(VERSION_EDITS)}
         self.save()
 
@@ -259,7 +399,8 @@ class Acceptance(containment.Acceptance):
             metadata, = [n for n in archive.namelist() if n.endswith(".dist-info/METADATA")]
             info = email.message_from_bytes(archive.read(metadata))
             require(info["Version"] == VERSIONS[name] and info["Requires-Python"] == ">=3.10", "wrong release metadata")
-        item.update(rebuilt_wheel=str(second), rebuilt_sha256=sha256(second), payload_sha256=contents(wheel))
+        item.update(wheel_uri=wheel.resolve().as_uri(), rebuilt_wheel=str(second),
+                    rebuilt_uri=second.resolve().as_uri(), rebuilt_sha256=sha256(second), payload_sha256=contents(wheel))
         self.save()
         return wheel, support
 
@@ -273,7 +414,7 @@ class Acceptance(containment.Acceptance):
         archives = {}
         for name, distribution in [("ledger", "governance-ledger"), ("guard", "waveframe-guard")]:
             path = self.report["builds"][name][artifact]
-            archives[distribution] = {"wheel": path, "sha256": sha256(path)}
+            archives[distribution] = {"wheel": path, "sha256": sha256(path), "uri": Path(path).resolve().as_uri()}
         if published:
             archives["cricore-contract-compiler"] = self.report["published_compiler"]
         environment = "published-pair" if published else artifact + "-pair"
@@ -288,16 +429,20 @@ class Acceptance(containment.Acceptance):
             error = str(exc)
         if proof.exists():
             result = json.loads(proof.read_text(encoding="utf-8"))
-            outcomes = containment.junit_outcomes(junit, result["collected"], result["outcomes"])
+            outcomes = checked_outcomes(junit, result)
             self.report["suites"][lane] = dict(proof_sha256=sha256(proof),
                 collected=len(result["collected"]), outcomes=result["outcomes"])
             self.save()
             require(not result["origin_violations"] and result["imports"], "origin proof failed")
+            validate_pair_proof(result, archives, {distribution: self.report["builds"][name]["payload_sha256"]
+                for name, distribution in [("ledger", "governance-ledger"), ("guard", "waveframe-guard")]})
             # Full Guard accepts ONLY the existing explicit platform skip rules;
-            # mandatory security cases below additionally reject every skip.
-            counts = account_cases(result["collected"], outcomes, required, lane, platform.system())
-            self.report["suites"][lane] = {**counts, "proof_sha256": sha256(proof)}
-        require(error is None and proof.exists(), error or "missing runtime proof")
+            # mandatory cases reject every other skip, including missing archive checks.
+            counts = account_cases(result["collected"], outcomes, required + HARNESS_NODES, lane, platform.system(), junit)
+            self.report["suites"][lane] = {**counts, "proof_sha256": sha256(proof), "junit_sha256": sha256(junit)}
+        else:
+            raise RuntimeError(error or "missing runtime proof")
+        validate_exit_code(self.report["commands"][-1]["exit"], counts["historical_baseline_only"])
         self.report["passed_lanes"].append(lane)
         self.save()
 
@@ -358,7 +503,8 @@ def sha256_bytes(data):
 
 def aggregate(folder, pair, output):
     result = dict(scope="security-patch-distributions", pair=pair, status="failed", matrix_complete=False,
-                  historical_certification="not claimed", release_ready=False, runtime_activation_ready=False, cells=[])
+                  distribution_acceptance=False, historical_certification="not claimed", release_ready=False,
+                  runtime_activation_ready=False, cells=[])
     try:
         reports = list(Path(folder).rglob("security-patch-acceptance.json"))
         require(len(reports) == 4, "exactly four cell reports required")
@@ -370,7 +516,7 @@ def aggregate(folder, pair, output):
                     and set(cell["passed_lanes"]) == set(LANES), "failed/incomplete cell")
             require(cell["historical_certification"] == "not claimed" and cell["release_ready"] is False
                     and cell["runtime_activation_ready"] is False, "false historical/promotion claim")
-            require(cell["mandatory_tests"] == {"ledger": LEDGER_NODES, "guard": GUARD_NODES}, "required manifest changed")
+            require(cell["mandatory_tests"] == {"ledger": LEDGER_NODES, "guard": GUARD_NODES, "harness": HARNESS_NODES}, "required manifest changed")
             for name, build in cell["builds"].items():
                 require(build["head"] == pair[name]["head"], "build source identity mismatch")
                 for key, hashkey, directory in [("wheel", "wheel_sha256", name + "-dist"),
@@ -379,16 +525,35 @@ def aggregate(folder, pair, output):
                     filename = build[key].replace("\\", "/").rsplit("/", 1)[-1]
                     files = list(path.parent.rglob(directory + "/" + filename))
                     require(len(files) == 1 and sha256(files[0]) == build[hashkey], "retained candidate archive mismatch")
+            require(set(cell["suites"]) == set(LANES), "missing lane evidence")
+            historical = {}
+            for lane in LANES:
+                proof_path, junit = path.parent / (lane + "-proof.json"), path.parent / (lane + ".xml")
+                require(sha256(proof_path) == cell["suites"][lane]["proof_sha256"]
+                        and sha256(junit) == cell["suites"][lane]["junit_sha256"], "lane proof/JUnit changed")
+                proof = json.loads(proof_path.read_text(encoding="utf-8"))
+                require(proof.get("imports") and not proof.get("origin_violations"), "missing/failed import proof")
+                artifact = "rebuilt_wheel" if "sdist-wheel" in lane else "wheel"
+                archives = {distribution: dict(sha256=cell["builds"][name]["rebuilt_sha256" if artifact == "rebuilt_wheel" else "wheel_sha256"],
+                    uri=cell["builds"][name]["rebuilt_uri" if artifact == "rebuilt_wheel" else "wheel_uri"])
+                    for name, distribution in [("ledger", "governance-ledger"), ("guard", "waveframe-guard")]}
+                validate_pair_proof(proof, archives, {distribution: cell["builds"][name]["payload_sha256"]
+                    for name, distribution in [("ledger", "governance-ledger"), ("guard", "waveframe-guard")]})
+                required = (LEDGER_NODES if lane.startswith("ledger") else GUARD_NODES) + HARNESS_NODES
+                counts = account_cases(proof["collected"], checked_outcomes(junit, proof), required, lane, cell["system"], junit)
+                require(all(cell["suites"][lane][key] == value for key, value in counts.items()), "lane accounting changed")
+                if counts["historical_baseline_only"]:
+                    historical[lane] = counts["historical_baseline_only"]
             axis = (cell["system"], ".".join(cell["python"].split()[0].split(".")[:2]))
             require(axis not in axes, "duplicate matrix cell")
             axes.add(axis)
-            result["cells"].append(dict(axis=axis, report_sha256=sha256(path), builds=cell["builds"]))
+            result["cells"].append(dict(axis=axis, report_sha256=sha256(path), builds=cell["builds"], historical_baseline_only=historical))
         require(axes == {(os_name, py) for os_name in ("Linux", "Windows") for py in ("3.10", "3.14")}, "incomplete OS/Python axes")
         for name, repo in [("ledger", "Waveframe-Ledger"), ("guard", "Waveframe-Guard")]:
             head = subprocess.check_output(["git", "ls-remote", f"https://github.com/Waveframe-Labs/{repo}.git",
                 f"refs/pull/{pair[name]['pr']}/head"], text=True).split()[0]
             require(head == pair[name]["head"], "PR moved before aggregation; re-pin all evidence")
-        result.update(status="passed", matrix_complete=True)
+        result.update(status="passed", matrix_complete=True, distribution_acceptance=True)
     except BaseException as exc:
         result["error"] = str(exc)
         raise

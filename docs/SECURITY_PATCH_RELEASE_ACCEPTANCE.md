@@ -77,7 +77,80 @@ cases, 2 creation-separation cases, and 2 publication replay cases.
 
 Historical full-suite provenance assertions still demand earlier Ledger Git
 commits. Such failures are retained as failures; honest candidate-wheel metadata
-is never changed to satisfy them. The aggregate cannot pass with failed lanes.
+is never changed to satisfy them. The precise reconciliation below is authorized
+by Stream comments 6594237321 and 6594259798. Every other failure blocks acceptance.
+
+## Exact historical accounting and named current-pair evidence
+
+In `guard-full-wheel` and `guard-full-sdist-wheel` only, both of these unchanged
+cases must be collected exactly once, executed, and reported as **FAILED**:
+
+- `tests/test_action_policy_creation.py::test_exact_dependencies_and_installed_public_api_acceptance[development]`
+- `tests/test_action_policy_creation.py::test_exact_dependencies_and_installed_public_api_acceptance[release]`
+
+Their historical environment installs Ledger from Git at
+`a34c11d81b85963794cf28b4adad091fac15e130`, with Compiler Git at
+`ae590dee058d3481e384dea850d5b7d980f533ff`. In the current wheel pair, only
+`builtins.KeyError` with exactly `('vcs_info',)` during the call phase qualifies.
+The final two traceback frames must be the unchanged test at line 65 followed
+by `tools/acceptance/action_policy_creation.py::provenance` at line 51, with
+the pinned source SHA256 values. The helper module must be
+`tools.acceptance.action_policy_creation`. Both helper and test remain byte-frozen;
+the Guard candidate and its native-generation fixture remain unchanged.
+The captured helper frame must identify `governance-ledger` with archive metadata
+and no `vcs_info`, so a Compiler-origin failure cannot use this reconciliation.
+
+The runtime proof and a named JUnit property must agree on that structured
+signature. JUnit must also retain one failure with exact message
+`KeyError: 'vcs_info'`, matching runtime traceback text and the helper's final
+origin line. Missing, skipped, passing, differently failing, duplicate or
+additional failures block acceptance. A pytest process exit other than exactly
+1 for the full lanes (0 for the others) also blocks. No xfail marker, deselection,
+test edit, metadata substitution or broad failure allowlist is used.
+
+Each full-lane report records the two outcomes in `historical_baseline_only`
+with status **FAILED**, original environment pins, signature and JUnit hash.
+They remain in collection, raw outcomes, logs and JUnit, and are counted as two
+failures, never as passes. Only after exact validation does the unchanged strict
+case validator account the remaining current-pair cases. Aggregate re-reads the
+retained proofs/JUnit, verifies their hashes, repeats this contract and retains
+the named failed historical outcomes. Distribution acceptance success does not
+claim full Guard suites have zero failures or historical certification.
+
+The named mandatory harness case in **every** installed lane is:
+
+- `harness::current_pair_installed_archive_provenance`
+
+It executes the existing `package_provenance.installed_archive` helper for both
+Ledger 0.9.1 and Guard 0.19.1 and appears as a real collected pytest/JUnit case.
+The initial pre-collection archive checks remain, and this case repeats them
+after collection. Exact versions, wheel hashes, truthful archive origins,
+every installed file's byte equality and runtime module locations remain strict.
+Missing/nonpassing named-case evidence or either package's serialized proof
+blocks both cell and aggregate acceptance. Origin isolation and its sticky hard
+failure monitor are unchanged. Neither the historical cases nor this check can
+disappear without failing acceptance.
+
+Fixture `SHA256SUMS` integrity and compiler-versus-retained-fixture determinism
+execute inside the historical helper's `run()`, after its Git-provenance gate.
+They execute in the original Git-pinned containment `guard-baseline` environment
+(retained run 41543274340, Ledger cb81fb4095f71d72f079dd4158a01317c5cb7ea5 /
+Guard e77c7fb718009b947daba621155baa43315fa045). They are historical-baseline
+evidence, **not current-pair distribution evidence**. Current-pair API/behavior
+coverage is the mandatory action siblings and full sibling/attestation suites,
+as independently executed in Jim's comment 6594237321. No fixture/compiler
+determinism coverage is silently invented for the wheel pair.
+
+The original failed distribution run 41562918952 and its artifacts remain
+retained. A new exact-head four-cell run is required after this accounting change.
+
+Release record correction: two version-tracking test IDs were renamed during
+preparation, with their assertions retained: Ledger
+`test_guard_0190_pair_keeps_release_coordination_pending` became
+`test_guard_0191_pair_keeps_release_coordination_pending`; Guard
+`test_release_metadata_matches_v0190_candidate` became
+`test_release_metadata_matches_v0191_candidate`. The other v2/v3 integration
+test IDs remained stable. Guard is unchanged by this reconciliation.
 
 ## Approved skip contracts
 
