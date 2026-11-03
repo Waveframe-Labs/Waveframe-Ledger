@@ -336,6 +336,7 @@ def finalize_domain_policy_authority(
     _require_no_rule_conflicts(rules)
     authority = draft["authority"]
     compiler_input = _compiler_input(authority, rules)
+    _require_new_repository_path_grant(compiler_input.get("targets", {}).get("allow", []))
     normalized = _normalized_semantic_meaning(authority, rules, compiler_input)
     reconciliation = {
         "schema_version": "governance_semantic_reconciliation.v1",
@@ -927,6 +928,16 @@ def _lower_constraint(constraint: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("Constraint IR concept is not supported by repository lowering")
     rule["rule_id"] = "rule-" + canonical_sha256(rule).removeprefix("sha256:")
     return rule
+
+
+def _require_new_repository_path_grant(allow_rules: list[dict[str, Any]]) -> None:
+    """Gate new pack-1 authoring, never historical reconstruction/validation."""
+    if not allow_rules:
+        raise ValueError(
+            "new pack-1 repository authority requires an affirmative path grant; "
+            "create a new source/authority revision with explicit path allows and "
+            "fresh human acceptance; do not reuse historical approvals"
+        )
 
 
 def _compile_domain_contract_v2(

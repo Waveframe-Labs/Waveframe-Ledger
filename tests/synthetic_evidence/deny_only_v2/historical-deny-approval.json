@@ -1,0 +1,189 @@
+{
+  "proposal": {
+    "schema_version": "policy_translation_proposal.v1",
+    "source_policy": {
+      "source_policy_id": "repository-policy",
+      "source_revision": "revision-1",
+      "source_policy_ref": "repository-policy@revision-1",
+      "content_encoding": "base64",
+      "source_bytes_base64": "QWdlbnRzIG11c3Qgbm90IG1vZGlmeSBmaWxlcyB1bmRlciBkZXBsb3ltZW50Ly4=",
+      "snapshot_hash": "sha256:78ab417d649097072d14c26fd1a1bee89f1c8c478e1a948ea56197181cb04cce"
+    },
+    "authority": {
+      "authority_id": "repository-authority",
+      "authority_version": "1.0.0",
+      "authority_ref": "repository-authority@1.0.0"
+    },
+    "capability_catalog": {
+      "catalog_id": "waveframe.coding-agent.repository-change",
+      "catalog_version": "1.0.0",
+      "catalog_hash": "sha256:194bb5564a574236b9018171f8662a9d186bd68cfa68522b51ba3b4197858dc7"
+    },
+    "clauses": [
+      {
+        "clause_id": "policy-clause-e8d072f6f233a27524aabb9950e4b63d4ef64d515cc44297eb560365e5ccb192",
+        "index": 0,
+        "start_byte": 0,
+        "end_byte": 47,
+        "clause_bytes_base64": "QWdlbnRzIG11c3Qgbm90IG1vZGlmeSBmaWxlcyB1bmRlciBkZXBsb3ltZW50Ly4=",
+        "clause_hash": "sha256:78ab417d649097072d14c26fd1a1bee89f1c8c478e1a948ea56197181cb04cce",
+        "coverage_status": "fully_represented",
+        "candidate_controls": [
+          {
+            "control_type": "prefix_path_access",
+            "actor_kind": "autonomous_agent",
+            "action": "modify",
+            "resource_kind": "repository_path",
+            "fact_id": "proposal.resource.path",
+            "operator": "starts_with",
+            "effect": "deny",
+            "enforcement_point": "waveframe.guard.repository-change.v1",
+            "value": {
+              "kind": "source_literal",
+              "value": "deployment/",
+              "canonical_value": "deployment/",
+              "start_byte": 35,
+              "end_byte": 46,
+              "literal_hash": "sha256:5479571e275b8276821a7239e46a643219c58379199b19e279ce8dcd1f549f3c"
+            },
+            "required_runtime_facts": [
+              "actor.subject_kind",
+              "proposal.action",
+              "proposal.resource.kind",
+              "proposal.resource.path"
+            ],
+            "candidate_control_id": "candidate-control-8fccdb1b40ea50c935a3c75cd8e2ec3837e9c767202dfab72e0ffeec6499ac49"
+          }
+        ],
+        "unresolved_binding_ids": [],
+        "limitation_code": null,
+        "residual_unsupported_spans": []
+      }
+    ],
+    "organizational_bindings": [],
+    "translation_runs": [
+      {
+        "run_id": "translation-run-873be339138d630afc20514a4d27177ac7089369e1e37e5af5b7113a9efcf681",
+        "sequence_number": 0,
+        "source_policy_ref": "repository-policy@revision-1",
+        "source_revision": "revision-1",
+        "source_snapshot_hash": "sha256:78ab417d649097072d14c26fd1a1bee89f1c8c478e1a948ea56197181cb04cce",
+        "capability_catalog": {
+          "catalog_id": "waveframe.coding-agent.repository-change",
+          "catalog_version": "1.0.0",
+          "catalog_hash": "sha256:194bb5564a574236b9018171f8662a9d186bd68cfa68522b51ba3b4197858dc7"
+        },
+        "provider_class": "hosted_model",
+        "provider_identifier": "provider/deployment",
+        "translation_template_version": "template-1",
+        "translation_template_hash": "sha256:5cde0f1298f41f7d1c8b907a36992a7a513225a2615bd6e307bf1a9149b06b40",
+        "request_configuration_id": "request-config-1",
+        "request_configuration_hash": "sha256:b7d64a9221007dfd5390f7df6cd5b8f3ea4f82faa1237141e35ebf161f5511a1",
+        "request_hash": "sha256:3286617685bbb1c98a7125614077f484421e8a8c5bd6ac89d433101af9842d2d",
+        "response_hash": "sha256:2e3aa0a786a1ff759948dff712e370cf31f5aa768c5f5ad99645692da8b1cd1b",
+        "explanation_hash": null,
+        "created_at": "2026-09-03T12:00:00Z",
+        "completed_at": "2026-09-03T12:00:01Z",
+        "previous_run_hash": null,
+        "run_hash": "sha256:180359425095f195c87348de6c946a7d4846396ec03749883b623418d055d900"
+      }
+    ],
+    "proposal_id": "policy-translation-proposal-595767fcda7fff5716a65552942af3b9fab4ac1f49a137fb117debea854aee2f",
+    "proposal_hash": "sha256:595767fcda7fff5716a65552942af3b9fab4ac1f49a137fb117debea854aee2f"
+  },
+  "confirmation": {
+    "schema_version": "policy_translation_confirmation.v1",
+    "proposal_id": "policy-translation-proposal-595767fcda7fff5716a65552942af3b9fab4ac1f49a137fb117debea854aee2f",
+    "proposal_hash": "sha256:595767fcda7fff5716a65552942af3b9fab4ac1f49a137fb117debea854aee2f",
+    "source_snapshot_hash": "sha256:78ab417d649097072d14c26fd1a1bee89f1c8c478e1a948ea56197181cb04cce",
+    "authority_ref": "repository-authority@1.0.0",
+    "binding_resolutions": [],
+    "control_confirmations": [
+      {
+        "clause_id": "policy-clause-e8d072f6f233a27524aabb9950e4b63d4ef64d515cc44297eb560365e5ccb192",
+        "candidate_control_id": "candidate-control-8fccdb1b40ea50c935a3c75cd8e2ec3837e9c767202dfab72e0ffeec6499ac49",
+        "confirmed_by": "policy-owner",
+        "confirmed_at": "2026-09-03T12:01:00Z",
+        "confirmation_hash": "sha256:9e46316b62395a761cf4b014667fff660a0ce96dc73c5268835301374f121510"
+      }
+    ],
+    "clause_coverage_decisions": [
+      {
+        "clause_id": "policy-clause-e8d072f6f233a27524aabb9950e4b63d4ef64d515cc44297eb560365e5ccb192",
+        "coverage_status": "fully_represented",
+        "reason_code": "human-confirmed-complete",
+        "human_reason": null,
+        "acknowledged_unrepresented": false,
+        "confirmed_by": "policy-owner",
+        "confirmed_at": "2026-09-03T12:02:00Z",
+        "decision_hash": "sha256:2b67edcaf7bb1038b1196d2b79124f55657952d626fe6feaca03617024b8aa61"
+      }
+    ],
+    "coverage": {
+      "total_clause_count": 1,
+      "enforced_clause_count": 1,
+      "unenforced_clause_count": 0,
+      "unresolved_clause_count": 0,
+      "fully_represented_clause_count": 1,
+      "partially_represented_clause_count": 0,
+      "entirely_unsupported_clause_count": 0,
+      "informational_clause_count": 0,
+      "unrepresented_clause_count": 0,
+      "enforced_clause_ids": [
+        "policy-clause-e8d072f6f233a27524aabb9950e4b63d4ef64d515cc44297eb560365e5ccb192"
+      ],
+      "unenforced_clause_ids": [],
+      "acknowledged_unrepresented_clause_ids": [],
+      "total_control_count": 1,
+      "confirmed_control_count": 1,
+      "unresolved_control_count": 0,
+      "confirmed_control_ids": [
+        "candidate-control-8fccdb1b40ea50c935a3c75cd8e2ec3837e9c767202dfab72e0ffeec6499ac49"
+      ],
+      "unresolved_control_ids": []
+    },
+    "confirmation_hash": "sha256:afbe096afd876658f4624c878d83de877dd2f6ee59b6cf7927cd2f4147f82318"
+  },
+  "approval": {
+    "schema_version": "policy_translation_approval.v1",
+    "proposal_id": "policy-translation-proposal-595767fcda7fff5716a65552942af3b9fab4ac1f49a137fb117debea854aee2f",
+    "proposal_hash": "sha256:595767fcda7fff5716a65552942af3b9fab4ac1f49a137fb117debea854aee2f",
+    "confirmation_hash": "sha256:afbe096afd876658f4624c878d83de877dd2f6ee59b6cf7927cd2f4147f82318",
+    "review_hash": "sha256:80d8c84f6ce9b002c9d3b11bb5476b88a210610884d3b579fe6c015383f5540d",
+    "source_policy_ref": "repository-policy@revision-1",
+    "source_snapshot_hash": "sha256:78ab417d649097072d14c26fd1a1bee89f1c8c478e1a948ea56197181cb04cce",
+    "authority_ref": "repository-authority@1.0.0",
+    "capability_catalog": {
+      "catalog_id": "waveframe.coding-agent.repository-change",
+      "catalog_version": "1.0.0",
+      "catalog_hash": "sha256:194bb5564a574236b9018171f8662a9d186bd68cfa68522b51ba3b4197858dc7"
+    },
+    "coverage": {
+      "total_clause_count": 1,
+      "enforced_clause_count": 1,
+      "unenforced_clause_count": 0,
+      "unresolved_clause_count": 0,
+      "fully_represented_clause_count": 1,
+      "partially_represented_clause_count": 0,
+      "entirely_unsupported_clause_count": 0,
+      "informational_clause_count": 0,
+      "unrepresented_clause_count": 0,
+      "enforced_clause_ids": [
+        "policy-clause-e8d072f6f233a27524aabb9950e4b63d4ef64d515cc44297eb560365e5ccb192"
+      ],
+      "unenforced_clause_ids": [],
+      "acknowledged_unrepresented_clause_ids": [],
+      "total_control_count": 1,
+      "confirmed_control_count": 1,
+      "unresolved_control_count": 0,
+      "confirmed_control_ids": [
+        "candidate-control-8fccdb1b40ea50c935a3c75cd8e2ec3837e9c767202dfab72e0ffeec6499ac49"
+      ],
+      "unresolved_control_ids": []
+    },
+    "approved_by": "policy-owner",
+    "approved_at": "2026-09-03T12:03:00Z",
+    "approval_id": "policy-translation-approval-fac75ac67f4ea66ebfd36b133486bf1f8d269e4f7213859617a20185bece05a3",
+    "approval_hash": "sha256:fac75ac67f4ea66ebfd36b133486bf1f8d269e4f7213859617a20185bece05a3"
+  }
+}

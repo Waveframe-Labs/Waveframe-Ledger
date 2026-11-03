@@ -642,7 +642,7 @@ def _binding_proposal() -> dict:
     )
 
 
-def test_bounded_binding_resolution_and_review_then_v2_publication() -> None:
+def test_bounded_binding_resolution_and_review_cannot_approve_role_only_authority() -> None:
     proposal = _binding_proposal()
     inspection = inspect_policy_translation_proposal(proposal)
     assert inspection["publication_ready"] is False
@@ -692,23 +692,9 @@ def test_bounded_binding_resolution_and_review_then_v2_publication() -> None:
         confirmed_by="owner",
         confirmed_at="2026-09-03T12:01:00Z",
     )
-    approval = _approved(proposal, state)
     _schema_validate(state, "policy_translation_confirmation.v1.json")
-    _schema_validate(approval, "policy_translation_approval.v1.json")
-    result = finalize_policy_translation_authority(
-        proposal,
-        state,
-        approval,
-        committed_by="committer",
-        committed_at="2026-09-03T12:04:00Z",
-        publication_id="publication-1",
-        published_by="publisher",
-        published_at="2026-09-03T12:05:00Z",
-    )
-    assert result["compiled_authority_contract"]["authority_requirements"] == {
-        "required_roles": ["repository-maintainer"]
-    }
-    assert result["proposal_evidence_required_by_guard"] is False
+    with pytest.raises(ValueError, match="affirmative path grant"):
+        _approved(proposal, state)
 
 
 def test_partial_coverage_requires_every_exact_unenforced_acknowledgement() -> None:
@@ -952,13 +938,8 @@ def test_partial_compound_clause_preserves_residual_meaning_and_acknowledgement(
     assert state["coverage"]["acknowledged_unrepresented_clause_ids"] == [
         proposal["clauses"][0]["clause_id"]
     ]
-    approval = _approved(proposal, state)
-    with pytest.raises(ValueError, match="cannot represent enforced and residual unsupported meaning"):
-        finalize_policy_translation_authority(
-            proposal, state, approval, committed_by="committer",
-            committed_at="2026-09-03T12:04:00Z", publication_id="publication-1",
-            published_by="publisher", published_at="2026-09-03T12:05:00Z",
-        )
+    with pytest.raises(ValueError, match="affirmative path grant"):
+        _approved(proposal, state)
 
 
 def test_catalog_resolution_is_registered_immutable_and_schema_is_extensible() -> None:

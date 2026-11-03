@@ -224,9 +224,13 @@ def test_v3_publishes_two_individually_confirmed_controls_from_one_exact_clause(
     assert result["compiled_authority_contract"]["schema_version"] == "compiled_authority_contract.v2"
 
 
-def test_v3_publishes_supported_control_and_acknowledged_residual_as_partial() -> None:
+def test_historical_v3_partial_evidence_survives_but_new_deny_only_approval_is_refused() -> None:
     proposal = _partial_proposal()
-    result = _publish(proposal, _confirm_partial(proposal))
+    with pytest.raises(ValueError, match="affirmative path grant"):
+        _publish(proposal, _confirm_partial(proposal))
+    result = json.loads((ROOT / "tests/synthetic_evidence/deny_only_v2/historical-partial-v3.json").read_text(encoding="utf-8"))["finalization"]
+    validate_authority_bundle(result["authority_bundle"])
+    validate_publication_receipt(result["authority_bundle"], result["publication_receipt"])
     clause = result["policy_translation_commitment"]["clauses"][0]
 
     assert clause["customer_coverage_state"] == "Partially enforceable"
@@ -323,8 +327,7 @@ def test_v3_independent_validation_fails_closed_on_public_provenance_tampering(
     mutation: str,
 ) -> None:
     if mutation == "binding":
-        proposal = _partial_proposal()
-        result = _publish(proposal, _confirm_partial(proposal))
+        result = json.loads((ROOT / "tests/synthetic_evidence/deny_only_v2/historical-partial-v3.json").read_text(encoding="utf-8"))["finalization"]
     else:
         result = _publish(_proposal())
     bundle = copy.deepcopy(result["authority_bundle"])
