@@ -16,6 +16,7 @@ from governance_ledger import (
     create_policy_translation_run_evidence,
     finalize_policy_translation_authority_v3,
     inspect_policy_translation_customer_coverage,
+    render_policy_translation_review,
     validate_authority_bundle,
     validate_authority_bundle_v3,
     validate_policy_translation_commitment,
@@ -25,6 +26,7 @@ from governance_ledger import (
 from governance_ledger.constraint_ir import artifact_hash
 from governance_ledger.publication_provenance import canonical_sha256
 from tests.test_policy_translation import (
+    SUPPORTED_SOURCE,
     _approved,
     _base,
     _confirmed,
@@ -245,7 +247,7 @@ def test_historical_v3_partial_evidence_survives_but_new_deny_only_approval_is_r
     assert result["policy_translation_commitment"]["coverage"]["acknowledged_residual_count"] == 1
 
 
-def test_v3_publishes_entirely_unsupported_and_informational_clauses_truthfully() -> None:
+def test_v3_review_preserves_unsupported_and_informational_clauses_but_blocks_approval() -> None:
     proposal = _direct_unsupported_informational_proposal()
     state = None
     for index, clause in enumerate(proposal["clauses"]):
@@ -263,18 +265,22 @@ def test_v3_publishes_entirely_unsupported_and_informational_clauses_truthfully(
             confirmed_by="owner", confirmed_at=f"2026-09-03T12:02:0{index}Z",
         )
     assert state is not None
-    commitment = _publish(proposal, state)["policy_translation_commitment"]
-    assert [item["customer_coverage_state"] for item in commitment["clauses"]] == [
-        "Ready to enforce", "Not currently enforceable", "Informational",
+    coverage = inspect_policy_translation_customer_coverage(proposal, state)
+    assert [item["customer_coverage_state"] for item in coverage["clauses"]] == [
+        "Not currently enforceable", "Not currently enforceable", "Not currently enforceable",
     ]
-    assert commitment["clauses"][1]["customer_explanation"] == (
+    assert [item["blocks_approval"] for item in coverage["clauses"]] == [False, True, True]
+    assert [item["clause_index"] for item in coverage["approval_blockers"]] == [2, 3]
+    review = render_policy_translation_review(proposal, state)
+    assert review["clauses"][1]["residual_explanation"] == (
         "Waveframe cannot enforce this part yet because pull-request approvals are not currently supported."
     )
-    assert commitment["clauses"][2]["customer_explanation"] == (
+    assert review["clauses"][2]["residual_explanation"] == (
         "This clause is informational and does not create an enforcement rule."
     )
-    assert commitment["coverage"]["unenforced_clause_count"] == 1
-    assert commitment["coverage"]["informational_clause_count"] == 1
+    assert review["coverage"]["unrepresented_clause_count"] == 1
+    with pytest.raises(ValueError, match="source clause 2 is outside the supported repository grammar"):
+        _publish(proposal, state)
 
 
 def test_missing_residual_acknowledgment_and_control_confirmation_fail_before_publication() -> None:
@@ -311,7 +317,7 @@ def test_duplicate_and_contradictory_controls_never_reach_v3_publication(contrad
 
 
 def test_v3_rejects_invalid_publication_chronology() -> None:
-    proposal = _proposal()
+    proposal = _proposal(SUPPORTED_SOURCE)
     state = _confirmed(proposal)
     approval = _approved(proposal, state)
     with pytest.raises(ValueError, match="approved_at must be no later"):
@@ -329,7 +335,7 @@ def test_v3_independent_validation_fails_closed_on_public_provenance_tampering(
     if mutation == "binding":
         result = json.loads((ROOT / "tests/synthetic_evidence/deny_only_v2/historical-partial-v3.json").read_text(encoding="utf-8"))["finalization"]
     else:
-        result = _publish(_proposal())
+        result = _publish(_proposal(SUPPORTED_SOURCE))
     bundle = copy.deepcopy(result["authority_bundle"])
     commitment = bundle["policy_translation_commitment"]
 
@@ -356,7 +362,7 @@ def test_v3_independent_validation_fails_closed_on_public_provenance_tampering(
 
 
 def test_v3_rejects_post_approval_control_confirmation_even_if_outer_hash_is_restamped() -> None:
-    result = _publish(_proposal())
+    result = _publish(_proposal(SUPPORTED_SOURCE))
     bundle = copy.deepcopy(result["authority_bundle"])
     control = bundle["policy_translation_commitment"]["clauses"][0]["controls"][0]
     control["human_confirmation"]["confirmed_at"] = "2026-09-03T12:03:01Z"
@@ -369,7 +375,7 @@ def test_v3_rejects_post_approval_control_confirmation_even_if_outer_hash_is_res
 
 
 def test_private_provider_evidence_can_be_deleted_without_affecting_publication() -> None:
-    proposal = _proposal()
+    proposal = _proposal(SUPPORTED_SOURCE)
     run = proposal["translation_runs"][0]
     evidence = create_policy_translation_run_evidence(
         run,
@@ -386,8 +392,8 @@ def test_private_provider_evidence_can_be_deleted_without_affecting_publication(
 
 
 def test_one_byte_source_change_propagates_through_every_public_identity() -> None:
-    first = _publish(_proposal(b"Agents may modify README.md. Policy overview.\n"))
-    second = _publish(_proposal(b"Agents may modify README.md. Policy overview!\n"))
+    first = _publish(_proposal(b"Agents may modify README.md."))
+    second = _publish(_proposal(b"Agents may modify README.md.\n"))
     for key in (
         "source_snapshot_hash", "policy_translation_commitment_hash",
         "semantic_commit_hash", "semantic_commit_bundle_hash", "compiled_contract_hash",
@@ -398,7 +404,7 @@ def test_one_byte_source_change_propagates_through_every_public_identity() -> No
 
 
 def test_v3_schemas_are_strict_and_dispatch_rejects_cross_version_masquerading() -> None:
-    result = _publish(_proposal())
+    result = _publish(_proposal(SUPPORTED_SOURCE))
     _schema_validate(result["policy_translation_commitment"], "policy_translation_commitment.v1.json")
     _schema_validate(result["authority_bundle"], "authority_bundle.v3.json")
     _schema_validate(result["publication_receipt"], "publication_receipt.v3.json")
@@ -417,7 +423,7 @@ def test_v3_schemas_are_strict_and_dispatch_rejects_cross_version_masquerading()
 
 
 def test_customer_coverage_and_explanations_exclude_implementation_vocabulary() -> None:
-    proposal = _proposal()
+    proposal = _proposal(SUPPORTED_SOURCE)
     pending = inspect_policy_translation_customer_coverage(proposal)
     assert pending["clauses"][0]["customer_coverage_state"] == "Needs an answer"
     result = _publish(proposal)

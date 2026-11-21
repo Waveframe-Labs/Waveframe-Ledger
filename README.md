@@ -226,6 +226,13 @@ See [Deterministic Domain-Pack Policy Compiler](docs/DOMAIN_PACK_COMPILER.md) fo
 
 ## Untrusted policy translation proposals
 
+The proposed mandatory-coverage correction restricts new catalog-1 issuance to the
+installed repository policy language. Read the [accepted sentence forms and blocked
+cases](docs/CATALOG_1_AUTHORING.md) before authoring. This source candidate is under
+review and is not included in the published Ledger 0.9.1 package. Unrecognized prose,
+including headings and context, blocks approval with all offending text and byte
+ranges displayed. That restriction remains a product decision before release.
+
 Ledger provides a model-agnostic `policy_translation_proposal.v1` boundary for coding-agent
 engineering policy. An external model or deterministic form may propose; a human confirms;
 Ledger validates, renders, and compiles; Guard enforces published authority without a
@@ -249,7 +256,10 @@ The unchanged v2 publication path supports multiple controls only when the deter
 source grammar reconstructs all of them. It cannot encode multiple human-mapped controls,
 or both enforced and residual unsupported meaning, inside one otherwise pending source
 statement. The additive `policy_translation_commitment.v1`, `authority_bundle.v3`, and
-`publication_receipt.v3` path publishes those cases without changing v2. Every control
+`publication_receipt.v3` format can preserve those cases without changing v2. The
+current source candidate blocks new catalog-1 issuance when any source clause remains
+outside the installed grammar. Historical artifact verification preserves recorded
+meaning and does not grant current approval or runtime activation. Every control
 has its own confirmation, every residual has an explicit acknowledgment, and the
 runtime payload remains `compiled_authority_contract.v2`.
 
