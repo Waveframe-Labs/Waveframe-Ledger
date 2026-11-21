@@ -37,6 +37,9 @@ from governance_ledger.policy_translation import (
     _direct_statement_semantics,
     _render_control,
     _render_residual,
+    _repository_translation_blocker,
+    _repository_translation_blockers,
+    _translation_source_draft,
     _utc,
     _utc_datetime,
     _validate_approval,
@@ -99,28 +102,41 @@ def inspect_policy_translation_customer_coverage(
     decisions = {item["clause_id"]: item for item in state["clause_coverage_decisions"]}
     confirmed = {item["candidate_control_id"] for item in state["control_confirmations"]}
     resolved = {item["binding_id"] for item in state["binding_resolutions"]}
+    catalog_version = proposal["capability_catalog"]["catalog_version"]
+    blockers = _repository_translation_blockers(_translation_source_draft(proposal))
+    blocked_indexes = {item["clause_index"] for item in blockers}
+    source_blocked = bool(blockers)
     clauses = []
-    for clause in proposal["clauses"]:
+    for index, clause in enumerate(proposal["clauses"], start=1):
         customer_state = _proposal_customer_state(
             clause,
             decision=decisions.get(clause["clause_id"]),
             confirmed_controls=confirmed,
             resolved_bindings=resolved,
         )
-        if proposal["capability_catalog"]["catalog_version"] == "2.0.0" and customer_state in {READY_TO_ENFORCE, PARTIALLY_ENFORCEABLE}:
+        if (source_blocked or catalog_version == "2.0.0") and customer_state in {
+            READY_TO_ENFORCE, PARTIALLY_ENFORCEABLE
+        }:
             customer_state = NOT_CURRENTLY_ENFORCEABLE
-        if proposal["capability_catalog"]["catalog_version"] == "3.0.0":
+        if index in blocked_indexes:
+            customer_state = NOT_CURRENTLY_ENFORCEABLE
+        if catalog_version == "3.0.0":
             customer_state = {READY_TO_ENFORCE: PREPARED_FOR_GUARD,
                               PARTIALLY_ENFORCEABLE: PARTIALLY_PREPARED_FOR_GUARD}.get(customer_state, customer_state)
         clauses.append(
             {
                 "clause_id": clause["clause_id"],
                 "customer_coverage_state": customer_state,
+                "blocks_approval": index in blocked_indexes,
             }
         )
     return {
         "view_type": "policy_translation_customer_coverage",
         "clauses": clauses,
+        "approval_blockers": [
+            {**item, "clause_id": proposal["clauses"][item["clause_index"] - 1]["clause_id"]}
+            for item in blockers
+        ],
         "coverage": _customer_coverage_totals(clauses, control_count=sum(
             len(item["candidate_controls"]) for item in proposal["clauses"]
         ), residual_count=sum(
@@ -238,13 +254,21 @@ def validate_policy_translation_commitment(
     commitment: dict[str, Any],
     *,
     approved_at: str,
+    require_supported_source: bool = False,
 ) -> dict[str, Any]:
-    """Validate a standalone public commitment against its exact source and approval time."""
+    """Verify historical evidence; optionally also require current source eligibility.
+
+    A successful result establishes artifact consistency, not permission to issue
+    or activate authority. New issuance always checks eligibility independently.
+    """
+    if not isinstance(require_supported_source, bool):
+        raise ValueError("require_supported_source must be a boolean")
     constraints = _validate_policy_translation_commitment(
         source_policy,
         authority,
         commitment,
         approval_time=approved_at,
+        require_supported_source=require_supported_source,
     )
     return {
         "artifact_schema_version": POLICY_TRANSLATION_COMMITMENT_V1,
@@ -487,6 +511,8 @@ def validate_authority_bundle_v3(bundle: dict[str, Any]) -> dict[str, Any]:
         authority_core,
         commitment,
         approval_time=bundle["approval_record"]["approved_at"],
+        # Preserve verification of previously issued bundle and receipt evidence.
+        require_supported_source=False,
     )
     if not constraints:
         raise ValueError("authority_bundle.v3 requires at least one confirmed control")
@@ -641,6 +667,7 @@ def _validate_policy_translation_commitment(
     commitment: dict[str, Any],
     *,
     approval_time: str,
+    require_supported_source: bool = True,
 ) -> list[dict[str, Any]]:
     _exact(
         source,
@@ -931,6 +958,10 @@ def _validate_policy_translation_commitment(
     )
     if commitment["coverage"] != expected_coverage or expected_coverage["waiting_clause_count"]:
         raise ValueError("published coverage totals are invalid or unresolved")
+    if require_supported_source:
+        blocker = _repository_translation_blocker(draft)
+        if blocker is not None:
+            raise ValueError(blocker)
     return constraints
 
 

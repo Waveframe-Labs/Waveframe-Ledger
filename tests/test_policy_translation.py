@@ -37,6 +37,8 @@ from governance_ledger.publication_provenance import bytes_sha256, canonical_sha
 
 ROOT = Path(__file__).parents[1]
 NOW = "2026-09-03T12:00:00Z"
+SUPPORTED_SOURCE = b"Agents may modify README.md. Agents must not modify files under deployment/.\n"
+INFORMATIONAL_SOURCE = b"Agents may modify README.md. Policy overview.\n"
 FACTS = [
     "actor.subject_kind",
     "proposal.action",
@@ -113,7 +115,7 @@ def _path_control(
 
 
 def _proposal(
-    source: bytes = b"Agents may modify README.md. Policy overview.\n",
+    source: bytes = INFORMATIONAL_SOURCE,
 ) -> dict:
     draft = _base(source)
     clauses = []
@@ -312,7 +314,7 @@ def test_translation_run_tampering_is_detected_even_if_proposal_is_rehashed() ->
 
 def test_ordered_multi_run_omission_reordering_duplication_and_substitution_fail_closed() -> None:
     proposal = _proposal()
-    draft = _base(b"Agents may modify README.md. Policy overview.\n")
+    draft = _base(INFORMATIONAL_SOURCE)
     second = _run(draft, sequence=1, previous=proposal["translation_runs"][0]["run_hash"], response=b"second", created_at="2026-09-03T12:00:01Z", completed_at="2026-09-03T12:00:02Z")
     third = _run(draft, sequence=2, previous=second["run_hash"], response=b"third", created_at="2026-09-03T12:00:02Z", completed_at="2026-09-03T12:00:03Z")
     proposal["translation_runs"].extend([second, third])
@@ -364,13 +366,13 @@ def test_run_cross_source_revision_and_catalog_binding(field: str) -> None:
 
 @pytest.mark.parametrize("provider_class", ["hosted_model", "local_model"])
 def test_model_runs_require_model_or_deployment_identifier(provider_class: str) -> None:
-    draft = _base(b"Agents may modify README.md. Policy overview.\n")
+    draft = _base(INFORMATIONAL_SOURCE)
     with pytest.raises(ValueError, match="model/deployment identifier"):
         _run(draft, provider_class=provider_class, provider_identifier=None)
 
 
 def test_raw_run_evidence_is_optional_private_and_independently_deletable() -> None:
-    proposal = _proposal()
+    proposal = _proposal(SUPPORTED_SOURCE)
     run = proposal["translation_runs"][0]
     raw = create_policy_translation_run_evidence(
         run,
@@ -393,7 +395,7 @@ def test_raw_run_evidence_is_optional_private_and_independently_deletable() -> N
 
 
 def test_provider_explanation_can_contradict_but_never_controls_review_meaning() -> None:
-    source = b"Agents may modify README.md. Policy overview.\n"
+    source = SUPPORTED_SOURCE
     draft = _base(source)
     explanation = "DENY everything and require five reviewers."
     proposal = _proposal(source)
@@ -772,7 +774,7 @@ def test_cross_source_and_cross_authority_substitution_fail_closed() -> None:
 
 
 def test_changed_human_confirmation_or_late_confirmation_invalidates_approval() -> None:
-    proposal = _proposal()
+    proposal = _proposal(SUPPORTED_SOURCE)
     confirmation = _confirmed(proposal)
     approval = _approved(proposal, confirmation)
     tampered = copy.deepcopy(confirmation)
@@ -965,11 +967,11 @@ def test_catalog_resolution_is_registered_immutable_and_schema_is_extensible() -
 
 
 def test_run_chronology_rejects_reversed_overlapping_future_and_post_approval_runs() -> None:
-    draft = _base(b"Agents may modify README.md. Policy overview.\n")
+    draft = _base(SUPPORTED_SOURCE)
     with pytest.raises(ValueError, match="completion precedes creation"):
         _run(draft, created_at="2026-09-03T12:00:02Z", completed_at="2026-09-03T12:00:01Z")
 
-    proposal = _proposal()
+    proposal = _proposal(SUPPORTED_SOURCE)
     overlapping = _run(
         draft, sequence=1, previous=proposal["translation_runs"][0]["run_hash"],
         created_at="2026-09-03T12:00:00Z", completed_at="2026-09-03T12:00:02Z",
@@ -979,7 +981,7 @@ def test_run_chronology_rejects_reversed_overlapping_future_and_post_approval_ru
     with pytest.raises(ValueError, match="cannot begin before"):
         validate_policy_translation_proposal(proposal)
 
-    proposal = _proposal()
+    proposal = _proposal(SUPPORTED_SOURCE)
     confirmation = _confirmed(proposal)
     with pytest.raises(ValueError, match="complete no later"):
         approve_policy_translation_proposal(
@@ -1013,8 +1015,8 @@ def test_customer_review_explanations_exclude_implementation_identifiers() -> No
 
 
 def test_one_byte_source_mutation_changes_every_downstream_normative_identity() -> None:
-    first_proposal = _proposal(b"Agents may modify README.md. Policy overview.\n")
-    second_proposal = _proposal(b"Agents may modify READNE.md. Policy overview.\n")
+    first_proposal = _proposal(SUPPORTED_SOURCE)
+    second_proposal = _proposal(SUPPORTED_SOURCE.replace(b"README.md", b"READNE.md"))
     first_confirmation = _confirmed(first_proposal)
     second_confirmation = _confirmed(second_proposal)
     first_approval = _approved(first_proposal, first_confirmation)
@@ -1039,7 +1041,7 @@ def test_one_byte_source_mutation_changes_every_downstream_normative_identity() 
 
 
 def test_v2_publication_independently_validates_without_proposal_evidence() -> None:
-    result = _final(_proposal())
+    result = _final(_proposal(SUPPORTED_SOURCE))
     bundle = result["authority_bundle"]
     receipt = result["publication_receipt"]
     assert "translation_runs" not in json.dumps(bundle)
@@ -1047,8 +1049,8 @@ def test_v2_publication_independently_validates_without_proposal_evidence() -> N
     assert "policy_translation_proposal" not in json.dumps(bundle)
     assert validate_authority_bundle(bundle)["provenance_complete"] is True
     assert validate_publication_receipt(bundle, receipt)["provenance_complete"] is True
-    assert result["policy_translation_coverage"]["enforced_clause_count"] == 1
-    assert result["policy_translation_coverage"]["unenforced_clause_count"] == 1
+    assert result["policy_translation_coverage"]["enforced_clause_count"] == 2
+    assert result["policy_translation_coverage"]["unenforced_clause_count"] == 0
 
 
 def test_translation_boundary_is_network_filesystem_guard_and_credentials_free(
@@ -1090,7 +1092,7 @@ def test_guard_0170_cold_verification_binds_v2_publication_to_exact_source(
     from waveframe_guard.authority.adapters import LocalRegistryResolver
 
     assert version("waveframe-guard") == "0.19.1"
-    result = _final(_proposal())
+    result = _final(_proposal(SUPPORTED_SOURCE))
     bundle = result["authority_bundle"]
     receipt = result["publication_receipt"]
     contract = result["compiled_authority_contract"]

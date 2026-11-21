@@ -711,17 +711,24 @@ def inspect_policy_translation_proposal(
         for item in proposal["clauses"]
         if item["clause_id"] not in decisions
     ]
+    source_blockers = _repository_translation_blockers(_translation_source_draft(proposal))
     return {
         "view_type": "policy_translation_inspection",
         "proposal_validation": validation,
         "coverage": copy.deepcopy(state["coverage"]),
         "unresolved_bindings": unresolved_bindings,
         "unresolved_clauses": unresolved_clauses,
+        "source_coverage_blockers": source_blockers,
         "publication_ready": state["coverage"]["unresolved_clause_count"] == 0
         and state["coverage"]["unresolved_control_count"] == 0
         and state["coverage"]["confirmed_control_count"] > 0
-        and (proposal["capability_catalog"]["catalog_version"] != "1.0.0"
-             or bool(_affirmative_path_controls(proposal, state))),
+        and (
+            proposal["capability_catalog"]["catalog_version"] != _CATALOG_VERSION
+            or (
+                bool(_affirmative_path_controls(proposal, state))
+                and not source_blockers
+            )
+        ),
     }
 
 
@@ -1024,8 +1031,6 @@ def approve_policy_translation_proposal(
         raise ValueError("publication approval requires at least one confirmed control")
     if coverage["unrepresented_clause_count"] != len(coverage["acknowledged_unrepresented_clause_ids"]):
         raise ValueError("partial coverage requires acknowledgement of every unrepresented clause or residual")
-    if proposal["capability_catalog"]["catalog_version"] == "1.0.0":
-        _require_new_repository_path_grant(_affirmative_path_controls(proposal, state))
     approval_time = _utc_datetime(approved_at, "approved_at")
     if any(
         _utc_datetime(run["completed_at"], "translation run completed_at") > approval_time
@@ -1793,6 +1798,12 @@ def _validate_approval(proposal: dict[str, Any], state: dict[str, Any], approval
     for field, value in expected.items():
         if approval[field] != value:
             raise ValueError(f"policy translation approval {field} is inconsistent")
+    # Both approval creation and new issuance with an existing approval go through here.
+    if proposal["capability_catalog"]["catalog_version"] == _CATALOG_VERSION:
+        _require_new_repository_path_grant(_affirmative_path_controls(proposal, state))
+        blocker = _repository_translation_blocker(_translation_source_draft(proposal))
+        if blocker is not None:
+            raise ValueError(blocker)
 
 
 def _control_selections(control: dict[str, Any], resolutions: dict[str, str]) -> tuple[str, dict[str, Any]]:
@@ -1839,12 +1850,11 @@ def _direct_constraint_semantics(constraint: dict[str, Any], *, action_aware: bo
     }
 
 
-def _direct_clause_ids(proposal: dict[str, Any]) -> set[str]:
+def _translation_source_draft(proposal: dict[str, Any]) -> dict[str, Any]:
     source = proposal["source_policy"]
     authority = proposal["authority"]
-    exact = _decode_base64(source["source_bytes_base64"], "source bytes")
-    draft = interpret_policy_with_domain_pack(
-        exact,
+    return interpret_policy_with_domain_pack(
+        _decode_base64(source["source_bytes_base64"], "source bytes"),
         domain_pack_id=REPOSITORY_CHANGES_PACK_ID,
         domain_pack_version=proposal["capability_catalog"]["catalog_version"],
         source_policy_id=source["source_policy_id"],
@@ -1852,6 +1862,44 @@ def _direct_clause_ids(proposal: dict[str, Any]) -> set[str]:
         authority_id=authority["authority_id"],
         authority_version=authority["authority_version"],
     )
+
+
+def _repository_translation_blockers(draft: dict[str, Any]) -> list[dict[str, Any]]:
+    """List exact source spans outside the installed catalog-1 authoring language."""
+    if draft["domain_pack"]["domain_pack_version"] != _CATALOG_VERSION:
+        return []
+    blockers = []
+    for index, statement in enumerate(draft["source_statements"], start=1):
+        if statement["classification"] != "direct":
+            blockers.append({
+                "clause_index": index,
+                "start_byte": statement["start_byte"],
+                "end_byte": statement["end_byte"],
+                "source_text": _decode_base64(
+                    statement["statement_bytes_base64"], "source statement bytes"
+                ).decode("utf-8"),
+            })
+    return blockers
+
+
+def _repository_translation_blocker(draft: dict[str, Any]) -> str | None:
+    blockers = _repository_translation_blockers(draft)
+    if not blockers:
+        return None
+    details = "\n".join(
+        f"source clause {item['clause_index']} is outside the supported repository grammar; "
+        f"UTF-8 bytes [{item['start_byte']}, {item['end_byte']}): {item['source_text']!r}"
+        for item in blockers
+    )
+    return (
+        "Ledger cannot verify mandatory coverage.\n" + details
+        + "\nSee docs/CATALOG_1_AUTHORING.md for accepted forms and review options. "
+        "Keep the complete original source and its conditions."
+    )
+
+
+def _direct_clause_ids(proposal: dict[str, Any]) -> set[str]:
+    draft = _translation_source_draft(proposal)
     return {
         clause["clause_id"]
         for clause, statement in zip(proposal["clauses"], draft["source_statements"])

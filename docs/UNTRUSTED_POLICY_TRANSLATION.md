@@ -5,12 +5,13 @@ policy. A model may propose a bounded interpretation, but it never decides what 
 authorized:
 
 1. A model or deterministic form proposes.
-2. A human supplies organizational bindings, confirms executable controls, and
-   acknowledges every unenforced clause.
-3. Ledger validates, deterministically renders the review, reconstructs the result from
-   the exact embedded source bytes, and compiles the confirmed controls.
-4. Ledger publishes the provider-free commitment through the additive v3 authority
-   path, while retaining the released v2 compiled-contract format.
+2. A human supplies organizational bindings, confirms proposed controls, and
+   reviews unenforced meaning.
+3. Ledger reconstructs the policy from the exact embedded source. Catalog-1
+   repository translation requires complete recognition by the installed grammar
+   before approval or new authority issuance.
+4. Ledger publishes the approved provider-free commitment through the additive v3
+   authority path, using the released v2 compiled-contract format.
 5. Guard 0.17.0 verifies the native v3 publication and enforces the compiled authority
    without a model or private translation evidence.
 
@@ -80,6 +81,8 @@ The public APIs keep trust transitions explicit:
   hashes, source/authority identity, and capability confinement. It returns
   `semantic_validity: not_established`.
 - `inspect_policy_translation_proposal(...)` reports exact coverage and unresolved work.
+  Its transient `source_coverage_blockers` lists all source clauses outside catalog 1's
+  authoring language, including exact text and UTF-8 byte ranges.
 - `apply_policy_translation_binding(...)` accepts one human answer of a declared bounded
   type.
 - `apply_policy_translation_control_confirmation(...)` confirms one candidate control;
@@ -91,18 +94,23 @@ The public APIs keep trust transitions explicit:
 - `validate_policy_translation_review(...)` validates the strict
   `policy_translation_review.v1` artifact that approval hash-binds.
 - `approve_policy_translation_proposal(...)` binds the completed confirmation,
-  deterministic review, catalog, source, authority, and enforced/unenforced counts.
+  deterministic review, catalog, source, authority, and coverage counts. Catalog-1
+  approval requires an affirmative path grant and complete source recognition.
 - `finalize_policy_translation_authority(...)` replays everything from source bytes and
   lowers only cases truthfully representable by the released v2 publication format.
 - `inspect_policy_translation_customer_coverage(...)` renders the six customer states:
   Ready to enforce, Needs an answer, Needs a connection, Partially enforceable, Not
-  currently enforceable, and Informational.
+  currently enforceable, and Informational. Its transient `approval_blockers` and
+  per-row `blocks_approval` make every source-coverage blocker explicit, even when the
+  recorded clause disposition was informational.
 - `build_policy_translation_commitment(...)` creates the provider-free normative
   commitment containing confirmed controls and acknowledged residuals.
 - `validate_policy_translation_commitment(...)` reconstructs a standalone commitment
-  against its exact source and approval time.
-- `finalize_policy_translation_authority_v3(...)` emits the native multi-control and
-  partial-coverage publication.
+  against its exact source and approval time for historical verification. The optional
+  `require_supported_source=True` also checks current source-language eligibility.
+  A valid historical artifact is not an approval or activation permission.
+- `finalize_policy_translation_authority_v3(...)` emits the approved multi-control
+  publication.
 - `validate_authority_bundle_v3(...)` and `validate_publication_receipt_v3(...)`
   independently reconstruct the additive publication chain. The version-dispatched
   public validators reject cross-version bundle/receipt pairs.
@@ -169,7 +177,7 @@ runtime-fact, and enforcement behavior remains unchanged.
 Hosted Cloud authoring and native v3 serving are not yet available. Local publication,
 local registry resolution, and Guard enforcement do not depend on hosted Cloud.
 
-## Coverage and partial publication
+## Source coverage and repository approval
 
 Every clause has an ordered `candidate_controls` array containing zero or more controls.
 Each control carries its own exact source-literal span and hash. Duplicate or
@@ -184,39 +192,33 @@ coverage decision:
 Proposal validation reconstructs deterministic domain interpretation. A clause already
 recognized as direct must contain every corresponding control in deterministic order
 and exact executable semantics; neither provider output nor a human decision may omit
-one or downgrade the clause. For arbitrary English outside that deterministic grammar,
-Ledger cannot mathematically prove that an untrusted translator extracted every
-meaning. Ledger proves source preservation, capability confinement, and the exact
-mapping the human reviewed; semantic completeness is explicitly human-confirmed.
+one or downgrade the clause. Structural validation of a proposal preserves the
+source, coverage declarations, and exact mappings for human review.
 
-A clause is not fully represented merely because one meaning was mapped. Partial
-publication requires exact residual spans and the approver's explicit acknowledgement.
-Publication fails if a binding, control confirmation, or clause decision is unresolved,
-if there is no confirmed enforceable control, or if residual/unsupported meaning lacks
-acknowledgement. Coverage reports exact clause and control totals and identities.
-Because a partially represented clause contains both enforced and residual unenforced
-meaning, it truthfully appears in both the enforced-clause and unenforced-clause sets;
-the dedicated partial count removes any ambiguity.
+For new `waveframe.coding-agent.repository-change@1.0.0` translations, every source
+clause must match the installed grammar and have its exact controls confirmed before
+approval. A path grant can depend on text elsewhere in the source. An unrecognized
+clause therefore blocks the whole translation even if the proposal or reviewer labels
+it fully represented or informational. An acknowledged residual remains reviewable
+with its exact span and does not satisfy the issuance gate. The refusal lists every
+clause outside the grammar with exact text and UTF-8 byte ranges. The transient customer
+view marks these clauses as approval blockers instead of merely informational.
+This candidate retains a conservative authoring limit for free-form text and mixed
+documents, including prose offered as context. See the [catalog-1 authoring
+contract](CATALOG_1_AUTHORING.md) for accepted sentences, gaps and review options.
+The prose/import behavior still requires an explicit product decision before release.
 
-The unchanged v2 path can publish a deterministic source statement that produces
-multiple native constraints (for example, `Agents may modify README.md and
-CHANGELOG.md.`). Released `policy_mapping_decision.v1` can encode only one human-mapped
-control for an otherwise pending statement. Consequently, finalization fails closed if
-an arbitrary pending clause contains multiple human-mapped controls; representing that
-approval meaning requires a separately reviewed normative publication extension, not a
-silent change to v2.
+For example, `Agents may modify README.md and CHANGELOG.md.` can issue after individual
+confirmation of both controls. Adding a Tech Lead approval condition requires support
+for that condition before the policy can issue. A path-only mapping cannot substitute
+for the conditional permission.
 
-The same v2 limitation applies to a pending clause that mixes an enforced mapping with
-residual unsupported meaning: released `policy_mapping_decision.v1` classifies the whole
-statement with one disposition. Ledger can validate, render, and approve the explicit
-partial boundary, but v2 finalization fails closed because v2 cannot truthfully preserve
-that mixed normative meaning. `policy_translation_commitment.v1`,
-`authority_bundle.v3`, and `publication_receipt.v3` provide the additive path. They
-publish each independently confirmed control plus every exact acknowledged residual;
-they never relabel the whole clause enforced.
-
-Released `authority_bundle.v2`, `publication_receipt.v2`,
-`compiled_authority_contract.v2`, all v1 schemas, and the v0.6 compatibility path are
-unchanged. No v3 runtime artifact is introduced merely to retain model output.
-Native v3 is selected only by the new finalizer; old artifacts are never silently
-upgraded. No provider evidence is embedded in v3.
+The same rule applies when an existing approval is supplied for a new commitment or
+v2/v3 finalization. These new-issuance APIs have no eligibility bypass. Standalone
+commitment verification and v2/v3 bundle/receipt verification preserve historical
+evidence by default, including old false-full declarations. They establish artifact
+consistency, not present authoring eligibility or safe activation. The standalone
+validator's `require_supported_source=True` opts into the additional source check.
+An old validation result cannot satisfy today's new-issuance gates.
+The rule uses the trusted catalog and exact source bytes already bound by the existing
+review and commitment formats.

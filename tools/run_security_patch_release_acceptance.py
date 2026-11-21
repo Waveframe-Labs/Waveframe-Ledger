@@ -49,7 +49,7 @@ LEDGER_SECURITY = {
     "tests/test_policy_translation_publication_v3.py": [
         "test_v3_publishes_two_individually_confirmed_controls_from_one_exact_clause",
         "test_historical_v3_partial_evidence_survives_but_new_deny_only_approval_is_refused",
-        "test_v3_publishes_entirely_unsupported_and_informational_clauses_truthfully",
+        "test_v3_review_preserves_unsupported_and_informational_clauses_but_blocks_approval",
         "test_missing_residual_acknowledgment_and_control_confirmation_fail_before_publication",
         "test_duplicate_and_contradictory_controls_never_reach_v3_publication",
         "test_v3_rejects_invalid_publication_chronology",
