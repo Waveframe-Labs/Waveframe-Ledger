@@ -1,4 +1,17 @@
-# Waveframe Ledger v0.9.1 Release Notes (unreleased security patch candidate)
+# Waveframe Ledger v0.9.2 Release Notes
+
+Ledger 0.9.2 packages the catalog-1 source-coverage correction merged in
+[PR #29](https://github.com/Waveframe-Labs/Waveframe-Ledger/pull/29).
+New approval and issuance require every clause to match the supported repository
+policy language. Review keeps unsupported text and reports its exact UTF-8 spans.
+See [Catalog 1 authoring](docs/CATALOG_1_AUTHORING.md) for the supported forms.
+
+Historical authorities remain verifiable through their original artifact bindings.
+Pass `require_supported_source=True` to additionally check the current source
+language on a standalone commitment. New issuance always applies the current
+gate. The repository-policy integration checks use Compiler 0.5.0 and Guard 0.19.1.
+
+# Waveframe Ledger v0.9.1 Release Notes (retained security patch notes)
 
 New pack-1 repository approval/finalization requires a confirmed, enforceable
 affirmative path allow. Candidate controls, deny-only policies and role-only

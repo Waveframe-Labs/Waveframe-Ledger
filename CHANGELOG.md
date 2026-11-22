@@ -1,6 +1,17 @@
 # Changelog
 
-## [0.9.1] - Unreleased security patch candidate
+## [0.9.2] - Release candidate
+
+- Gate new catalog-1 approval and issuance on complete coverage by the installed
+  repository policy language. Reviews expose unsupported clauses and their exact
+  source spans. See [PR #29](https://github.com/Waveframe-Labs/Waveframe-Ledger/pull/29).
+- Preserve historical v3 artifact verification. Standalone verification can
+  additionally check current source eligibility with `require_supported_source=True`.
+
+## [0.9.1] - 2026-11-03
+
+Ledger 0.9.1 and Guard 0.19.1 were published on PyPI on November 3, 2026. The
+following notes retain the security acceptance and publication plan for that pair.
 
 The 0.9.1 Ledger / 0.19.1 Guard security patch candidates require an affirmative
 path grant. Guard refuses live `compiled_authority_contract.v2` authorization
