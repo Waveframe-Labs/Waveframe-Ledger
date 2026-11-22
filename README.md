@@ -116,12 +116,13 @@ Ledger relies on installed package contracts for integration behavior:
 
 - `cricore-contract-compiler>=0.5.0,<0.6.0`; Compiler 0.5.0 is published.
 - Optional `[guard]` requires `waveframe-guard>=0.19.0,<0.20.0`.
-- Published baseline: Ledger 0.9.0 / Guard 0.19.0. The unreleased security patch
-  pair is Ledger 0.9.1 / Guard 0.19.1; package acceptance is pending review.
-  See [security patch acceptance](docs/SECURITY_PATCH_RELEASE_ACCEPTANCE.md).
+- Ledger 0.9.2 packages the catalog-1 source coverage correction from
+  [PR #29](https://github.com/Waveframe-Labs/Waveframe-Ledger/pull/29).
+- Ledger 0.9.1 and Guard 0.19.1 shipped the affirmative path grant requirement.
+  See [the 0.9.1 security patch acceptance](docs/SECURITY_PATCH_RELEASE_ACCEPTANCE.md).
 
-The 0.9.1 Ledger / 0.19.1 Guard security patch candidates require an affirmative
-path grant. Guard refuses live `compiled_authority_contract.v2` authorization
+New catalog-1 repository authority requires an affirmative path grant.
+Guard 0.19.1 refuses live `compiled_authority_contract.v2` authorization
 when `target_requirements.allow` is empty, including deny-only and role-only
 authority, with an actionable diagnostic. Deny precedence and explicit grants
 remain enforced. Ledger gates new pack-1 repository approval/finalization on
@@ -134,26 +135,16 @@ v3 evaluation semantics are unchanged. Replace missing grants with a new source
 and authority revision and fresh human review/acceptance. Never reuse an old
 approval for changed grants.
 
-Previously published Ledger 0.9.0 and Guard 0.19.0 remain affected in the reproduced
-scope. Dependency ranges still admit older packages. After separate publication
-approval, explicitly upgrade both packages:
+For the repository-policy workflow, install the exact pair once Ledger 0.9.2
+is available on PyPI:
 
 ```text
-python -m pip install --upgrade governance-ledger==0.9.1 waveframe-guard==0.19.1
+python -m pip install --upgrade governance-ledger==0.9.2 waveframe-guard==0.19.1
 python -m pip check
 ```
 
-A Ledger-only upgrade does not patch an older Guard; a Guard-only upgrade does
-not supply Ledger's new-authoring gate. An already satisfied optional extra does
-not establish that both patches are installed. No Cloud activation, production
-consumer upgrade, or automatic repair of existing approvals is claimed.
-
-These are unreleased candidates. Historical action-policy certification remains
-unchanged; separate distribution acceptance must validate these exact artifacts.
-Publishing requires separate owner approval and must use only the accepted
-files, with SHA256 equality checked on PyPI for Ledger before Guard upload.
-Final tags must bind the exact accepted commits (Ledger annotated, Guard
-lightweight). No tags or publication are part of this preparation.
+Dependency ranges still admit older packages. Pin both Ledger and Guard when
+reproducing the repository-policy workflow.
 
 Catalog 3.0.0 supports explicit create/modify authoring and fresh approval/public
 verification without development flags. The default remains catalog 1.0.0;
@@ -161,10 +152,7 @@ development catalog 2.0.0 remains opt-in. See the [release catalog API, fixtures
 Guard/Cloud handoff](docs/RELEASE_CATALOG_3.md). Publication does not establish runtime
 activation or hosted availability.
 
-The following installation and compatibility evidence describes the **historical
-released 0.8.0**, not release compatibility of this candidate.
-The base install does not install Waveframe Guard. Install the release-tested runtime
-integration explicitly:
+For the historical 0.8.0 integration, install the release-tested pair:
 
 ```powershell
 pip install "governance-ledger[guard]==0.8.0"
@@ -179,7 +167,8 @@ and `pip check` are part of release acceptance.
 
 | Ledger | Guard | Publication support | Notes |
 | --- | --- | --- | --- |
-| 0.9.0 | 0.19.0 | Intended v1/v2/v3 and catalog-3 v4 | Exact candidate acceptance: see issue #25 evidence; release coordination pending. |
+| 0.9.2 | 0.19.1 | Catalog-1 repository workflow | Versions used in the repository-policy integration checks. |
+| 0.9.0 | 0.19.0 | v1/v2/v3 and catalog-3 v4 | Historical acceptance scope in issue #25. |
 | 0.8.0 | 0.17.0 | v1, v2, native v3 | Historical release-tested extra for Ledger 0.8.0 only. |
 | 0.7.0 | 0.17.0 | v1, v2 | Dependency-compatible; native v3 requires Ledger 0.8 or later. |
 | 0.7.0 | 0.16.1 | v1, v2 | Prior release-tested compatibility pair; no native v3 support. |
@@ -207,10 +196,10 @@ returns exit code 2 with `LEDGER_GUARD_UNAVAILABLE` or
 Native public authority execution uses Guard's supported SDK. Repository writes
 require an absolute `repository_root`, `repository_tool(action="modify", ...)`,
 and mediated `RepositoryTarget.write_bytes()`. Saved logical replay uses
-`guard.store.replay(run_id)` and does not invoke an execution callback. Run
-`examples/native_v3_multi_control.py --candidate` with the exact candidate wheel
-set to exercise private-evidence deletion, native publication, enforcement and
-saved replay. The default example mode retains the historical 0.8/0.17 run.
+`guard.store.replay(run_id)` and does not invoke an execution callback. The
+[v3 publication integration test](tests/test_policy_translation_publication_v3.py)
+exercises native publication, Guard enforcement and saved replay with the
+0.9.2 and 0.19.1 pair. The standalone v3 example retains its historical pins.
 
 Local checkout path resolution is not part of production behavior.
 
@@ -226,12 +215,10 @@ See [Deterministic Domain-Pack Policy Compiler](docs/DOMAIN_PACK_COMPILER.md) fo
 
 ## Untrusted policy translation proposals
 
-The proposed mandatory-coverage correction restricts new catalog-1 issuance to the
-installed repository policy language. Read the [accepted sentence forms and blocked
-cases](docs/CATALOG_1_AUTHORING.md) before authoring. This source candidate is under
-review and is not included in the published Ledger 0.9.1 package. Unrecognized prose,
-including headings and context, blocks approval with all offending text and byte
-ranges displayed. That restriction remains a product decision before release.
+Ledger 0.9.2 restricts new catalog-1 issuance to the installed repository policy
+language. Read the [accepted sentence forms and blocked cases](docs/CATALOG_1_AUTHORING.md)
+before authoring. Unrecognized prose, including headings and context, blocks
+approval with all offending text and byte ranges displayed.
 
 Ledger provides a model-agnostic `policy_translation_proposal.v1` boundary for coding-agent
 engineering policy. An external model or deterministic form may propose; a human confirms;

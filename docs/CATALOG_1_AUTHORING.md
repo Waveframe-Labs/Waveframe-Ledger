@@ -1,8 +1,8 @@
 # Repository policy language for catalog 1
 
-This document describes the proposed mandatory-coverage correction for
-`waveframe.coding-agent.repository-change@1.0.0`. It is a source candidate under
-review. The published Ledger 0.9.1 package does not include this correction.
+Ledger 0.9.2 includes mandatory source coverage for
+`waveframe.coding-agent.repository-change@1.0.0`. The correction was merged in
+[PR #29](https://github.com/Waveframe-Labs/Waveframe-Ledger/pull/29).
 
 Catalog 1 can issue a new policy only when every source clause matches its installed
 repository language. It supports modifying existing repository files. Whole-document
